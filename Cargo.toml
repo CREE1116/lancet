@@ -1,0 +1,73 @@
+[package]
+name = "lancet"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+description = "Surgical code, AST, and multi-format document search, inspection, and refactoring CLI for AI agents and developers"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/CREE1116/lancet"
+readme = "README.md"
+keywords = ["grep", "search", "ast", "trigram", "cli"]
+categories = ["command-line-utilities", "development-tools", "text-processing"]
+exclude = ["bench/", "semantic/", "sft/", "harness/"]
+
+[lib]
+name = "lancet"
+path = "src/lib.rs"
+
+[[bin]]
+name = "lancet"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+calamine = { version = "0.38", optional = true }
+cfb = { version = "0.14", optional = true }
+clap = { version = "4", features = ["derive"] }
+flate2 = { version = "1", optional = true }
+globset = "0.4"
+ignore = "0.4"
+memchr = "2"
+memmap2 = "0.9"
+pdf-extract = { version = "0.12", optional = true }
+quick-xml = { version = "0.38", optional = true }
+rayon = "1"
+regex = "1"
+regex-syntax = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tar = { version = "0.4", optional = true }
+tree-sitter = { version = "0.27", optional = true }
+tree-sitter-go = { version = "0.25", optional = true }
+tree-sitter-javascript = { version = "0.25", optional = true }
+tree-sitter-python = { version = "0.25", optional = true }
+tree-sitter-rust = { version = "0.24", optional = true }
+tree-sitter-typescript = { version = "0.23", optional = true }
+zip = { version = "4", default-features = false, features = ["deflate"], optional = true }
+
+[features]
+default = ["ast", "adapters"]
+ast = [
+    "dep:tree-sitter",
+    "dep:tree-sitter-go",
+    "dep:tree-sitter-javascript",
+    "dep:tree-sitter-python",
+    "dep:tree-sitter-rust",
+    "dep:tree-sitter-typescript",
+]
+adapters = [
+    "dep:calamine",
+    "dep:cfb",
+    "dep:flate2",
+    "dep:pdf-extract",
+    "dep:quick-xml",
+    "dep:tar",
+    "dep:zip",
+]
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

@@ -1,0 +1,174 @@
+//! Directory traversal (ripgrep's `ignore` crate: .gitignore, hidden files,
+//! no symlink following) plus file-level filters.
+
+use crate::query::{FileType, Filters};
+use globset::{Glob, GlobSet, GlobSetBuilder};
+use ignore::{WalkBuilder, WalkState};
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::UNIX_EPOCH;
+
+#[derive(Clone, Debug, Default)]
+pub struct WalkOpts {
+    pub hidden: bool,
+    pub no_ignore: bool,
+    /// 0 = automatic.
+    pub threads: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct FileEntry {
+    pub path: PathBuf,
+    /// Path relative to the search root, `/`-separated.
+    pub rel: String,
+    pub size: u64,
+    pub mtime_ns: u64,
+}
+
+pub struct FileFilter {
+    types: Vec<FileType>,
+    exts: Vec<String>,
+    globs: Option<GlobSet>,
+}
+
+fn has_glob_meta(s: &str) -> bool {
+    s.contains(['*', '?', '[', '{'])
+}
+
+impl FileFilter {
+    pub fn all() -> Self {
+        FileFilter {
+            types: vec![],
+            exts: vec![],
+            globs: None,
+        }
+    }
+
+    pub fn new(f: &Filters) -> Result<Self, String> {
+        let globs = if f.paths.is_empty() {
+            None
+        } else {
+            let mut b = GlobSetBuilder::new();
+            for p in &f.paths {
+                let p = p.trim_start_matches("./");
+                b.add(Glob::new(p).map_err(|e| e.to_string())?);
+                if !has_glob_meta(p) {
+                    b.add(
+                        Glob::new(&format!("{}/**", p.trim_end_matches('/')))
+                            .map_err(|e| e.to_string())?,
+                    );
+                }
+            }
+            Some(b.build().map_err(|e| e.to_string())?)
+        };
+        Ok(FileFilter {
+            types: f.types.clone(),
+            exts: f.exts.clone(),
+            globs,
+        })
+    }
+
+    pub fn accepts(&self, rel: &str) -> bool {
+        let p = Path::new(rel);
+        if !self.types.is_empty() && !self.types.contains(&FileType::from_path(p)) {
+            return false;
+        }
+        if !self.exts.is_empty() {
+            let ext = p
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            if !self.exts.contains(&ext) {
+                return false;
+            }
+        }
+        if let Some(g) = &self.globs {
+            if !g.is_match(rel) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+pub fn rel_path(root: &Path, path: &Path) -> String {
+    match path.strip_prefix(root) {
+        Ok(r) if !r.as_os_str().is_empty() => r.to_string_lossy().replace('\\', "/"),
+        _ => path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+    }
+}
+
+pub fn mtime_ns(m: &std::fs::Metadata) -> u64 {
+    m.modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0)
+}
+
+struct Flush<'a> {
+    out: &'a Mutex<Vec<FileEntry>>,
+    buf: Vec<FileEntry>,
+}
+
+impl Drop for Flush<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut o) = self.out.lock() {
+            o.append(&mut self.buf);
+        }
+    }
+}
+
+/// Walk `root`, returning accepted files sorted by relative path.
+pub fn walk(root: &Path, opts: &WalkOpts, filter: &FileFilter, need_meta: bool) -> Vec<FileEntry> {
+    let out: Mutex<Vec<FileEntry>> = Mutex::new(Vec::new());
+    let mut b = WalkBuilder::new(root);
+    let ig = !opts.no_ignore;
+    b.hidden(!opts.hidden)
+        .ignore(ig)
+        .git_ignore(ig)
+        .git_global(ig)
+        .git_exclude(ig)
+        .parents(ig)
+        .threads(opts.threads)
+        .filter_entry(|e| e.file_name() != crate::index::DIR_NAME);
+    b.build_parallel().run(|| {
+        // Per-thread buffer, flushed into `out` when the visitor is dropped.
+        let mut g = Flush {
+            out: &out,
+            buf: Vec::new(),
+        };
+        Box::new(move |res| {
+            let Ok(ent) = res else {
+                return WalkState::Continue;
+            };
+            if ent.file_type().is_some_and(|t| t.is_file()) {
+                let rel = rel_path(root, ent.path());
+                if filter.accepts(&rel) {
+                    let (size, mtime) = if need_meta {
+                        match ent.metadata() {
+                            Ok(m) => (m.len(), mtime_ns(&m)),
+                            Err(_) => return WalkState::Continue,
+                        }
+                    } else {
+                        (0, 0)
+                    };
+                    g.buf.push(FileEntry {
+                        path: ent.path().to_path_buf(),
+                        rel,
+                        size,
+                        mtime_ns: mtime,
+                    });
+                }
+            }
+            WalkState::Continue
+        })
+    });
+    let mut v = out.into_inner().unwrap();
+    v.sort_by(|a, b| a.rel.cmp(&b.rel));
+    v
+}

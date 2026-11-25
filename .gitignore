@@ -1,0 +1,7 @@
+/target/
+/.lancet/
+/bench/.cache/
+/bench/corpora/
+__pycache__/
+*.pyc
+.DS_Store
