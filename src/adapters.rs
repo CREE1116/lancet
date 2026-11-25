@@ -293,27 +293,27 @@ mod imp {
 
         let mut out = String::new();
         if !encrypted {
-            let mut sections: Vec<(u32, String)> = Vec::new();
+            let mut sections: Vec<(u32, PathBuf)> = Vec::new();
             for entry in cf.walk() {
                 if !entry.is_stream() {
                     continue;
                 }
-                let p = entry.path().to_string_lossy();
-                let trimmed = p.trim_start_matches('/');
+                let normalized = entry.path().to_string_lossy().replace('\\', "/");
+                let trimmed = normalized.trim_start_matches('/');
                 let low = trimmed.to_ascii_lowercase();
                 if let Some(rest) = low.strip_prefix("bodytext/section") {
                     if let Ok(num) = rest.parse::<u32>() {
-                        sections.push((num, trimmed.to_string()));
+                        sections.push((num, entry.path().to_path_buf()));
                     }
                 }
             }
-            sections.sort();
+            sections.sort_by_key(|(num, _)| *num);
 
-            for (_, name) in sections {
+            for (_, stream_path) in sections {
                 if out.len() >= MAX_EXTRACTED_BYTES {
                     break;
                 }
-                let Ok(stream) = cf.open_stream(&name) else {
+                let Ok(stream) = cf.open_stream(&stream_path) else {
                     continue;
                 };
                 let mut raw = Vec::new();
