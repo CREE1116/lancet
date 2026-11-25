@@ -142,13 +142,24 @@ lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply
 
 ---
 
+## Why `lancet read` Instead of `cat` / `sed` / Built-in `Read`?
+
+`lancet read` is not a plain text viewer — it is a **context scalpel** that shares an exact coordinate system with the search engine:
+
+1. **1-to-1 Coordinate Isomorphism Across Binary Formats**: Standard search-then-read workflows break as soon as a match lands inside a `.pdf`, `.docx`, `.xlsx`, `.hwp`/`.hwpx`, or `.zip`. External tools (`cat`, `Read`, or mismatched Python extractors) either fail on binary bytes or produce completely different line numbers. `lancet read` runs the **exact same in-process extraction pipeline** as `lancet` search — line `42` in a search hit is guaranteed to be line `42` in `lancet read`, whether in Rust source, a PDF report, a Korean HWP file, or `bundle.zip!node_0.log`.
+2. **Semantic Slicing Without Guessing Line Numbers (`--symbol`, `--page`, `--sheet`)**: Instead of 2–3 agent round-trips guessing where a function ends, `lancet read src/search.rs --symbol execute_one` uses Tree-sitter byte spans to extract the exact symbol body (plus contiguous `///` doc comments and attributes above it) in a single call.
+3. **Hard Token-Budget Caps with Resumable Cursors (`--budget-tokens`)**: Minified bundles or wide logs cannot blow up an agent's context window. `lancet read --budget-tokens 800` stops cleanly at the budget boundary and emits `next_line` (`resume with --lines 236:`).
+4. **Zero-Tempfile Bomb-Safe Container Piercing**: Reads PDF pages, spreadsheet row/column slices (`--rows 1:30 --cols A:D`), and `.zip`/`.tar.gz` entries in memory with strict `16 MiB` extraction caps — no `/tmp` clutter and no `pandoc`/`libreoffice` subprocesses.
+
+---
+
 ## Using Lancet with AI Coding Agents
 
 Drop [`docs/agent-instructions.md`](./docs/agent-instructions.md) into your project's `AGENTS.md`, `CLAUDE.md`, or system rules so agents automatically replace multi-tool shell chains (`rg` + `fd` + `ast-grep` + `cat` + Python PDF scripts) with structured, token-budgeted `lancet` calls.
 
 ---
 
-## Architecture
+## Core Algorithms & Architecture
 
 ```text
                        ┌───────────────────────────────────────────┐
@@ -166,6 +177,12 @@ Drop [`docs/agent-instructions.md`](./docs/agent-instructions.md) into your proj
 │ lancet read  │◀─────────────────── 1-to-1 line parity ────────────────────────┘
 └──────────────┘
 ```
+
+1. **Conservative Trigram Lower-Bounds & Zero-Daemon Freshness (`Scan == Auto`)**: Queries and regex HIRs compile into a sound boolean trigram formula (`Req`). Posting lists are intersected rarest-first (`peek_count` ordering; ultra-common `>85%` trigrams are skipped automatically). At query time, files whose disk `(mtime_ns, size)` match the segment metadata are pruned via the index, modified/new files are scanned live, and every surviving candidate is verified by the exact scan evaluator — delivering **5–60× speedups with zero background watcher daemons and zero stale results**.
+2. **Indexed Fuzzy Search via the q-gram Threshold Lemma**: Traditional trigram indexes fall back to full scans on typo-tolerant queries. Lancet applies the q-gram lemma — a word of trigram count `|G|` at Levenshtein distance `k` must still share at least `|G| - 3k` ASCII trigrams (`|G| - k` for 3-byte Hangul syllables) — evaluating `Req::AtLeast` (`k`-of-`n` posting accumulation) directly over the index.
+3. **3-Stage Hybrid AST Matching (`Trigram Index` → `SIMD memmem` → `u16 kind_id` Pattern Tree)**: `ast-grep` parses every candidate language file with Tree-sitter. `lancet ast` extracts non-string, non-comment identifier literals from the pattern AST to (a) prune files via `.lancet` trigrams without opening them, (b) run SIMD `memmem` prefilters before invoking Tree-sitter even in `--no-index` scan mode, and (c) match against a precompiled `u16 kind_id` pattern tree with thread-local parser caching (**7× faster than `ast-grep` unindexed, up to 123× faster indexed**).
+4. **Unicode Case-Orbit Folding + SIMD Dual-Byte Prefilters**: Equivalent Unicode case-folding orbits (`'k'`, `'K'`, Kelvin `'K' U+212A`) map to a canonical representative across both index and evaluator, while ASCII literals use `memchr2` dual-case SIMD vector scans instead of regex automata.
+5. **Zero-Heap `LANCET03` Segments & Lazy Line Resolution (`LineMode::HitsOnly`)**: Opening an index validates only a 40-byte `mmap` header (`O(1)`, zero heap allocation) at `~8%` of corpus size. During evaluation, full newline offset tables are never allocated up front; line numbers are computed via SIMD `memchr` only on byte spans that actually match.
 
 - **Zero silent approximations**: malformed queries, unknown flags, or unparseable AST patterns fail fast with exact diagnostics; `--rewrite` never mutates files without `--apply`.
 - **Supported document & archive formats** (`adapters` feature, enabled by default): `.pdf`, `.docx`, `.pptx`, `.odt`, `.hwp` (5.0 OLE/CFB), `.hwpx`, `.epub`, `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.ods`, `.zip`, `.tar`, `.gz`, `.tgz`/`.tar.gz` (plus opt-in `--ocr` via `tesseract`/`pdftoppm`).
