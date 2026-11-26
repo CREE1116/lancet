@@ -454,9 +454,7 @@ fn compact_manifest(dir: &Path, manifest: &mut Manifest, force_all: bool) -> Res
         let out_name = format!("seg-{:06}.wseg", manifest.next_seg);
         manifest.next_seg += 1;
         let ndocs = segment::merge(&dir.join(&out_name), &inputs)?;
-        for k in i..j {
-            old_files_to_remove.push(dir.join(&manifest.segments[k].name));
-        }
+        old_files_to_remove.extend(manifest.segments[i..j].iter().map(|s| dir.join(&s.name)));
         compacted_count += j - i;
         if ndocs > 0 {
             new_entries.push(SegEntry {
