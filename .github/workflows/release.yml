@@ -74,7 +74,7 @@ jobs:
         if: endsWith(matrix.target, '-musl')
         run: |
           file "target/${{ matrix.target }}/release/lancet"
-          file "target/${{ matrix.target }}/release/lancet" | grep -Eq 'static(-pie)? linked'
+          file "target/${{ matrix.target }}/release/lancet" | grep -Eq 'static(-pie|ally) linked'
 
       - name: Package archive (Unix)
         if: runner.os != 'Windows'

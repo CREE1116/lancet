@@ -53,3 +53,27 @@ jobs:
         run: |
           ./bin/lancet.exe --version
           ./bin/lancet.exe rg -c LANCET_INSTALL_DIR install.ps1
+
+  musl-vs-gnu:
+    name: musl vs gnu speed (ubuntu-x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install both builds
+        run: |
+          LANCET_LIBC=gnu LANCET_INSTALL_DIR="$PWD/gnu" sh install.sh
+          LANCET_LIBC=musl LANCET_INSTALL_DIR="$PWD/musl" sh install.sh
+      - name: Same output, compare wall time (no index, all CPUs)
+        run: |
+          sudo apt-get install -y -qq hyperfine >/dev/null
+          for p in 'static' '[A-Z][a-z]+Error' 'fn\s+\w+\('; do
+            gnu/lancet rg --no-index -c "$p" /usr/include /usr/share | sort > g.txt || true
+            musl/lancet rg --no-index -c "$p" /usr/include /usr/share | sort > m.txt || true
+            cmp g.txt m.txt
+          done
+          hyperfine -N -w 2 -r 10 --export-markdown t.md \
+            "gnu/lancet rg --no-index -c static /usr/include /usr/share" \
+            "musl/lancet rg --no-index -c static /usr/include /usr/share" \
+            "gnu/lancet rg --no-index -c [A-Z][a-z]+Error /usr/include /usr/share" \
+            "musl/lancet rg --no-index -c [A-Z][a-z]+Error /usr/include /usr/share"
+          cat t.md >> "$GITHUB_STEP_SUMMARY"
