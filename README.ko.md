@@ -12,28 +12,28 @@
 </div>
 
 <p align="center">
-  <img src="docs/assets/bench-linux.svg" width="100%" alt="Linux 커널(파일 86,218개)에서 lancet은 텍스트 쿼리를 항상 최신인 auto 모드로 ripgrep보다 6–10배, --trust-index로 12–223배 빠르게 처리하고, AST 패턴은 ast-grep보다 5배, 파일 목록은 fd보다 4배 빠릅니다.">
+  <img src="docs/assets/bench-suite.ko.svg" width="100%" alt="8개 코드베이스·7개 언어(파일 338,763개)에서 lancet은 희귀 리터럴 검색을 항상 최신인 auto 모드로 ripgrep보다 2.8~9.6배, --trust-index로 17~292배 빠르게 처리하며 모든 출력이 ripgrep과 바이트 단위로 일치합니다.">
 </p>
 
 Lancet은 `rg` + `fd` + `ast-grep` + `cat` + `pdftotext`로 이어지던 도구 사슬을 **인덱스와 좌표계를 공유하는** 단일 Rust 바이너리 하나로 바꿉니다. 파일 탐색, 텍스트·구문 검색, 정확한 범위·심볼 열람, 코드 리라이트까지 — 소스 코드든 PDF든 엑셀이든 한글(HWP) 문서든 압축 파일이든 똑같이 동작합니다.
 
-AI 코딩 에이전트와 그 옆에서 일하는 개발자를 위해 만들었습니다. 구조화된 JSON, 토큰 예산 하드 캡, 그리고 **조용한 근사치 없음**.
+기존 CLI 도구들은 사람이 단계 사이를 이어 붙인다는 전제로 설계되었습니다. Lancet은 AI 코딩 에이전트와 그 옆에서 일하는 개발자가 직접 조합해 쓰는 환경을 전제로 처음부터 설계했습니다. 구조화된 JSON, 토큰 예산 하드 캡, 그리고 **조용한 근사치 없음**.
 
 ---
 
 ## 두 가지 핵심
 
-### 1 · 인덱스 속도, 그러나 오래된 결과는 절대 없음
+### 1 · 인덱스 속도, 기본은 최신 결과
 
-<p align="center"><img src="docs/assets/pipeline.svg" width="100%" alt="쿼리는 필수 트라이그램으로 컴파일되어 인덱스에서 교집합되고, 인덱싱 이후 바뀐 파일은 즉시 스캔되며, 모든 후보는 풀스캔과 같은 평가기로 검증됩니다: 파일 86,218개 중 7,814개만 열어 7,073개 매치."></p>
+<p align="center"><img src="docs/assets/pipeline.ko.svg" width="100%" alt="쿼리는 필수 트라이그램으로 컴파일되어 인덱스에서 교집합되고, 인덱싱 이후 바뀐 파일은 즉시 스캔되며, 모든 후보는 풀스캔과 같은 평가기로 검증됩니다: 파일 86,218개 중 7,814개(9.1%)만 열어 7,073개 매치."></p>
 
 - 인덱스는 **열지 않을 파일만 정합니다.** 모든 후보를 풀스캔과 같은 평가기로 검증하므로 결과가 풀스캔과 "대체로"가 아니라 정확히 같습니다.
-- 마지막 `lancet index` 이후 수정된 파일은 `(mtime, size)`로 감지해 그 자리에서 스캔합니다. **감시 데몬도, 재인덱싱 단계도, 오래된 결과도 없습니다.**
-- 신선도를 포기하고 속도를 원할 때는 명시적으로 선택합니다: `--trust-index`는 인덱스만 보고 답합니다(Linux 커널에서 5–90 ms).
+- 마지막 `lancet index` 이후 수정된 파일은 `(mtime, size, ctime, inode)`와 타임스탬프 경계 검사로 감지해 그 자리에서 스캔합니다. **감시 데몬도, 재인덱싱 단계도 없습니다.** (표준 라이브러리가 `mtime`·`size`만 제공하는 Windows의 예외는 아래 [정확성 보장](#인덱스는-어떻게-동작하나) 참고.)
+- 신선도를 포기하고 속도를 원할 때는 명시적으로 선택합니다: `--trust-index`는 인덱스만 보고 답합니다(Linux 커널에서 3–86 ms).
 
 ### 2 · 하나의 좌표계: 찾기 → 읽기 → 고치기
 
-<p align="center"><img src="docs/assets/coordinates.svg" width="100%" alt="검색 결과, 읽기 범위, 심볼, AST 리라이트가 같은 경로·줄·구간을 공유하고, 수정된 파일은 다음 쿼리에서 자동으로 다시 스캔됩니다."></p>
+<p align="center"><img src="docs/assets/coordinates.ko.svg" width="100%" alt="검색 결과, 읽기 범위, 심볼, 리비전(rev), AST 리라이트가 같은 경로·줄·구간을 공유하고, 수정된 파일은 다음 쿼리에서 자동으로 다시 스캔됩니다."></p>
 
 - 검색 결과의 42번째 줄은 `lancet read`에서도 42번째 줄입니다. `.pdf`, `.xlsx`, `.hwp`, `bundle.zip!node.log` 안에서도 마찬가지입니다. 검색과 열람이 **같은 인프로세스 추출 파이프라인**을 쓰기 때문입니다.
 - `read --symbol`, `outline`, `refs`, `ast`가 모두 같은 Tree-sitter 구간을 쓰므로, 에이전트가 함수 끝 줄을 추측할 일이 없습니다.
@@ -87,10 +87,14 @@ git diff | lancet patch --apply                             # unified diff를 �
 
 도구를 이어 붙이면 사고는 **단계 사이**에서 납니다. 도구마다 좌표, 파일 범위, 바이너리 판정, 시점에 대한 생각이 다르고, 어느 도구도 다른 에이전트가 같은 파일을 고치고 있다는 걸 모릅니다. 실제 도구로 재현한 결과입니다([`bench/failure_modes.py`](./bench/failure_modes.py)).
 
+<p align="center">
+  <img src="docs/assets/failure-modes.ko.svg" width="100%" alt="도구 체인 대 lancet 재현 결과: 동시 수정 800건 중 600건 유실(edit --rev 800건 중 0건 유실), .docx 40개 중 rga→pandoc 0건 적중(lancet 40건), zoekt 낡은 인덱스, read --symbol로 컨텍스트 5~30배 절감, 파일 정체성 보존, sed 이름 바꾸기 주석·문자열 오탐 비율.">
+</p>
+
 | 도구 체인 | 실제로 일어난 일 | lancet |
 |---|---|---|
 | `rg -n` → `sed -i` 두 번 | 두 번째 수정이 **엉뚱한 줄**을 덮어씀. 둘 다 종료 코드 0 | `edit --edits`(원본 좌표) 또는 `conflict` |
-| 에이전트 4개: 읽기 → 고치기 → 통째로 쓰기 | 수정 800개 중 **600개**가 조용히 유실 | `edit --rev`: 80개 중 **0개** 유실 |
+| 에이전트 4개: 읽기 → 고치기 → 통째로 쓰기 | 수정 800개 중 **600개**가 조용히 유실 | `edit --rev`: 800개 중 **0개** 유실 |
 | 오래된 hunk가 섞인 `patch -p1` | 한 파일만 바뀌고 하나는 거부 — **반쯤 적용** | `patch`: 아무것도 안 씀, `conflict` |
 | `sed`로 이름 바꾸기 | 주석·문자열까지 바꿈: 출현의 **0.3~11.7%** | `refs`·`ast`는 코드만 봄 |
 | `.docx`에 `rga` → `pandoc` | 읽은 줄 40개 중 **0개**에 검색어가 있음 | **40개 중 40개**(검색과 읽기가 같은 추출) |
@@ -118,7 +122,15 @@ git diff | lancet patch --apply                             # unified diff를 �
 
 lancet이 **이기지 못하는** 곳: 리터럴 없는 정규식(인덱스가 걸러 줄 게 없어 ripgrep과 같거나 최대 1.4배 느림)과 리터럴 없는 구조 AST 패턴(ast-grep 속도의 0.6~1.0배). 자세한 내용은 [docs/why-one-tool.ko.md 7절](./docs/why-one-tool.ko.md#7-lancet이-이기지-못하는-곳).
 
-맨 위 차트는 Apple M4 Pro에서 잰 Linux 커널 v6.12(파일 86,218개, 1.4 GB) 결과입니다. [`bench/scale_bench.py`](./bench/scale_bench.py)로 재현하고 [`bench/readme_figures.py`](./bench/readme_figures.py)로 다시 그릴 수 있습니다. 인덱스 없는 `scan` 모드에서는 텍스트 검색이 ripgrep과 같은 속도이고, 배수는 인덱스에서 나옵니다.
+<p align="center">
+  <img src="docs/assets/bench-index-footprint.ko.svg" width="100%" alt="8개 코드베이스에서 lancet과 zoekt의 인덱스 빌드 시간, 디스크 크기, 피크 메모리 비교: lancet은 4~25배 빠르게 빌드되고 9~30배 작으며 메모리를 3.2~5.0배 적게 씁니다.">
+</p>
+
+<p align="center">
+  <img src="docs/assets/bench-workload-profile.ko.svg" width="100%" alt="LLVM 19.1의 8개 텍스트 쿼리 유형별 ripgrep 대비 속도 배수 및 8개 코드베이스의 리터럴 포함/미포함 AST 검색의 ast-grep 대비 속도 비교.">
+</p>
+
+위 차트들은 Apple M4 Pro(웜 캐시, `hyperfine` 5회 중앙값)에서 측정한 [`bench/results/suite-final.json`](./bench/results/suite-final.json)과 [`bench/results/failure_modes.json`](./bench/results/failure_modes.json) 데이터를 바탕으로 [`bench/readme_figures.py`](./bench/readme_figures.py)로 생성했습니다. 인덱스 없는 `--no-index` / `scan` 모드에서는 텍스트 검색이 ripgrep과 같은 속도이며, 위 배수는 인덱스에서 나옵니다.
 
 <details>
 <summary><b>크레이트 소스 코퍼스 (파일 28,352개, 452.6 MiB) — 검색·탐색·AST·문서</b></summary>
@@ -172,7 +184,7 @@ lancet이 **이기지 못하는** 곳: 리터럴 없는 정규식(인덱스가 �
 
 ## 인덱스는 어떻게 동작하나
 
-<p align="center"><img src="docs/assets/index-lifecycle.svg" width="100%" alt="작업 트리를 mtime과 크기로 비교하고, 새 파일은 불변 mmap 세그먼트에 쓰며 이전 버전은 툼스톤으로 표시하고, 작은 세그먼트는 계층형 컴팩션으로 합칩니다. Linux: 콜드 빌드 4.2초, 피크 메모리 약 350 MB, 인덱스 140 MB, 변경 없는 동기화 110 ms."></p>
+<p align="center"><img src="docs/assets/index-lifecycle.ko.svg" width="100%" alt="작업 트리를 mtime·크기·ctime·inode로 비교하고, 새 파일은 불변 mmap 세그먼트에 쓰며 이전 버전은 툼스톤으로 표시하고, 작은 세그먼트는 계층형 컴팩션으로 합칩니다. Linux v6.12: 콜드 빌드 3.33초, 피크 메모리 358 MB, 인덱스 134 MB(9.5%), 변경 없는 동기화 125 ms, 세그먼트 15개."></p>
 
 1. **보수적인 트라이그램 하한.** 쿼리와 정규식 HIR을 모든 매치가 반드시 만족하는 트라이그램 불리언 식(`Req`)으로 컴파일합니다. 포스팅 리스트는 가장 드문 것부터 교집합하고, 파일의 85% 이상에 나오는 트라이그램은 건너뜁니다. 식이 보수적이라 인덱스는 후보를 줄일 뿐 매치를 놓치지 않습니다.
 2. **인덱스 위의 퍼지 검색.** q-gram 보조정리에 따라 트라이그램이 `|G|`개인 단어는 편집 거리 `k` 안에서 최소 `|G| − 3k`개(한글 음절은 `|G| − k`개)를 유지하므로, `fuzzy(...)`도 풀스캔 대신 `k`-of-`n` 포스팅 집계로 처리합니다.

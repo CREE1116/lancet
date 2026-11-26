@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 608" width="920" height="608" role="img" aria-labelledby="title desc">
+<title id="title">도구를 이어 붙이면 실제로 생기는 사고들 (재현 결과)</title>
+<desc id="desc">실제 도구 실행 측정치 (ripgrep 15.2 · BSD sed/patch · pandoc 3 · rga 0.10 · zoekt) · bench/results/failure_modes.json</desc>
+<style>
+text{font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR","Malgun Gothic",-apple-system,BlinkMacSystemFont,sans-serif}
+.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+.num{font-variant-numeric:tabular-nums}
+.panel{fill:#fbfbfa;stroke:rgba(27,31,36,.12)}
+.card{fill:#ffffff;stroke:#d0d7de}
+.pill{fill:#f6f8fa;stroke:#d0d7de}
+.hl{fill:#eff6ff;stroke:#2563eb}
+.hlwarn{fill:#fffbeb;stroke:#d97706}
+.ink{fill:#1f2328}.ink2{fill:#59636e}.mut{fill:#7d8590}
+.grid{stroke:#eaeef2}.axis{stroke:#afb8c1}.div{stroke:#d8dee4}
+.flow{stroke:#8c959f;fill:none}.flowacc{stroke:#2563eb;fill:none}
+.head{fill:#8c959f}.headacc{fill:#2563eb}
+.base{fill:#94a3b8}.auto{fill:#2563eb}.trust{fill:#0d9488}
+.zoekt{fill:#d97706;stroke:#ffffff;stroke-width:1.4}
+.warn{fill:#d97706}.bad{fill:#cf222e}.good{fill:#1a7f37}
+.badsoft{fill:#ffebe9;stroke:#ff8182}.goodsoft{fill:#dafbe1;stroke:#4ac26b}
+.track{fill:#eaeef2}
+.f0{fill:#dbeafe}.f1{fill:#60a5fa}.f2{fill:#1d4ed8}
+.cblue{fill:#2563eb}.cteal{fill:#0d9488}.cwarn{fill:#d97706}.cbad{fill:#cf222e}.cgood{fill:#1a7f37}
+@media (prefers-color-scheme: dark){
+.panel{fill:#0d1117;stroke:rgba(240,246,252,.12)}
+.card{fill:#161b22;stroke:#30363d}
+.pill{fill:#21262d;stroke:#30363d}
+.hl{fill:#13233a;stroke:#58a6ff}
+.hlwarn{fill:#271f12;stroke:#f59e0b}
+.ink{fill:#f0f6fc}.ink2{fill:#9da7b3}.mut{fill:#7d8590}
+.grid{stroke:#21262d}.axis{stroke:#484f58}.div{stroke:#30363d}
+.flow{stroke:#6e7681}.flowacc{stroke:#58a6ff}
+.head{fill:#6e7681}.headacc{fill:#58a6ff}
+.base{fill:#6e7681}.auto{fill:#58a6ff}.trust{fill:#2dd4bf}
+.zoekt{fill:#f59e0b;stroke:#161b22;stroke-width:1.4}
+.warn{fill:#f59e0b}.bad{fill:#ff7b72}.good{fill:#3fb950}
+.badsoft{fill:#311618;stroke:#f85149}.goodsoft{fill:#12261e;stroke:#2ea043}
+.track{fill:#21262d}
+.f0{fill:#172b44}.f1{fill:#2f81f7}.f2{fill:#79c0ff}
+.cblue{fill:#58a6ff}.cteal{fill:#2dd4bf}.cwarn{fill:#f59e0b}.cbad{fill:#ff7b72}.cgood{fill:#3fb950}
+}
+</style>
+<defs>
+<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path class="head" d="M0,1 L10,5 L0,9 z"/></marker>
+<marker id="aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path class="headacc" d="M0,1 L10,5 L0,9 z"/></marker>
+</defs>
+<rect class="panel" x="0.5" y="0.5" width="919" height="607" rx="12"/>
+<text x="28.0" y="36.0" class="ink" font-size="17.5" text-anchor="start" font-weight="700">도구를 이어 붙이면 실제로 생기는 사고들 (재현 결과)</text>
+<text x="28.0" y="58.0" class="ink2" font-size="12" text-anchor="start">실제 도구 실행 측정치 (ripgrep 15.2 · BSD sed/patch · pandoc 3 · rga 0.10 · zoekt) · bench/results/failure_modes.json</text>
+<rect class="card" x="28.0" y="76.0" width="424.0" height="210.0" rx="9"/>
+<text x="44.0" y="102.0" class="ink" font-size="14" text-anchor="start" font-weight="700">B · 동시 편집 시 수정 유실</text>
+<text x="44.0" y="120.0" class="ink2" font-size="11.5" text-anchor="start">에이전트 4개가 같은 파일에 동시 추가</text>
+<text x="44.0" y="142.0" class="ink" font-size="12" text-anchor="start" font-weight="600">일반 도구: 읽기 → 고치기 → 통째로 쓰기</text>
+<rect class="track" x="44.0" y="150.0" width="392.0" height="18" rx="4"/>
+<rect class="base" x="44.0" y="150.0" width="98.0" height="18" rx="4"/>
+<rect class="bad" x="142.0" y="150.0" width="294.0" height="18" rx="4"/>
+<text x="44.0" y="183.0" class="cbad num" font-size="11.5" text-anchor="start" font-weight="650">800개 중 600개 유실 (75%) · 오류 없이 조용히 덮어씀</text>
+<text x="44.0" y="208.0" class="ink" font-size="12" text-anchor="start" font-weight="600">lancet edit --rev --apply (낙관적 잠금)</text>
+<rect class="good" x="44.0" y="216.0" width="392.0" height="18" rx="4"/>
+<text x="44.0" y="249.0" class="cgood num" font-size="11.5" text-anchor="start" font-weight="650">800개 중 0개 유실 (0%) · 충돌 1199회 감지 후 재시도</text>
+<rect class="card" x="468.0" y="76.0" width="424.0" height="210.0" rx="9"/>
+<text x="484.0" y="102.0" class="ink" font-size="14" text-anchor="start" font-weight="700">E · G · 낡은 좌표와 낡은 인덱스</text>
+<text x="484.0" y="126.0" class="ink2" font-size="11.5" text-anchor="start" font-weight="600">E · .docx 40개 검색 후 해당 줄 열기 (적중 수)</text>
+<text x="484.0" y="146.0" class="ink" font-size="11.5" text-anchor="start">rga → pandoc</text>
+<rect class="badsoft" x="582.0" y="135.0" width="148.0" height="13" rx="3"/>
+<text x="738.0" y="146.0" class="cbad num" font-size="11.5" text-anchor="start" font-weight="650">0 / 40 (0%)</text>
+<text x="484.0" y="165.0" class="ink" font-size="11.5" text-anchor="start" font-weight="650">lancet</text>
+<rect class="good" x="582.0" y="154.0" width="148.0" height="13" rx="3"/>
+<text x="738.0" y="165.0" class="cgood num" font-size="11.5" text-anchor="start" font-weight="650">40 / 40 (100%)</text>
+<text x="484.0" y="183.0" class="mut" font-size="10.5" text-anchor="start">rga는 .xlsx·.hwpx 0건 · lancet은 모두 검색·열람</text>
+<line class="div" x1="484.0" y1="193.0" x2="876.0" y2="193.0" stroke-width="1"/>
+<text x="484.0" y="211.0" class="ink2" font-size="11.5" text-anchor="start" font-weight="600">G · 파일 20개 수정 직후 검색 (새 단어 / 지운 단어)</text>
+<text x="484.0" y="232.0" class="ink" font-size="11.5" text-anchor="start">zoekt (index)</text>
+<rect class="badsoft" x="582.0" y="221.0" width="148.0" height="13" rx="3"/>
+<text x="738.0" y="232.0" class="cbad num" font-size="11.5" text-anchor="start" font-weight="650">0/20 새 · 20/20 낡음</text>
+<text x="484.0" y="253.0" class="ink" font-size="11.5" text-anchor="start" font-weight="650">lancet auto</text>
+<rect class="good" x="582.0" y="242.0" width="148.0" height="13" rx="3"/>
+<text x="738.0" y="253.0" class="cgood num" font-size="11.5" text-anchor="start" font-weight="650">20/20 새 · 0/20 낡음</text>
+<rect class="card" x="28.0" y="302.0" width="424.0" height="270.0" rx="9"/>
+<text x="44.0" y="328.0" class="ink" font-size="14" text-anchor="start" font-weight="700">H · 함수 하나 읽을 때 컨텍스트 크기</text>
+<text x="44.0" y="346.0" class="ink2" font-size="11.5" text-anchor="start">6개 코드베이스 각 60개 함수 중앙값 (cat vs read --symbol)</text>
+<rect class="base" x="44.0" y="358.0" width="10" height="10" rx="2"/>
+<text x="58.0" y="367.0" class="ink2" font-size="11" text-anchor="start">cat (파일 전체)</text>
+<rect class="auto" x="176.0" y="358.0" width="10" height="10" rx="2"/>
+<text x="190.0" y="367.0" class="cblue" font-size="11" text-anchor="start" font-weight="600">lancet read --symbol</text>
+<text x="44.0" y="397.0" class="ink" font-size="11.5" text-anchor="start" font-weight="600">linux</text>
+<rect class="base" x="126.0" y="385.0" width="175.0" height="8" rx="2"/>
+<rect class="auto" x="126.0" y="395.0" width="5.9" height="8" rx="2"/>
+<text x="438.0" y="398.0" class="ink2 num" font-size="11" text-anchor="end">18.7 KB → 629 B (30배)</text>
+<text x="44.0" y="426.0" class="ink" font-size="11.5" text-anchor="start" font-weight="600">vscode</text>
+<rect class="base" x="126.0" y="414.0" width="75.2" height="8" rx="2"/>
+<rect class="auto" x="126.0" y="424.0" width="3.2" height="8" rx="2"/>
+<text x="438.0" y="427.0" class="ink2 num" font-size="11" text-anchor="end">8.0 KB → 343 B (23배)</text>
+<text x="44.0" y="455.0" class="ink" font-size="11.5" text-anchor="start" font-weight="600">spring</text>
+<rect class="base" x="126.0" y="443.0" width="43.1" height="8" rx="2"/>
+<rect class="auto" x="126.0" y="453.0" width="3.0" height="8" rx="2"/>
+<text x="438.0" y="456.0" class="ink2 num" font-size="11" text-anchor="end">4.6 KB → 156 B (29배)</text>
+<text x="44.0" y="484.0" class="ink" font-size="11.5" text-anchor="start" font-weight="600">kubernetes</text>
+<rect class="base" x="126.0" y="472.0" width="38.2" height="8" rx="2"/>
+<rect class="auto" x="126.0" y="482.0" width="3.0" height="8" rx="2"/>
+<text x="438.0" y="485.0" class="ink2 num" font-size="11" text-anchor="end">4.1 KB → 208 B (20배)</text>
+<text x="44.0" y="513.0" class="ink" font-size="11.5" text-anchor="start" font-weight="600">django</text>
+<rect class="base" x="126.0" y="501.0" width="25.9" height="8" rx="2"/>
+<rect class="auto" x="126.0" y="511.0" width="3.0" height="8" rx="2"/>
+<text x="438.0" y="514.0" class="ink2 num" font-size="11" text-anchor="end">2.8 KB → 308 B (9배)</text>
+<text x="44.0" y="542.0" class="ink" font-size="11.5" text-anchor="start" font-weight="600">rust</text>
+<rect class="base" x="126.0" y="530.0" width="5.8" height="8" rx="2"/>
+<rect class="auto" x="126.0" y="540.0" width="3.0" height="8" rx="2"/>
+<text x="438.0" y="543.0" class="ink2 num" font-size="11" text-anchor="end">617 B → 129 B (5배)</text>
+<text x="44.0" y="560.0" class="mut" font-size="10.5" text-anchor="start">고정 50줄 창(sed -n)은 함수의 1.7~8.3%를 잘라 먹음</text>
+<rect class="card" x="468.0" y="302.0" width="424.0" height="270.0" rx="9"/>
+<text x="484.0" y="328.0" class="ink" font-size="14" text-anchor="start" font-weight="700">I · D · 파일 정체성 보존 &amp; 리팩터링 오탐</text>
+<text x="484.0" y="350.0" class="ink2" font-size="11.5" text-anchor="start" font-weight="600">I · 심볼릭 링크 · 하드 링크 · 0640 권한 파일 수정</text>
+<text x="663.0" y="368.0" class="mut" font-size="10.5" text-anchor="middle">심볼릭 링크</text>
+<text x="748.0" y="368.0" class="mut" font-size="10.5" text-anchor="middle">하드 링크</text>
+<text x="833.0" y="368.0" class="mut" font-size="10.5" text-anchor="middle">0640 권한</text>
+<text x="484.0" y="386.0" class="ink" font-size="11.5" text-anchor="start" font-weight="500">sed -i</text>
+<text x="663.0" y="386.0" class="cbad" font-size="12" text-anchor="middle" font-weight="700">✗</text>
+<text x="748.0" y="386.0" class="cbad" font-size="12" text-anchor="middle" font-weight="700">✗</text>
+<text x="833.0" y="386.0" class="cgood" font-size="12" text-anchor="middle" font-weight="700">✓</text>
+<text x="484.0" y="406.0" class="ink" font-size="11.5" text-anchor="start" font-weight="500">perl -pi</text>
+<text x="663.0" y="406.0" class="cbad" font-size="12" text-anchor="middle" font-weight="700">✗</text>
+<text x="748.0" y="406.0" class="cbad" font-size="12" text-anchor="middle" font-weight="700">✗</text>
+<text x="833.0" y="406.0" class="cgood" font-size="12" text-anchor="middle" font-weight="700">✓</text>
+<text x="484.0" y="426.0" class="ink" font-size="11.5" text-anchor="start" font-weight="500">tmp+rename (에디터)</text>
+<text x="663.0" y="426.0" class="cbad" font-size="12" text-anchor="middle" font-weight="700">✗</text>
+<text x="748.0" y="426.0" class="cbad" font-size="12" text-anchor="middle" font-weight="700">✗</text>
+<text x="833.0" y="426.0" class="cbad" font-size="12" text-anchor="middle" font-weight="700">✗</text>
+<text x="484.0" y="446.0" class="cblue" font-size="11.5" text-anchor="start" font-weight="700">lancet edit</text>
+<text x="663.0" y="446.0" class="cgood" font-size="12" text-anchor="middle" font-weight="700">✓</text>
+<text x="748.0" y="446.0" class="cgood" font-size="12" text-anchor="middle" font-weight="700">✓</text>
+<text x="833.0" y="446.0" class="cgood" font-size="12" text-anchor="middle" font-weight="700">✓</text>
+<line class="div" x1="484.0" y1="452.0" x2="876.0" y2="452.0" stroke-width="1"/>
+<text x="484.0" y="470.0" class="ink2" font-size="11.5" text-anchor="start" font-weight="600">D · sed 이름 바꾸기 시 주석·문자열 오탐 비율</text>
+<text x="484.0" y="490.0" class="ink" font-size="10.5" text-anchor="start">django (get_queryset)</text>
+<rect class="track" x="630.0" y="481.0" width="165.0" height="10" rx="2"/>
+<rect class="warn" x="630.0" y="481.0" width="137.9" height="10" rx="2"/>
+<text x="803.0" y="490.0" class="cwarn num" font-size="10.5" text-anchor="start" font-weight="650">11.7% (28)</text>
+<text x="484.0" y="509.0" class="ink" font-size="10.5" text-anchor="start">rust (unwrap)</text>
+<rect class="track" x="630.0" y="500.0" width="165.0" height="10" rx="2"/>
+<rect class="warn" x="630.0" y="500.0" width="110.8" height="10" rx="2"/>
+<text x="803.0" y="509.0" class="cwarn num" font-size="10.5" text-anchor="start" font-weight="650">9.4% (1,180)</text>
+<text x="484.0" y="528.0" class="ink" font-size="10.5" text-anchor="start">vscode (dispose)</text>
+<rect class="track" x="630.0" y="519.0" width="165.0" height="10" rx="2"/>
+<rect class="warn" x="630.0" y="519.0" width="62.5" height="10" rx="2"/>
+<text x="803.0" y="528.0" class="cwarn num" font-size="10.5" text-anchor="start" font-weight="650">5.3% (393)</text>
+<text x="484.0" y="547.0" class="ink" font-size="10.5" text-anchor="start">spring (getBean)</text>
+<rect class="track" x="630.0" y="538.0" width="165.0" height="10" rx="2"/>
+<rect class="warn" x="630.0" y="538.0" width="29.5" height="10" rx="2"/>
+<text x="803.0" y="547.0" class="cwarn num" font-size="10.5" text-anchor="start" font-weight="650">2.5% (107)</text>
+<text x="484.0" y="561.0" class="cgood" font-size="10.5" text-anchor="start" font-weight="600">lancet refs / ast: 0% (코드만 인식)</text>
+<text x="28.0" y="594.0" class="mut" font-size="11.5" text-anchor="start">재현: python3 bench/failure_modes.py</text>
+</svg>

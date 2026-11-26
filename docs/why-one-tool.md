@@ -20,10 +20,14 @@ choice and the alternative it beat, and lists where lancet still loses.
 Every row is a real run of the real tools (macOS, ripgrep 15.2, BSD sed/patch, pandoc 3,
 rga 0.10, zoekt), not a thought experiment.
 
+<p align="center">
+  <img src="./assets/failure-modes.svg" width="100%" alt="Measured failure modes of chained tools vs lancet across concurrent updates, document coordinates, stale index, context cost, file identity, and text-rename false hits.">
+</p>
+
 | # | Task | Tool chain | What happened | lancet |
 |---|---|---|---|---|
 | A | Change two call sites found by one search | `rg -n` → `sed -i 'Ns/…/'` twice | The first edit added two lines, so the second edit **overwrote the wrong line**. Both `sed` calls exited **0**. | `edit --edits`: all hunks use the original line numbers → correct. Sequential edits with `--rev`: the stale second edit is refused (`conflict`). |
-| B | 4 agents append to one file at the same time (200 trials) | read file → modify → write it back | **600 of 800 updates lost** (75%). Nothing reported an error. | `edit --rev --apply` + retry on `conflict`: **0 of 80 lost** (120 conflicts detected and retried). |
+| B | 4 agents append to one file at the same time (200 trials) | read file → modify → write it back | **600 of 800 updates lost** (75%). Nothing reported an error. | `edit --rev --apply` + retry on `conflict`: **0 of 800 lost** (1,199 conflicts detected and retried). |
 | C | Apply a 2-file diff where the 2nd file changed meanwhile | `patch -p1` | File 1 **changed**, file 2 rejected, `b.py.rej` left behind: a half-applied refactor (exit 1). | `patch --apply`: every file verified first → **nothing written**, `conflict` names the hunk. |
 | D | Rename an identifier | `rg -l \| xargs sed -i 's/\bname\b/…/'` | Also rewrites occurrences in **comments and string literals**: 0.3–11.7% of all occurrences (e.g. `unwrap` in rust-lang/rust: 1,180; `get_queryset` in Django: 28). Changing strings changes behaviour. | `refs` / `ast --rewrite` see code only (comments and strings excluded). |
 | E | Find a term in a `.docx`, then read that line | `rga -n` → `pandoc -t plain \| sed -n Np` | **0 of 40** lines read contained the term: rga numbers lines of its own conversion, pandoc wraps at 72 columns and adds blank lines. rga finds **nothing** in `.xlsx` and `.hwpx`. | Search and `read` share one extraction: **40 of 40**; `.xlsx`/`.hwpx` found. |
@@ -138,6 +142,14 @@ inside them only with `--docs`, so a drop-in `rg` replacement never changes its 
 
 Apple M4 Pro, warm cache, median of 5 runs (hyperfine 2, output piped). Full tables:
 `bench/results/SUITE.md`.
+
+<p align="center">
+  <img src="./assets/bench-index-footprint.svg" width="100%" alt="Index build time, disk size, and peak build RAM across 8 codebases: lancet vs zoekt.">
+</p>
+
+<p align="center">
+  <img src="./assets/bench-workload-profile.svg" width="100%" alt="Full workload profile across all 8 text query types on LLVM 19.1 and structural AST search across all 8 codebases.">
+</p>
 
 | Corpus | Files | lancet index (build · size · peak) | zoekt index (build · size · peak) | text, auto vs rg | text, trust vs rg | AST with literal vs ast-grep |
 |---|---:|---|---|---|---|---|

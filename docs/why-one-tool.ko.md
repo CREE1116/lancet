@@ -19,10 +19,14 @@
 
 모든 행은 실제 도구를 실제로 돌린 결과입니다(macOS, ripgrep 15.2, BSD sed/patch, pandoc 3, rga 0.10, zoekt).
 
+<p align="center">
+  <img src="./assets/failure-modes.ko.svg" width="100%" alt="도구 체인과 lancet의 실패 모드 재현 결과 비교: 동시 수정 유실, 문서 줄 좌표, 낡은 인덱스, 컨텍스트 비용, 파일 정체성, 리팩터링 오탐.">
+</p>
+
 | # | 작업 | 도구 체인 | 실제로 일어난 일 | lancet |
 |---|---|---|---|---|
 | A | 검색 한 번으로 찾은 호출 두 곳 고치기 | `rg -n` → `sed -i 'Ns/…/'` 두 번 | 첫 수정이 두 줄을 늘려서 두 번째 수정이 **엉뚱한 줄을 덮어씀**. `sed`는 두 번 다 종료 코드 **0**. | `edit --edits`: 모든 구간이 원본 줄 번호 기준 → 정확. `--rev`로 순서대로 고치면 오래된 두 번째 수정은 `conflict`로 거부. |
-| B | 에이전트 4개가 동시에 한 파일에 줄 추가 (200회) | 파일 읽기 → 고치기 → 통째로 쓰기 | 수정 800개 중 **600개 유실**(75%). 오류는 하나도 안 남. | `edit --rev --apply` + `conflict` 시 재시도: 80개 중 **유실 0**(충돌 120번을 감지하고 재시도). |
+| B | 에이전트 4개가 동시에 한 파일에 줄 추가 (200회) | 파일 읽기 → 고치기 → 통째로 쓰기 | 수정 800개 중 **600개 유실**(75%). 오류는 하나도 안 남. | `edit --rev --apply` + `conflict` 시 재시도: 800개 중 **유실 0**(충돌 1,199번을 감지하고 재시도). |
 | C | 두 번째 파일이 그새 바뀐 2-파일 diff 적용 | `patch -p1` | 첫 파일은 **바뀌고** 둘째는 거부, `b.py.rej`가 남음 — 반쯤 적용된 리팩터링(종료 코드 1). | `patch --apply`: 모든 파일을 먼저 검증 → **아무것도 쓰지 않음**, `conflict`가 어느 hunk인지 알려 줌. |
 | D | 식별자 이름 바꾸기 | `rg -l \| xargs sed -i 's/\bname\b/…/'` | **주석과 문자열 리터럴** 안의 출현까지 바꿈: 전체 출현의 0.3~11.7%(rust의 `unwrap` 1,180곳, Django의 `get_queryset` 28곳). 문자열이 바뀌면 동작이 바뀜. | `refs`·`ast --rewrite`는 코드만 봄(주석·문자열 제외). |
 | E | `.docx`에서 단어를 찾고 그 줄 읽기 | `rga -n` → `pandoc -t plain \| sed -n Np` | 읽은 줄 40개 중 **0개**에 단어가 있음: rga는 자기 변환 결과로 줄을 세고, pandoc은 72열에서 줄바꿈하고 빈 줄을 넣음. rga는 `.xlsx`·`.hwpx`에서 **아무것도 못 찾음**. | 검색과 `read`가 같은 추출을 씀: **40개 중 40개**. `.xlsx`·`.hwpx`도 찾음. |
@@ -101,6 +105,14 @@ HWP/HWPX이고, 로그는 압축돼서 옵니다. 체인으로 하면 형식마�
 ## 8. 벤치마크 요약
 
 Apple M4 Pro, 웜 캐시, 5회 중앙값(hyperfine 2, 출력은 파이프). 전체 표: `bench/results/SUITE.md`.
+
+<p align="center">
+  <img src="./assets/bench-index-footprint.ko.svg" width="100%" alt="8개 코드베이스에서 lancet과 zoekt의 인덱스 빌드 시간, 디스크 크기, 피크 메모리 비교.">
+</p>
+
+<p align="center">
+  <img src="./assets/bench-workload-profile.ko.svg" width="100%" alt="LLVM 19.1의 8개 텍스트 쿼리 유형 및 8개 코드베이스 AST 검색의 전체 워크로드 프로필.">
+</p>
 
 | 코퍼스 | 파일 | lancet 인덱스 (빌드 · 크기 · 피크) | zoekt 인덱스 (빌드 · 크기 · 피크) | 텍스트 auto vs rg | 텍스트 trust vs rg | 리터럴 AST vs ast-grep |
 |---|---:|---|---|---|---|---|

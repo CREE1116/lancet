@@ -108,6 +108,7 @@ def scenario_b(trials: int = 200, agents: int = 4) -> dict:
     lost_chain = 0
     lost_lancet = 0
     conflicts = 0
+    lock = threading.Lock()
 
     def chain_writer(i: int, barrier: threading.Barrier) -> None:
         text = f.read_text()
@@ -124,7 +125,8 @@ def scenario_b(trials: int = 200, agents: int = 4) -> dict:
                              "--rev", rev, "--apply"])
             if r.get("status") == "complete":
                 return
-            conflicts += 1
+            with lock:
+                conflicts += 1
         out.append(i)
 
     for _ in range(trials):
@@ -134,7 +136,7 @@ def scenario_b(trials: int = 200, agents: int = 4) -> dict:
         [t.start() for t in ts]
         [t.join() for t in ts]
         lost_chain += agents - sum(1 for i in range(agents) if f"agent_{i}()" in f.read_text())
-    for _ in range(trials // 10):  # lancet runs are processes; fewer trials suffice
+    for _ in range(trials):
         f.write_text("base()\n")
         b = threading.Barrier(agents)
         failed: list = []
@@ -146,7 +148,7 @@ def scenario_b(trials: int = 200, agents: int = 4) -> dict:
     return {
         "agents": agents,
         "chain": {"trials": trials, "updates": trials * agents, "lost": lost_chain},
-        "lancet": {"trials": trials // 10, "updates": trials // 10 * agents, "lost": lost_lancet,
+        "lancet": {"trials": trials, "updates": trials * agents, "lost": lost_lancet,
                    "conflicts_retried": conflicts},
     }
 

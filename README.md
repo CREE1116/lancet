@@ -12,24 +12,24 @@
 </div>
 
 <p align="center">
-  <img src="docs/assets/bench-linux.svg" width="100%" alt="On the Linux kernel (86,218 files), lancet answers text queries 6–10× faster than ripgrep in always-fresh auto mode and 12–223× faster with --trust-index; AST patterns run 5× faster than ast-grep and file listings 4× faster than fd.">
+  <img src="docs/assets/bench-suite.svg" width="100%" alt="Across 8 codebases and 7 languages (338,763 files), lancet answers rare-literal queries 2.8–9.6× faster than ripgrep in always-fresh auto mode and 17–292× faster with --trust-index (matching or beating zoekt while staying byte-identical to ripgrep).">
 </p>
 
 Lancet is a single Rust binary that replaces the `rg` + `fd` + `ast-grep` + `cat` + `pdftotext` chain with one tool that **shares an index and a coordinate system** across every step: discover files, search text and syntax, read exact ranges and symbols, and rewrite code — in source files, PDFs, spreadsheets, Korean HWP documents, and archives alike.
 
-It is built for AI coding agents and the developers working beside them: structured JSON, hard token budgets, and **no silent approximations**.
+Traditional CLI tools assume a human is stitching them together; Lancet is designed from the ground up for AI coding agents and the developers working beside them — structured JSON, hard token budgets, and **no silent approximations**.
 
 ---
 
 ## Two ideas
 
-### 1 · Index speed, never a stale result
+### 1 · Index speed, fresh results by default
 
 <p align="center"><img src="docs/assets/pipeline.svg" width="100%" alt="A query compiles to required trigrams, is intersected over the index, files changed since indexing are scanned live, and every candidate is verified by the full-scan evaluator: 86,218 files, 7,814 opened, 7,073 matches."></p>
 
 - The index **only decides what not to open.** Every candidate is checked by the same evaluator a full scan uses, so indexed results are identical to a scan — not "usually the same".
-- Files edited since the last `lancet index` are detected by `(mtime, size)` and scanned live. **No watcher daemon, no reindex step, no stale hits.**
-- When you *want* to trade freshness for speed, you say so explicitly: `--trust-index` answers straight from the index (5–90 ms on the Linux kernel).
+- Files edited since the last `lancet index` are detected by `(mtime, size, ctime, inode)` plus a racy-timestamp check and scanned live. **No watcher daemon, no reindex step.** (On Windows, where Rust's stdlib exposes only `mtime` and `size`, see [Exactness guarantees](#how-the-index-works).)
+- When you *want* to trade freshness for speed, you say so explicitly: `--trust-index` answers straight from the index (3–86 ms on the Linux kernel).
 
 ### 2 · One coordinate system: find → read → change
 
@@ -87,10 +87,14 @@ git diff | lancet patch --apply                             # apply a unified di
 
 Chained tools fail **between** the steps — they disagree on coordinates, files, binaries and time, and none of them knows another agent is editing the same file. Reproduced with the real tools ([`bench/failure_modes.py`](./bench/failure_modes.py)):
 
+<p align="center">
+  <img src="docs/assets/failure-modes.svg" width="100%" alt="Measured failure modes of chained tools vs lancet: 600 of 800 concurrent updates lost (0 of 800 lost with edit --rev), 0 of 40 docx lines matching rga to pandoc (40 of 40 with lancet), stale zoekt index on 20 edited files, 5–30× context savings with read --symbol, preserved symlinks/hard links/mode, and 2.5–11.7% sed false hits in comments/strings.">
+</p>
+
 | Tool chain | What actually happened | lancet |
 |---|---|---|
 | `rg -n` → two `sed -i` edits | The second edit overwrote the **wrong line**; both exited 0 | `edit --edits` (original coordinates) or a `conflict` |
-| 4 agents: read → change → write back | **600 of 800** updates lost, silently | `edit --rev`: **0 of 80** lost |
+| 4 agents: read → change → write back | **600 of 800** updates lost, silently | `edit --rev`: **0 of 800** lost |
 | `patch -p1` with one stale hunk | One file changed, one rejected — **half-applied** | `patch`: nothing written, `conflict` |
 | `sed` rename | Also rewrote comments/strings: **0.3–11.7%** of occurrences | `refs` / `ast` see code only |
 | `rga` → `pandoc` on a `.docx` | **0 of 40** lines read contained the hit | **40 of 40** (one extraction for search and read) |
@@ -118,7 +122,15 @@ The full write-up — the multi-agent protocol (`rev`, compare-and-swap, `confli
 
 Where lancet does **not** win: literal-free regex (the index can't narrow it — ripgrep's speed or up to 1.4× slower) and literal-free structural AST patterns (0.6–1.0× ast-grep's speed). Details in [docs/why-one-tool.md §7](./docs/why-one-tool.md#7-where-lancet-does-not-win).
 
-The chart at the top is the Linux kernel v6.12 (86,218 files, 1.4 GB) on an Apple M4 Pro, reproducible with [`bench/scale_bench.py`](./bench/scale_bench.py) and redrawn by [`bench/readme_figures.py`](./bench/readme_figures.py). Without an index (`scan` mode) lancet runs at ripgrep's speed on text; the index is where the multiples come from.
+<p align="center">
+  <img src="docs/assets/bench-index-footprint.svg" width="100%" alt="Index build time, disk footprint, and peak build RAM across 8 codebases: lancet builds 4–25× faster, uses 9–30× less disk space, and takes 3.2–5.0× less peak RAM than zoekt.">
+</p>
+
+<p align="center">
+  <img src="docs/assets/bench-workload-profile.svg" width="100%" alt="Full workload profile comparing all 8 text query types on LLVM 19.1 against ripgrep and both literal and literal-free structural AST patterns across all 8 codebases against ast-grep.">
+</p>
+
+All charts above are measured on an Apple M4 Pro (warm cache, median of 5 `hyperfine` runs) from [`bench/results/suite-final.json`](./bench/results/suite-final.json) and [`bench/results/failure_modes.json`](./bench/results/failure_modes.json), and regenerated by [`bench/readme_figures.py`](./bench/readme_figures.py). Without an index (`--no-index` / `scan`), text queries run at ripgrep's speed; the multiples come from the index.
 
 <details>
 <summary><b>Crate-source corpus (28,352 files, 452.6 MiB) — search, discovery, AST, documents</b></summary>
@@ -172,7 +184,7 @@ Reproducible via [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_com
 
 ## How the index works
 
-<p align="center"><img src="docs/assets/index-lifecycle.svg" width="100%" alt="Working tree compared by mtime and size; new files go to immutable mmap segments with tombstones; small segments are merged by tiered compaction. Linux: 4.2 s cold build, about 350 MB peak memory, 140 MB index, 110 ms no-op sync."></p>
+<p align="center"><img src="docs/assets/index-lifecycle.svg" width="100%" alt="Working tree compared by mtime, size, ctime and inode; new files go to immutable mmap segments with tombstones; small segments are merged by tiered compaction. Linux v6.12: 3.33 s cold build, 358 MB peak RAM, 134 MB index (9.5%), 125 ms no-op sync, 15 segments."></p>
 
 1. **Sound trigram lower bounds.** Queries and regex HIRs compile to a boolean trigram formula (`Req`) that every match must satisfy. Posting lists are intersected rarest-first; ultra-common trigrams (> 85% of files) are skipped. The formula is conservative, so the index can narrow but never drop a match.
 2. **Fuzzy search on the index.** By the q-gram lemma, a word with `|G|` trigrams at edit distance `k` keeps at least `|G| − 3k` of them (`|G| − k` for Hangul syllables), so `fuzzy(...)` runs as a `k`-of-`n` posting count instead of a full scan.

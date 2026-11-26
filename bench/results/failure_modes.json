@@ -19,10 +19,10 @@
    "lost": 600
   },
   "lancet": {
-   "trials": 20,
-   "updates": 80,
+   "trials": 200,
+   "updates": 800,
    "lost": 0,
-   "conflicts_retried": 120
+   "conflicts_retried": 1199
   }
  },
  "C_partial_patch": {

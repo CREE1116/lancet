@@ -1,109 +1,122 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 566" width="880" height="566" role="img" aria-labelledby="title desc">
-<title id="title">Benchmark on the Linux kernel</title>
-<desc id="desc">Rare literal: rg 1044 ms, lancet auto 147 ms, trust 45.0 ms; Rare identifier: rg 1038 ms, lancet auto 108 ms, trust 9.7 ms; Common word: rg 1064 ms, lancet auto 188 ms, trust 90.5 ms; No match: rg 1047 ms, lancet auto 104 ms, trust 4.7 ms; AST pattern: ast-grep 7953 ms, lancet auto 1586 ms, trust 1484.0 ms; File discovery: fd 79 ms, lancet auto 82 ms, trust 19.9 ms</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 564" width="920" height="564" role="img" aria-labelledby="title desc">
+<title id="title">Linux v6.12 benchmark</title>
+<desc id="desc">Benchmark on Linux v6.12 from suite-final.json.</desc>
 <style>
-text{font-family:system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
-.panel{fill:#fcfcfb;stroke:rgba(11,11,11,.10)}
-.card{fill:#ffffff;stroke:#c3c2b7}
-.hl{fill:#eef5fd;stroke:#2a78d6}
-.ink{fill:#0b0b0b}.ink2{fill:#52514e}.mut{fill:#898781}
-.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.grid{stroke:#e1e0d9}.axis{stroke:#c3c2b7}
-.flow{stroke:#898781;fill:none}.flowacc{stroke:#2a78d6;fill:none}
-.head{fill:#898781}.headacc{fill:#2a78d6}
-.base{fill:#a3a19a}.auto{fill:#2a78d6}.trust{fill:#104281}
-.f0{fill:#cde2fb}.f1{fill:#6da7ec}.f2{fill:#1c5cab}
-.accent{fill:#2a78d6}.good{fill:#006300}
+text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+.num{font-variant-numeric:tabular-nums}
+.panel{fill:#fbfbfa;stroke:rgba(27,31,36,.12)}
+.card{fill:#ffffff;stroke:#d0d7de}
+.pill{fill:#f6f8fa;stroke:#d0d7de}
+.hl{fill:#eff6ff;stroke:#2563eb}
+.hlwarn{fill:#fffbeb;stroke:#d97706}
+.ink{fill:#1f2328}.ink2{fill:#59636e}.mut{fill:#7d8590}
+.grid{stroke:#eaeef2}.axis{stroke:#afb8c1}.div{stroke:#d8dee4}
+.flow{stroke:#8c959f;fill:none}.flowacc{stroke:#2563eb;fill:none}
+.head{fill:#8c959f}.headacc{fill:#2563eb}
+.base{fill:#94a3b8}.auto{fill:#2563eb}.trust{fill:#0d9488}
+.zoekt{fill:#d97706;stroke:#ffffff;stroke-width:1.4}
+.warn{fill:#d97706}.bad{fill:#cf222e}.good{fill:#1a7f37}
+.badsoft{fill:#ffebe9;stroke:#ff8182}.goodsoft{fill:#dafbe1;stroke:#4ac26b}
+.track{fill:#eaeef2}
+.f0{fill:#dbeafe}.f1{fill:#60a5fa}.f2{fill:#1d4ed8}
+.cblue{fill:#2563eb}.cteal{fill:#0d9488}.cwarn{fill:#d97706}.cbad{fill:#cf222e}.cgood{fill:#1a7f37}
 @media (prefers-color-scheme: dark){
-.panel{fill:#1a1a19;stroke:rgba(255,255,255,.10)}
-.card{fill:#222220;stroke:#383835}
-.hl{fill:#16263a;stroke:#3987e5}
-.ink{fill:#f0efec}.ink2{fill:#c3c2b7}.mut{fill:#898781}
-.grid{stroke:#2c2c2a}.axis{stroke:#383835}
-.flow{stroke:#898781}.flowacc{stroke:#3987e5}
-.head{fill:#898781}.headacc{fill:#3987e5}
-.base{fill:#6b6a65}.auto{fill:#3987e5}.trust{fill:#9ec5f4}
-.f0{fill:#1c3350}.f1{fill:#256abf}.f2{fill:#9ec5f4}
-.accent{fill:#3987e5}.good{fill:#0ca30c}
+.panel{fill:#0d1117;stroke:rgba(240,246,252,.12)}
+.card{fill:#161b22;stroke:#30363d}
+.pill{fill:#21262d;stroke:#30363d}
+.hl{fill:#13233a;stroke:#58a6ff}
+.hlwarn{fill:#271f12;stroke:#f59e0b}
+.ink{fill:#f0f6fc}.ink2{fill:#9da7b3}.mut{fill:#7d8590}
+.grid{stroke:#21262d}.axis{stroke:#484f58}.div{stroke:#30363d}
+.flow{stroke:#6e7681}.flowacc{stroke:#58a6ff}
+.head{fill:#6e7681}.headacc{fill:#58a6ff}
+.base{fill:#6e7681}.auto{fill:#58a6ff}.trust{fill:#2dd4bf}
+.zoekt{fill:#f59e0b;stroke:#161b22;stroke-width:1.4}
+.warn{fill:#f59e0b}.bad{fill:#ff7b72}.good{fill:#3fb950}
+.badsoft{fill:#311618;stroke:#f85149}.goodsoft{fill:#12261e;stroke:#2ea043}
+.track{fill:#21262d}
+.f0{fill:#172b44}.f1{fill:#2f81f7}.f2{fill:#79c0ff}
+.cblue{fill:#58a6ff}.cteal{fill:#2dd4bf}.cwarn{fill:#f59e0b}.cbad{fill:#ff7b72}.cgood{fill:#3fb950}
 }
 </style>
 <defs>
-<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,1 L10,5 L0,9 z"/></marker>
-<marker id="aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="headacc" d="M0,1 L10,5 L0,9 z"/></marker>
+<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path class="head" d="M0,1 L10,5 L0,9 z"/></marker>
+<marker id="aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path class="headacc" d="M0,1 L10,5 L0,9 z"/></marker>
 </defs>
-<rect class="panel" x="0.5" y="0.5" width="879" height="565" rx="12"/>
-<text x="28" y="40" class="ink" font-size="17" text-anchor="start" font-weight="600">Linux kernel v6.12 — 86,218 files, 1.4 GB</text>
-<text x="28" y="62" class="ink2" font-size="13" text-anchor="start">Median wall time, Apple M4 Pro (12 cores). Log scale: every gridline is 10× — shorter is faster.</text>
-<rect class="base" x="28" y="78" width="12" height="12" rx="3"/>
-<text x="46" y="89" class="ink2" font-size="12.5" text-anchor="start">rg / ast-grep / fd</text>
-<rect class="auto" x="191.6" y="78" width="12" height="12" rx="3"/>
-<text x="209.6" y="89" class="ink2" font-size="12.5" text-anchor="start">lancet (auto: always fresh)</text>
-<rect class="trust" x="420.0" y="78" width="12" height="12" rx="3"/>
-<text x="438.0" y="89" class="ink2" font-size="12.5" text-anchor="start">lancet --trust-index</text>
-<line class="grid" x1="230.0" y1="104" x2="230.0" y2="502" stroke-width="1"/>
-<text x="230.0" y="520" class="mut" font-size="11.5" text-anchor="middle">1 ms</text>
-<line class="grid" x1="355.0" y1="104" x2="355.0" y2="502" stroke-width="1"/>
-<text x="355.0" y="520" class="mut" font-size="11.5" text-anchor="middle">10 ms</text>
-<line class="grid" x1="480.0" y1="104" x2="480.0" y2="502" stroke-width="1"/>
-<text x="480.0" y="520" class="mut" font-size="11.5" text-anchor="middle">100 ms</text>
-<line class="grid" x1="605.0" y1="104" x2="605.0" y2="502" stroke-width="1"/>
-<text x="605.0" y="520" class="mut" font-size="11.5" text-anchor="middle">1 s</text>
-<line class="grid" x1="730.0" y1="104" x2="730.0" y2="502" stroke-width="1"/>
-<text x="730.0" y="520" class="mut" font-size="11.5" text-anchor="middle">10 s</text>
-<line class="axis" x1="230" y1="104" x2="230" y2="502" stroke-width="1"/>
-<text x="28" y="130" class="ink" font-size="13.5" text-anchor="start" font-weight="600">Rare literal</text>
-<text x="28" y="148" class="ink2 mono" font-size="11.5" text-anchor="start">"PM_RESUME"</text>
-<rect class="base" x="230" y="112" width="377.3" height="14" rx="3"/>
-<text x="613.3115566751842" y="123" class="ink2" font-size="11" text-anchor="start">1.04 s  rg</text>
-<rect class="auto" x="230" y="128" width="270.8" height="14" rx="3"/>
-<text x="506.84075694750646" y="139" class="ink2" font-size="11" text-anchor="start">147 ms</text>
-<rect class="trust" x="230" y="144" width="206.7" height="14" rx="3"/>
-<text x="442.65156422191797" y="155" class="ink2" font-size="11" text-anchor="start">45.0 ms</text>
-<text x="852" y="142" class="good" font-size="13.5" text-anchor="end" font-weight="600">23× faster</text>
-<text x="28" y="196" class="ink" font-size="13.5" text-anchor="start" font-weight="600">Rare identifier</text>
-<text x="28" y="214" class="ink2 mono" font-size="11.5" text-anchor="start">"kmalloc_node_track"</text>
-<rect class="base" x="230" y="178" width="377.0" height="14" rx="3"/>
-<text x="613.0194389939318" y="189" class="ink2" font-size="11" text-anchor="start">1.04 s  rg</text>
-<rect class="auto" x="230" y="194" width="253.9" height="14" rx="3"/>
-<text x="489.926058031453" y="205" class="ink2" font-size="11" text-anchor="start">108 ms</text>
-<rect class="trust" x="230" y="210" width="123.3" height="14" rx="3"/>
-<text x="359.3464667832806" y="221" class="ink2" font-size="11" text-anchor="start">9.7 ms</text>
-<text x="852" y="208" class="good" font-size="13.5" text-anchor="end" font-weight="600">107× faster</text>
-<text x="28" y="262" class="ink" font-size="13.5" text-anchor="start" font-weight="600">Common word</text>
-<text x="28" y="280" class="ink2 mono" font-size="11.5" text-anchor="start">"spin_lock" · 7,073 files</text>
-<rect class="base" x="230" y="244" width="378.3" height="14" rx="3"/>
-<text x="614.3472910824412" y="255" class="ink2" font-size="11" text-anchor="start">1.06 s  rg</text>
-<rect class="auto" x="230" y="260" width="284.4" height="14" rx="3"/>
-<text x="520.3562900020831" y="271" class="ink2" font-size="11" text-anchor="start">188 ms</text>
-<rect class="trust" x="230" y="276" width="244.6" height="14" rx="3"/>
-<text x="480.58107240065044" y="287" class="ink2" font-size="11" text-anchor="start">90.5 ms</text>
-<text x="852" y="274" class="good" font-size="13.5" text-anchor="end" font-weight="600">12× faster</text>
-<text x="28" y="328" class="ink" font-size="13.5" text-anchor="start" font-weight="600">No match</text>
-<text x="28" y="346" class="ink2" font-size="11.5" text-anchor="start">zero-hit query</text>
-<rect class="base" x="230" y="310" width="377.5" height="14" rx="3"/>
-<text x="613.4829642459804" y="321" class="ink2" font-size="11" text-anchor="start">1.05 s  rg</text>
-<rect class="auto" x="230" y="326" width="252.3" height="14" rx="3"/>
-<text x="488.3375623332804" y="337" class="ink2" font-size="11" text-anchor="start">104 ms</text>
-<rect class="trust" x="230" y="342" width="84.0" height="14" rx="3"/>
-<text x="320.0122322419647" y="353" class="ink2" font-size="11" text-anchor="start">4.7 ms</text>
-<text x="852" y="340" class="good" font-size="13.5" text-anchor="end" font-weight="600">223× faster</text>
-<text x="28" y="394" class="ink" font-size="13.5" text-anchor="start" font-weight="600">AST pattern</text>
-<text x="28" y="412" class="ink2 mono" font-size="11.5" text-anchor="start">kmalloc($SZ, $FLAGS)</text>
-<rect class="base" x="230" y="376" width="487.6" height="14" rx="3"/>
-<text x="723.5663728065945" y="387" class="ink2" font-size="11" text-anchor="start">7.95 s  ast-grep</text>
-<rect class="auto" x="230" y="392" width="400.0" height="14" rx="3"/>
-<text x="636.0378978726981" y="403" class="ink2" font-size="11" text-anchor="start">1.59 s</text>
-<rect class="trust" x="230" y="408" width="396.4" height="14" rx="3"/>
-<text x="632.429237617876" y="419" class="ink2" font-size="11" text-anchor="start">1.48 s</text>
-<text x="852" y="406" class="good" font-size="13.5" text-anchor="end" font-weight="600">5× faster</text>
-<text x="28" y="460" class="ink" font-size="13.5" text-anchor="start" font-weight="600">File discovery</text>
-<text x="28" y="478" class="ink2" font-size="11.5" text-anchor="start">*.c files</text>
-<rect class="base" x="230" y="442" width="237.1" height="14" rx="3"/>
-<text x="473.1346254011776" y="453" class="ink2" font-size="11" text-anchor="start">78.9 ms  fd</text>
-<rect class="auto" x="230" y="458" width="239.1" height="14" rx="3"/>
-<text x="475.0941629589154" y="469" class="ink2" font-size="11" text-anchor="start">81.8 ms</text>
-<rect class="trust" x="230" y="474" width="162.4" height="14" rx="3"/>
-<text x="398.35663455121335" y="485" class="ink2" font-size="11" text-anchor="start">19.9 ms</text>
-<text x="852" y="472" class="good" font-size="13.5" text-anchor="end" font-weight="600">4× faster</text>
-<text x="28" y="550" class="mut" font-size="11.5" text-anchor="start">Speedup = baseline ÷ lancet --trust-index.  lancet scan mode (no index) ≈ rg on text queries.  Reproduce: bench/scale_bench.py</text>
+<rect class="panel" x="0.5" y="0.5" width="919" height="563" rx="12"/>
+<text x="28.0" y="38.0" class="ink" font-size="17" text-anchor="start" font-weight="700">Linux kernel v6.12 — 86,680 files, 1,408 MiB</text>
+<text x="28.0" y="60.0" class="ink2" font-size="12.5" text-anchor="start">Median wall time, Apple M4 Pro. Log scale: every gridline is 10× — shorter is faster.</text>
+<rect class="base" x="28.0" y="78" width="12" height="12" rx="3"/>
+<text x="46.0" y="88.5" class="ink2" font-size="12" text-anchor="start">rg / ast-grep / fd</text>
+<rect class="auto" x="180.1" y="78" width="12" height="12" rx="3"/>
+<text x="198.1" y="88.5" class="ink2" font-size="12" text-anchor="start">lancet (auto: always fresh)</text>
+<rect class="trust" x="391.2" y="78" width="12" height="12" rx="3"/>
+<text x="409.2" y="88.5" class="ink2" font-size="12" text-anchor="start">lancet --trust-index</text>
+<line class="grid" x1="236.0" y1="104" x2="236.0" y2="502" stroke-width="1"/>
+<text x="236.0" y="520.0" class="mut num" font-size="11" text-anchor="middle">1 ms</text>
+<line class="grid" x1="369.5" y1="104" x2="369.5" y2="502" stroke-width="1"/>
+<text x="369.5" y="520.0" class="mut num" font-size="11" text-anchor="middle">10 ms</text>
+<line class="grid" x1="503.0" y1="104" x2="503.0" y2="502" stroke-width="1"/>
+<text x="503.0" y="520.0" class="mut num" font-size="11" text-anchor="middle">100 ms</text>
+<line class="grid" x1="636.5" y1="104" x2="636.5" y2="502" stroke-width="1"/>
+<text x="636.5" y="520.0" class="mut num" font-size="11" text-anchor="middle">1 s</text>
+<line class="grid" x1="770.0" y1="104" x2="770.0" y2="502" stroke-width="1"/>
+<text x="770.0" y="520.0" class="mut num" font-size="11" text-anchor="middle">10 s</text>
+<line class="axis" x1="236" y1="104" x2="236" y2="502" stroke-width="1"/>
+<text x="28.0" y="130.0" class="ink" font-size="13.5" text-anchor="start" font-weight="650">Rare literal</text>
+<text x="28.0" y="148.0" class="ink2 mono" font-size="11" text-anchor="start">PM_RESUME</text>
+<rect class="base" x="236" y="112.0" width="405.3" height="14" rx="3"/>
+<text x="647.3" y="123.0" class="ink2 num" font-size="11" text-anchor="start">1.09 s  rg</text>
+<rect class="auto" x="236" y="128.5" width="289.7" height="14" rx="3"/>
+<text x="531.7" y="139.5" class="ink2 num" font-size="11" text-anchor="start">148 ms</text>
+<rect class="trust" x="236" y="145.0" width="214.6" height="14" rx="3"/>
+<text x="456.6" y="156.0" class="ink2 num" font-size="11" text-anchor="start">40 ms</text>
+<text x="892.0" y="142.0" class="cgood num" font-size="13" text-anchor="end" font-weight="700">27× faster</text>
+<text x="28.0" y="196.0" class="ink" font-size="13.5" text-anchor="start" font-weight="650">Common identifier</text>
+<text x="28.0" y="214.0" class="ink2 mono" font-size="11" text-anchor="start">spin_lock</text>
+<rect class="base" x="236" y="178.0" width="407.2" height="14" rx="3"/>
+<text x="649.2" y="189.0" class="ink2 num" font-size="11" text-anchor="start">1.12 s  rg</text>
+<rect class="auto" x="236" y="194.5" width="305.4" height="14" rx="3"/>
+<text x="547.4" y="205.5" class="ink2 num" font-size="11" text-anchor="start">194 ms</text>
+<rect class="trust" x="236" y="211.0" width="258.5" height="14" rx="3"/>
+<text x="500.5" y="222.0" class="ink2 num" font-size="11" text-anchor="start">86 ms</text>
+<text x="892.0" y="208.0" class="cgood num" font-size="13" text-anchor="end" font-weight="700">13× faster</text>
+<text x="28.0" y="262.0" class="ink" font-size="13.5" text-anchor="start" font-weight="650">Regex w/ literal</text>
+<text x="28.0" y="280.0" class="ink2 mono" font-size="11" text-anchor="start">\w+_irqsave\(</text>
+<rect class="base" x="236" y="244.0" width="404.4" height="14" rx="3"/>
+<text x="646.4" y="255.0" class="ink2 num" font-size="11" text-anchor="start">1.07 s  rg</text>
+<rect class="auto" x="236" y="260.5" width="292.9" height="14" rx="3"/>
+<text x="534.9" y="271.5" class="ink2 num" font-size="11" text-anchor="start">156 ms</text>
+<rect class="trust" x="236" y="277.0" width="221.5" height="14" rx="3"/>
+<text x="463.5" y="288.0" class="ink2 num" font-size="11" text-anchor="start">46 ms</text>
+<text x="892.0" y="274.0" class="cgood num" font-size="13" text-anchor="end" font-weight="700">23× faster</text>
+<text x="28.0" y="328.0" class="ink" font-size="13.5" text-anchor="start" font-weight="650">No match</text>
+<text x="28.0" y="346.0" class="ink2 mono" font-size="11" text-anchor="start">zero-hit token</text>
+<rect class="base" x="236" y="310.0" width="407.7" height="14" rx="3"/>
+<text x="649.7" y="321.0" class="ink2 num" font-size="11" text-anchor="start">1.13 s  rg</text>
+<rect class="auto" x="236" y="326.5" width="290.8" height="14" rx="3"/>
+<text x="532.8" y="337.5" class="ink2 num" font-size="11" text-anchor="start">151 ms</text>
+<rect class="trust" x="236" y="343.0" width="59.9" height="14" rx="3"/>
+<text x="301.9" y="354.0" class="ink2 num" font-size="11" text-anchor="start">2.8 ms</text>
+<text x="892.0" y="340.0" class="cgood num" font-size="13" text-anchor="end" font-weight="700">403× faster</text>
+<text x="28.0" y="394.0" class="ink" font-size="13.5" text-anchor="start" font-weight="650">AST w/ literal</text>
+<text x="28.0" y="412.0" class="ink2 mono" font-size="11" text-anchor="start">kmalloc($SZ, $FLAGS)</text>
+<rect class="base" x="236" y="376.0" width="529.0" height="14" rx="3"/>
+<text x="771.0" y="387.0" class="ink2 num" font-size="11" text-anchor="start">9.18 s  ast-grep</text>
+<rect class="auto" x="236" y="392.5" width="449.3" height="14" rx="3"/>
+<text x="691.3" y="403.5" class="ink2 num" font-size="11" text-anchor="start">2.32 s</text>
+<rect class="trust" x="236" y="409.0" width="446.4" height="14" rx="3"/>
+<text x="688.4" y="420.0" class="ink2 num" font-size="11" text-anchor="start">2.21 s</text>
+<text x="892.0" y="406.0" class="cgood num" font-size="13" text-anchor="end" font-weight="700">4.2× faster</text>
+<text x="28.0" y="460.0" class="ink" font-size="13.5" text-anchor="start" font-weight="650">File discovery</text>
+<text x="28.0" y="478.0" class="ink2 mono" font-size="11" text-anchor="start">-e c</text>
+<rect class="base" x="236" y="442.0" width="248.0" height="14" rx="3"/>
+<text x="490.0" y="453.0" class="ink2 num" font-size="11" text-anchor="start">72 ms  fd</text>
+<rect class="auto" x="236" y="458.5" width="252.9" height="14" rx="3"/>
+<text x="494.9" y="469.5" class="ink2 num" font-size="11" text-anchor="start">78 ms</text>
+<rect class="trust" x="236" y="475.0" width="155.6" height="14" rx="3"/>
+<text x="397.6" y="486.0" class="ink2 num" font-size="11" text-anchor="start">15 ms</text>
+<text x="892.0" y="472.0" class="cgood num" font-size="13" text-anchor="end" font-weight="700">4.9× faster</text>
+<text x="28.0" y="548.0" class="mut" font-size="11.5" text-anchor="start">Data: bench/results/suite-final.json · Reproduce: python3 bench/suite.py</text>
 </svg>

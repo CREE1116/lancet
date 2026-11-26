@@ -1,76 +1,89 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 300" width="880" height="300" role="img" aria-labelledby="title desc">
-<title id="title">Index lifecycle</title>
-<desc id="desc">Working tree compared by mtime and size, new files written to immutable mmap segments with tombstones, small segments merged by tiered compaction. Linux: 4.2 s cold build, 350 MB peak, 140 MB index, 110 ms no-op sync.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 310" width="920" height="310" role="img" aria-labelledby="title desc">
+<title id="title">The index: immutable segments, cheap to keep fresh</title>
+<desc id="desc">LSM-style: new and changed files go to new segments, old versions are tombstoned, small segments are merged.</desc>
 <style>
-text{font-family:system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
-.panel{fill:#fcfcfb;stroke:rgba(11,11,11,.10)}
-.card{fill:#ffffff;stroke:#c3c2b7}
-.hl{fill:#eef5fd;stroke:#2a78d6}
-.ink{fill:#0b0b0b}.ink2{fill:#52514e}.mut{fill:#898781}
-.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.grid{stroke:#e1e0d9}.axis{stroke:#c3c2b7}
-.flow{stroke:#898781;fill:none}.flowacc{stroke:#2a78d6;fill:none}
-.head{fill:#898781}.headacc{fill:#2a78d6}
-.base{fill:#a3a19a}.auto{fill:#2a78d6}.trust{fill:#104281}
-.f0{fill:#cde2fb}.f1{fill:#6da7ec}.f2{fill:#1c5cab}
-.accent{fill:#2a78d6}.good{fill:#006300}
+text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+.num{font-variant-numeric:tabular-nums}
+.panel{fill:#fbfbfa;stroke:rgba(27,31,36,.12)}
+.card{fill:#ffffff;stroke:#d0d7de}
+.pill{fill:#f6f8fa;stroke:#d0d7de}
+.hl{fill:#eff6ff;stroke:#2563eb}
+.hlwarn{fill:#fffbeb;stroke:#d97706}
+.ink{fill:#1f2328}.ink2{fill:#59636e}.mut{fill:#7d8590}
+.grid{stroke:#eaeef2}.axis{stroke:#afb8c1}.div{stroke:#d8dee4}
+.flow{stroke:#8c959f;fill:none}.flowacc{stroke:#2563eb;fill:none}
+.head{fill:#8c959f}.headacc{fill:#2563eb}
+.base{fill:#94a3b8}.auto{fill:#2563eb}.trust{fill:#0d9488}
+.zoekt{fill:#d97706;stroke:#ffffff;stroke-width:1.4}
+.warn{fill:#d97706}.bad{fill:#cf222e}.good{fill:#1a7f37}
+.badsoft{fill:#ffebe9;stroke:#ff8182}.goodsoft{fill:#dafbe1;stroke:#4ac26b}
+.track{fill:#eaeef2}
+.f0{fill:#dbeafe}.f1{fill:#60a5fa}.f2{fill:#1d4ed8}
+.cblue{fill:#2563eb}.cteal{fill:#0d9488}.cwarn{fill:#d97706}.cbad{fill:#cf222e}.cgood{fill:#1a7f37}
 @media (prefers-color-scheme: dark){
-.panel{fill:#1a1a19;stroke:rgba(255,255,255,.10)}
-.card{fill:#222220;stroke:#383835}
-.hl{fill:#16263a;stroke:#3987e5}
-.ink{fill:#f0efec}.ink2{fill:#c3c2b7}.mut{fill:#898781}
-.grid{stroke:#2c2c2a}.axis{stroke:#383835}
-.flow{stroke:#898781}.flowacc{stroke:#3987e5}
-.head{fill:#898781}.headacc{fill:#3987e5}
-.base{fill:#6b6a65}.auto{fill:#3987e5}.trust{fill:#9ec5f4}
-.f0{fill:#1c3350}.f1{fill:#256abf}.f2{fill:#9ec5f4}
-.accent{fill:#3987e5}.good{fill:#0ca30c}
+.panel{fill:#0d1117;stroke:rgba(240,246,252,.12)}
+.card{fill:#161b22;stroke:#30363d}
+.pill{fill:#21262d;stroke:#30363d}
+.hl{fill:#13233a;stroke:#58a6ff}
+.hlwarn{fill:#271f12;stroke:#f59e0b}
+.ink{fill:#f0f6fc}.ink2{fill:#9da7b3}.mut{fill:#7d8590}
+.grid{stroke:#21262d}.axis{stroke:#484f58}.div{stroke:#30363d}
+.flow{stroke:#6e7681}.flowacc{stroke:#58a6ff}
+.head{fill:#6e7681}.headacc{fill:#58a6ff}
+.base{fill:#6e7681}.auto{fill:#58a6ff}.trust{fill:#2dd4bf}
+.zoekt{fill:#f59e0b;stroke:#161b22;stroke-width:1.4}
+.warn{fill:#f59e0b}.bad{fill:#ff7b72}.good{fill:#3fb950}
+.badsoft{fill:#311618;stroke:#f85149}.goodsoft{fill:#12261e;stroke:#2ea043}
+.track{fill:#21262d}
+.f0{fill:#172b44}.f1{fill:#2f81f7}.f2{fill:#79c0ff}
+.cblue{fill:#58a6ff}.cteal{fill:#2dd4bf}.cwarn{fill:#f59e0b}.cbad{fill:#ff7b72}.cgood{fill:#3fb950}
 }
 </style>
 <defs>
-<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,1 L10,5 L0,9 z"/></marker>
-<marker id="aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="headacc" d="M0,1 L10,5 L0,9 z"/></marker>
+<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path class="head" d="M0,1 L10,5 L0,9 z"/></marker>
+<marker id="aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path class="headacc" d="M0,1 L10,5 L0,9 z"/></marker>
 </defs>
-<rect class="panel" x="0.5" y="0.5" width="879" height="299" rx="12"/>
-<text x="28" y="40" class="ink" font-size="17" text-anchor="start" font-weight="600">The index: immutable segments, cheap to keep fresh</text>
-<text x="28" y="62" class="ink2" font-size="13" text-anchor="start">LSM-style: new and changed files go to new segments, old versions are tombstoned, small segments are merged.</text>
-<rect class="card" x="28" y="92" width="150" height="120" rx="8"/>
-<text x="42" y="118" class="ink" font-size="14" text-anchor="start" font-weight="600">Working tree</text>
-<text x="42" y="142" class="ink2" font-size="12" text-anchor="start">walk (.gitignore-aware)</text>
-<text x="42" y="160" class="ink2" font-size="12" text-anchor="start">compare mtime + size</text>
-<text x="42" y="178" class="ink2" font-size="12" text-anchor="start">unchanged → skip</text>
-<path class="flow" stroke-width="1.6" d="M182,152 L222,152" marker-end="url(#ah)"/>
-<rect class="card" x="226" y="92" width="380" height="120" rx="8"/>
-<text x="240" y="118" class="ink" font-size="14" text-anchor="start" font-weight="600">.lancet/  (mmap'd, zero-copy)</text>
-<rect class="f1" x="240" y="134" width="50" height="34" rx="4"/>
-<text x="265" y="155" class="ink" font-size="11" text-anchor="middle">seg 1</text>
-<rect class="f1" x="298" y="134" width="50" height="34" rx="4"/>
-<text x="323" y="155" class="ink" font-size="11" text-anchor="middle">seg 2</text>
-<rect class="f1" x="356" y="134" width="50" height="34" rx="4"/>
-<text x="381" y="155" class="ink" font-size="11" text-anchor="middle">seg 3</text>
-<rect class="f1" x="414" y="134" width="50" height="34" rx="4"/>
-<text x="439" y="155" class="ink" font-size="11" text-anchor="middle">seg 4</text>
-<rect class="f0" x="472" y="134" width="50" height="34" rx="4"/>
-<text x="497" y="155" class="ink" font-size="11" text-anchor="middle">seg 5</text>
-<rect class="f0" x="530" y="134" width="50" height="34" rx="4"/>
-<text x="555" y="155" class="ink" font-size="11" text-anchor="middle">seg 6</text>
-<text x="240" y="188" class="ink2" font-size="12" text-anchor="start">≤96 MiB input / ≤65,536 docs per segment</text>
-<text x="240" y="204" class="ink2" font-size="12" text-anchor="start">tombstones mark replaced or deleted files</text>
-<path class="flow" stroke-width="1.6" d="M610,152 L650,152" marker-end="url(#ah)"/>
-<rect class="hl" x="654" y="92" width="198" height="120" rx="8"/>
-<text x="668" y="118" class="ink" font-size="14" text-anchor="start" font-weight="600">Tiered compaction</text>
-<text x="668" y="142" class="ink2" font-size="12" text-anchor="start">&gt;6 segments or ≥25% dead</text>
-<text x="668" y="160" class="ink2" font-size="12" text-anchor="start">→ k-way merge small ones</text>
-<text x="668" y="178" class="ink2" font-size="12" text-anchor="start">big segments left alone</text>
-<text x="32.0" y="252" class="ink" font-size="20" text-anchor="start" font-weight="650">4.2 s</text>
-<text x="32.0" y="272" class="ink2" font-size="12" text-anchor="start">cold build</text>
-<text x="196.8" y="252" class="ink" font-size="20" text-anchor="start" font-weight="650">~350 MB</text>
-<text x="196.8" y="272" class="ink2" font-size="12" text-anchor="start">peak memory</text>
-<text x="361.6" y="252" class="ink" font-size="20" text-anchor="start" font-weight="650">140 MB</text>
-<text x="361.6" y="272" class="ink2" font-size="12" text-anchor="start">index (10%)</text>
-<text x="526.4000000000001" y="252" class="ink" font-size="20" text-anchor="start" font-weight="650">110 ms</text>
-<text x="526.4000000000001" y="272" class="ink2" font-size="12" text-anchor="start">no-op sync</text>
-<text x="691.2" y="252" class="ink" font-size="20" text-anchor="start" font-weight="650">134 ms</text>
-<text x="691.2" y="272" class="ink2" font-size="12" text-anchor="start">sync +200 files</text>
-<text x="852" y="290" class="mut" font-size="11" text-anchor="end">Linux v6.12, 86,218 files</text>
+<rect class="panel" x="0.5" y="0.5" width="919" height="309" rx="12"/>
+<text x="28.0" y="36.0" class="ink" font-size="17.5" text-anchor="start" font-weight="700">The index: immutable segments, cheap to keep fresh</text>
+<text x="28.0" y="58.0" class="ink2" font-size="12.5" text-anchor="start">LSM-style: new and changed files go to new segments, old versions are tombstoned, small segments are merged.</text>
+<rect class="card" x="28.0" y="86.0" width="178.0" height="124.0" rx="9"/>
+<text x="42.0" y="112.0" class="ink" font-size="14" text-anchor="start" font-weight="700">Working tree</text>
+<text x="42.0" y="138.0" class="ink2" font-size="12" text-anchor="start">walk (.gitignore-aware)</text>
+<text x="42.0" y="157.0" class="ink2" font-size="12" text-anchor="start">mtime·size·ctime·inode</text>
+<text x="42.0" y="176.0" class="ink2" font-size="12" text-anchor="start">unchanged → skip</text>
+<path class="flow" stroke-width="1.6" d="M210.0,148.0 L248.0,148.0" marker-end="url(#ah)"/>
+<rect class="card" x="252.0" y="86.0" width="390.0" height="124.0" rx="9"/>
+<text x="266.0" y="112.0" class="ink" font-size="14" text-anchor="start" font-weight="700">.lancet/  (mmap'd, zero-copy LANCET04)</text>
+<rect class="f1" x="266" y="128" width="52" height="34" rx="4"/>
+<text x="292.0" y="149.0" class="ink" font-size="11" text-anchor="middle">seg 1</text>
+<rect class="f1" x="326" y="128" width="52" height="34" rx="4"/>
+<text x="352.0" y="149.0" class="ink" font-size="11" text-anchor="middle">seg 2</text>
+<rect class="f1" x="386" y="128" width="52" height="34" rx="4"/>
+<text x="412.0" y="149.0" class="ink" font-size="11" text-anchor="middle">seg 3</text>
+<rect class="f1" x="446" y="128" width="52" height="34" rx="4"/>
+<text x="472.0" y="149.0" class="ink" font-size="11" text-anchor="middle">seg 4</text>
+<rect class="f0" x="506" y="128" width="52" height="34" rx="4"/>
+<text x="532.0" y="149.0" class="ink" font-size="11" text-anchor="middle">seg 5</text>
+<rect class="f0" x="566" y="128" width="52" height="34" rx="4"/>
+<text x="592.0" y="149.0" class="ink" font-size="11" text-anchor="middle">seg 6</text>
+<text x="266.0" y="182.0" class="ink2" font-size="11.5" text-anchor="start">≤96 MiB input / ≤65,536 docs per segment</text>
+<text x="266.0" y="199.0" class="ink2" font-size="11.5" text-anchor="start">tombstones mark replaced or deleted files</text>
+<path class="flow" stroke-width="1.6" d="M646.0,148.0 L684.0,148.0" marker-end="url(#ah)"/>
+<rect class="hl" x="688.0" y="86.0" width="204.0" height="124.0" rx="9"/>
+<text x="702.0" y="112.0" class="cblue" font-size="14" text-anchor="start" font-weight="700">Tiered compaction</text>
+<text x="702.0" y="138.0" class="ink2" font-size="12" text-anchor="start">&gt;6 segments or ≥25% dead</text>
+<text x="702.0" y="157.0" class="ink2" font-size="12" text-anchor="start">→ k-way merge small ones</text>
+<text x="702.0" y="176.0" class="ink2" font-size="12" text-anchor="start">big segments left alone</text>
+<text x="32.0" y="256.0" class="ink num" font-size="18.5" text-anchor="start" font-weight="700">3.33 s</text>
+<text x="32.0" y="276.0" class="ink2" font-size="11.5" text-anchor="start">cold build</text>
+<text x="204.8" y="256.0" class="ink num" font-size="18.5" text-anchor="start" font-weight="700">358 MB</text>
+<text x="204.8" y="276.0" class="ink2" font-size="11.5" text-anchor="start">peak RAM (reused buffers)</text>
+<text x="377.6" y="256.0" class="ink num" font-size="18.5" text-anchor="start" font-weight="700">134 MB (9.5%)</text>
+<text x="377.6" y="276.0" class="ink2" font-size="11.5" text-anchor="start">index on disk</text>
+<text x="550.4" y="256.0" class="ink num" font-size="18.5" text-anchor="start" font-weight="700">125 ms</text>
+<text x="550.4" y="276.0" class="ink2" font-size="11.5" text-anchor="start">no-op sync</text>
+<text x="723.2" y="256.0" class="ink num" font-size="18.5" text-anchor="start" font-weight="700">15 segs</text>
+<text x="723.2" y="276.0" class="ink2" font-size="11.5" text-anchor="start">Linux v6.12 (86,680 files)</text>
+<text x="892.0" y="296.0" class="mut" font-size="11" text-anchor="end">Linux v6.12 · 86,680 files · suite-final.json</text>
 </svg>
