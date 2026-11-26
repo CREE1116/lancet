@@ -34,6 +34,10 @@ pub struct FileFilter {
     types: Vec<FileType>,
     exts: Vec<String>,
     globs: Option<GlobSet>,
+    /// ripgrep `-g/--iglob` semantics (whitelist / `!` negation / directory globs).
+    overrides: Option<ignore::overrides::Override>,
+    /// ripgrep `-t/-T` file types (ripgrep's default definitions).
+    rg_types: Option<ignore::types::Types>,
 }
 
 fn has_glob_meta(s: &str) -> bool {
@@ -46,7 +50,51 @@ impl FileFilter {
             types: vec![],
             exts: vec![],
             globs: None,
+            overrides: None,
+            rg_types: None,
         }
+    }
+
+    /// ripgrep-style filter: `globs`/`iglobs` as `-g`/`--iglob` (relative to `root`),
+    /// `select`/`negate` as `-t`/`-T` over ripgrep's default type definitions.
+    pub fn rg(
+        root: &Path,
+        globs: &[String],
+        iglobs: &[String],
+        select: &[String],
+        negate: &[String],
+    ) -> Result<Self, String> {
+        let overrides = if globs.is_empty() && iglobs.is_empty() {
+            None
+        } else {
+            let mut b = ignore::overrides::OverrideBuilder::new(root);
+            for g in globs {
+                b.add(g).map_err(|e| e.to_string())?;
+            }
+            b.case_insensitive(true).map_err(|e| e.to_string())?;
+            for g in iglobs {
+                b.add(g).map_err(|e| e.to_string())?;
+            }
+            Some(b.build().map_err(|e| e.to_string())?)
+        };
+        let rg_types = if select.is_empty() && negate.is_empty() {
+            None
+        } else {
+            let mut b = ignore::types::TypesBuilder::new();
+            b.add_defaults();
+            for t in select {
+                b.select(t);
+            }
+            for t in negate {
+                b.negate(t);
+            }
+            Some(b.build().map_err(|e| e.to_string())?)
+        };
+        Ok(FileFilter {
+            overrides,
+            rg_types,
+            ..FileFilter::all()
+        })
     }
 
     pub fn new(f: &Filters) -> Result<Self, String> {
@@ -70,6 +118,8 @@ impl FileFilter {
             types: f.types.clone(),
             exts: f.exts.clone(),
             globs,
+            overrides: None,
+            rg_types: None,
         })
     }
 
@@ -90,6 +140,24 @@ impl FileFilter {
         }
         if let Some(g) = &self.globs {
             if !g.is_match(rel) {
+                return false;
+            }
+        }
+        if let Some(ov) = &self.overrides {
+            if ov.matched(p, false).is_ignore() {
+                return false;
+            }
+            // Directory globs (`!target/`) exclude everything below, as in a walk.
+            let mut a = p.parent();
+            while let Some(d) = a.filter(|d| !d.as_os_str().is_empty()) {
+                if ov.matched(d, true).is_ignore() {
+                    return false;
+                }
+                a = d.parent();
+            }
+        }
+        if let Some(t) = &self.rg_types {
+            if t.matched(p, false).is_ignore() {
                 return false;
             }
         }
@@ -158,6 +226,14 @@ pub fn walk(root: &Path, opts: &WalkOpts, filter: &FileFilter, need_meta: bool) 
         .parents(ig)
         .threads(opts.threads)
         .filter_entry(|e| e.file_name() != crate::index::DIR_NAME);
+    if ig {
+        b.add_custom_ignore_filename(".rgignore"); // as ripgrep does
+    }
+    if let Some(ov) = &filter.overrides {
+        // In the walker, as in ripgrep: whitelist globs win over hidden/ignore rules
+        // and `!dir/` prunes whole directories.
+        b.overrides(ov.clone());
+    }
     b.build_parallel().run(|| {
         // Per-thread buffer, flushed into `out` when the visitor is dropped.
         let mut g = Flush {

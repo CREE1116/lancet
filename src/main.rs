@@ -1,4 +1,4 @@
-use clap::{ArgGroup, Parser};
+use clap::{ArgAction, ArgGroup, Parser};
 use lancet::ast_grep::{print_ast_human, search_ast, AstOptions};
 use lancet::edit_cmd::{edit_file, EditOptions, Op, Target};
 use lancet::fd::{find_files, parse_duration, parse_size, print_fd_human, FdOptions, PatternMode};
@@ -36,6 +36,7 @@ Examples:
 Subcommands:
   lancet fd [PATTERN] [PATH]    fast .gitignore-aware file & folder finder / tree view
   lancet ast <PATTERN> [PATH]   tree-sitter structural search & safe AST rewrite
+  lancet rg [FLAGS] PATTERN [PATH...]   ripgrep-compatible search (same flags and output)
   lancet read <TARGET>          surgical line / symbol / page / sheet / archive reader
   lancet edit <PATH>            replace / delete / insert lines addressed like `read`
   lancet outline [PATH]         document table-of-contents & code declaration skeleton
@@ -473,6 +474,7 @@ fn main() -> ExitCode {
         Some("parse") => run_parse(ParseCli::parse_from(&args[1..])),
         Some("explain") => run_explain(ExplainCli::parse_from(&args[1..])),
         Some("batch") => run_batch(BatchCli::parse_from(&args[1..])),
+        Some("rg") => run_rg(RgCli::parse_from(&args[1..])),
         _ => run_search(SearchCli::parse_from(&args)),
     }
 }
@@ -965,6 +967,252 @@ struct EditCli {
     /// Print machine-readable JSON
     #[arg(long)]
     json: bool,
+}
+
+#[derive(Parser)]
+#[command(
+    name = "lancet rg",
+    args_override_self = true,
+    about = "ripgrep-compatible search: same flags, semantics, output and exit codes, on lancet's index (always fresh) and document extractors"
+)]
+struct RgCli {
+    /// PATTERN then PATH... (with -e/-f, every argument is a PATH)
+    args: Vec<String>,
+    /// A pattern to search for (repeatable)
+    #[arg(short = 'e', long = "regexp", allow_hyphen_values = true)]
+    regexp: Vec<String>,
+    /// Read patterns from FILE, one per line (`-` for stdin)
+    #[arg(short = 'f', long = "file")]
+    pattern_file: Vec<PathBuf>,
+    /// Treat patterns as literal strings
+    #[arg(short = 'F', long)]
+    fixed_strings: bool,
+    /// Case-insensitive search
+    #[arg(short = 'i', long, overrides_with_all = ["case_sensitive", "smart_case"])]
+    ignore_case: bool,
+    /// Case-sensitive search (default)
+    #[arg(short = 's', long, overrides_with_all = ["ignore_case", "smart_case"])]
+    case_sensitive: bool,
+    /// Case-insensitive unless the pattern has an uppercase letter
+    #[arg(short = 'S', long, overrides_with_all = ["ignore_case", "case_sensitive"])]
+    smart_case: bool,
+    /// Only matches surrounded by word boundaries
+    #[arg(short = 'w', long)]
+    word_regexp: bool,
+    /// Only matches spanning the whole line
+    #[arg(short = 'x', long)]
+    line_regexp: bool,
+    /// Print lines that do not match
+    #[arg(short = 'v', long)]
+    invert_match: bool,
+    /// Allow matches to span lines
+    #[arg(short = 'U', long)]
+    multiline: bool,
+    /// With -U, let `.` match newlines
+    #[arg(long)]
+    multiline_dotall: bool,
+    /// Print only the matched parts
+    #[arg(short = 'o', long)]
+    only_matching: bool,
+    /// Number of matching lines per file
+    #[arg(short = 'c', long)]
+    count: bool,
+    /// Number of matches per file
+    #[arg(long)]
+    count_matches: bool,
+    /// Only print paths with at least one match
+    #[arg(short = 'l', long)]
+    files_with_matches: bool,
+    /// Only print paths without a match
+    #[arg(long)]
+    files_without_match: bool,
+    /// No output; exit 0 on the first match
+    #[arg(short = 'q', long)]
+    quiet: bool,
+    /// Stop after NUM matching lines per file
+    #[arg(short = 'm', long)]
+    max_count: Option<u64>,
+    /// Lines of context after each match
+    #[arg(short = 'A', long)]
+    after_context: Option<usize>,
+    /// Lines of context before each match
+    #[arg(short = 'B', long)]
+    before_context: Option<usize>,
+    /// Lines of context before and after each match
+    #[arg(short = 'C', long)]
+    context: Option<usize>,
+    /// Show line numbers (default)
+    #[arg(short = 'n', long, overrides_with = "no_line_number")]
+    line_number: bool,
+    /// Hide line numbers
+    #[arg(short = 'N', long, overrides_with = "line_number")]
+    no_line_number: bool,
+    /// Always print the file path
+    #[arg(short = 'H', long, overrides_with = "no_filename")]
+    with_filename: bool,
+    /// Never print the file path
+    #[arg(short = 'I', long, overrides_with = "with_filename")]
+    no_filename: bool,
+    /// Show the column of the first match
+    #[arg(long)]
+    column: bool,
+    /// path:line:column:line for every match
+    #[arg(long)]
+    vimgrep: bool,
+    /// ripgrep's JSON Lines output (begin/match/context/end/summary)
+    #[arg(long)]
+    json: bool,
+    /// NUL after file paths
+    #[arg(short = '0', long)]
+    null: bool,
+    /// Replace matches in the output (`$1`, `${name}` supported)
+    #[arg(short = 'r', long, allow_hyphen_values = true)]
+    replace: Option<String>,
+    /// Search binary files as text
+    #[arg(short = 'a', long)]
+    text: bool,
+    /// Include/exclude paths by glob (`!` negates; repeatable)
+    #[arg(short = 'g', long, allow_hyphen_values = true)]
+    glob: Vec<String>,
+    /// Like --glob, case-insensitive
+    #[arg(long, allow_hyphen_values = true)]
+    iglob: Vec<String>,
+    /// Only search files of TYPE (ripgrep's type list)
+    #[arg(short = 't', long = "type")]
+    type_: Vec<String>,
+    /// Skip files of TYPE
+    #[arg(short = 'T', long)]
+    type_not: Vec<String>,
+    /// Print the known file types
+    #[arg(long)]
+    type_list: bool,
+    /// -u: no ignore files, -uu: also hidden, -uuu: also binary
+    #[arg(short = 'u', long, action = ArgAction::Count)]
+    unrestricted: u8,
+    /// Search hidden files and directories
+    #[arg(long, short = '.')]
+    hidden: bool,
+    /// Don't respect .gitignore/.ignore/.rgignore
+    #[arg(long)]
+    no_ignore: bool,
+    /// Print the files that would be searched
+    #[arg(long)]
+    files: bool,
+    /// Worker threads
+    #[arg(short = 'j', long)]
+    threads: Option<usize>,
+    /// Accepted for compatibility; output is always sorted by path
+    #[arg(long, value_name = "SORTBY")]
+    sort: Option<String>,
+    /// Accepted for compatibility; output never uses headings
+    #[arg(long)]
+    no_heading: bool,
+    /// Accepted for compatibility; output is never colored
+    #[arg(long, value_name = "WHEN")]
+    color: Option<String>,
+    /// Ignore the lancet index (search like plain ripgrep)
+    #[arg(long)]
+    no_index: bool,
+    /// Answer from the lancet index without checking for changed files
+    #[arg(long, conflicts_with = "no_index")]
+    trust_index: bool,
+    /// Custom index directory (default: PATH/.lancet or an ancestor)
+    #[arg(long)]
+    index_dir: Option<PathBuf>,
+}
+
+fn run_rg(cli: RgCli) -> ExitCode {
+    use lancet::rg::{list_files, run, Case, RgOptions};
+    let fail = |msg: &str| {
+        eprintln!("lancet rg: {msg}");
+        ExitCode::from(2)
+    };
+    if cli.type_list {
+        let mut b = ignore::types::TypesBuilder::new();
+        b.add_defaults();
+        for d in b.definitions() {
+            println!("{}: {}", d.name(), d.globs().join(", "));
+        }
+        return ExitCode::SUCCESS;
+    }
+    init_threads(cli.threads);
+    let mut patterns = cli.regexp.clone();
+    for f in &cli.pattern_file {
+        match read_text_arg(f) {
+            Ok(t) => patterns.extend(t.lines().map(str::to_string)),
+            Err(e) => return fail(&format!("{}: {e}", f.display())),
+        }
+    }
+    let mut args = cli.args.clone().into_iter();
+    if patterns.is_empty() && cli.pattern_file.is_empty() && !cli.files {
+        match args.next() {
+            Some(p) => patterns.push(p),
+            None => return fail("a pattern is required (or use --files / --type-list)"),
+        }
+    }
+    let mut o = RgOptions::new(patterns);
+    o.paths = args.map(PathBuf::from).collect();
+    o.fixed_strings = cli.fixed_strings;
+    o.case = if cli.ignore_case {
+        Case::Insensitive
+    } else if cli.smart_case {
+        Case::Smart
+    } else {
+        Case::Sensitive
+    };
+    o.word = cli.word_regexp;
+    o.line_regexp = cli.line_regexp;
+    o.invert = cli.invert_match;
+    o.multiline = cli.multiline;
+    o.multiline_dotall = cli.multiline_dotall;
+    o.only_matching = cli.only_matching;
+    o.count = cli.count;
+    o.count_matches = cli.count_matches;
+    o.files_with_matches = cli.files_with_matches;
+    o.files_without_match = cli.files_without_match;
+    o.quiet = cli.quiet;
+    o.max_count = cli.max_count;
+    o.before = cli.before_context.or(cli.context).unwrap_or(0);
+    o.after = cli.after_context.or(cli.context).unwrap_or(0);
+    o.line_number = !cli.no_line_number;
+    o.with_filename = if cli.with_filename {
+        Some(true)
+    } else if cli.no_filename {
+        Some(false)
+    } else {
+        None
+    };
+    o.column = cli.column;
+    o.vimgrep = cli.vimgrep;
+    o.json = cli.json;
+    o.null = cli.null;
+    o.replace = cli.replace;
+    o.text = cli.text || cli.unrestricted >= 3;
+    o.globs = cli.glob;
+    o.iglobs = cli.iglob;
+    o.types = cli.type_;
+    o.types_not = cli.type_not;
+    o.walk = WalkOpts {
+        hidden: cli.hidden || cli.unrestricted >= 2,
+        no_ignore: cli.no_ignore || cli.unrestricted >= 1,
+        threads: cli.threads.unwrap_or(0),
+    };
+    o.index = index_mode(cli.no_index, cli.trust_index);
+    o.index_dir = cli.index_dir;
+
+    let stdout = io::stdout();
+    let mut out = io::BufWriter::new(stdout.lock());
+    let res = if cli.files {
+        list_files(&o, &mut out)
+    } else {
+        run(&o, &mut out)
+    };
+    let _ = out.flush();
+    match res {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::from(1),
+        Err(msg) => fail(&msg),
+    }
 }
 
 fn read_text_arg(f: &Path) -> io::Result<String> {

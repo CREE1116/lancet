@@ -2088,3 +2088,102 @@ fn fuzz_scan_equals_auto_equals_trust() {
         check(&mut r, "re-synced index", true);
     }
 }
+
+#[test]
+fn rg_mode_matches_ripgrep_semantics_and_is_index_independent() {
+    use lancet::rg::{run, Case, RgOptions};
+
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    let files = [
+        ("a.txt", "foo bar\nFoo Bar\nfoofoo foo,foo\nnothing\n"),
+        ("a/b.txt", "alpha foo\n\nbeta\nfoo\n"),
+        ("sym.txt", "a @x b\nx@x\n"),
+        ("crlf.txt", "foo\r\nbar\r\n"),
+        ("empty.txt", ""),
+    ];
+    for (rel, body) in files {
+        let p = root.join(rel);
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, body).unwrap();
+    }
+    let rg = |f: &dyn Fn(&mut RgOptions), pat: &str| -> (bool, String) {
+        let mut o = RgOptions::new(vec![pat.into()]);
+        o.paths = vec![root.to_path_buf()];
+        o.index = IndexMode::Off;
+        f(&mut o);
+        let mut out = Vec::new();
+        let any = run(&o, &mut out).unwrap();
+        let base = format!("{}/", root.display());
+        (any, String::from_utf8(out).unwrap().replace(&base, ""))
+    };
+
+    // Component-wise path order (`a/b.txt` before `a.txt`), path:line:text.
+    let (any, out) = rg(&|_| {}, "foo");
+    assert!(any);
+    assert_eq!(
+        out,
+        "a/b.txt:1:alpha foo\na/b.txt:4:foo\na.txt:1:foo bar\na.txt:3:foofoo foo,foo\ncrlf.txt:1:foo\r\n"
+    );
+    // -w: boundaries may be shared and may be non-word characters.
+    let (_, out) = rg(
+        &|o| {
+            o.word = true;
+            o.only_matching = true;
+        },
+        "foo",
+    );
+    assert_eq!(
+        out,
+        "a/b.txt:1:foo\na/b.txt:4:foo\na.txt:1:foo\na.txt:3:foo\na.txt:3:foo\ncrlf.txt:1:foo\n"
+    );
+    let (_, out) = rg(&|o| o.word = true, "@x");
+    assert_eq!(out, "sym.txt:1:a @x b\n");
+    // Case modes, counts, inversion, file lists.
+    let (_, out) = rg(
+        &|o| {
+            o.case = Case::Smart;
+            o.count = true;
+        },
+        "Foo",
+    );
+    assert_eq!(out, "a.txt:1\n");
+    let (_, out) = rg(
+        &|o| {
+            o.case = Case::Smart;
+            o.count = true;
+        },
+        "foo",
+    );
+    assert_eq!(out, "a/b.txt:2\na.txt:3\ncrlf.txt:1\n");
+    let (_, out) = rg(
+        &|o| {
+            o.invert = true;
+            o.files_with_matches = true;
+        },
+        "foo",
+    );
+    assert_eq!(out, "a/b.txt\na.txt\ncrlf.txt\nsym.txt\n");
+    let (_, out) = rg(&|o| o.files_without_match = true, "foo");
+    assert_eq!(out, "empty.txt\nsym.txt\n");
+    // Context groups are separated by `--` only when context is requested.
+    let (_, out) = rg(&|o| o.after = 1, "alpha|beta");
+    assert_eq!(
+        out,
+        "a/b.txt:1:alpha foo\na/b.txt-2-\na/b.txt:3:beta\na/b.txt-4-foo\n"
+    );
+    let (_, out) = rg(&|o| o.replace = Some("[$1]".into()), "(f)oo b");
+    assert_eq!(out, "a.txt:1:[f]ar\n");
+    let (any, out) = rg(&|_| {}, "zzz");
+    assert!(!any && out.is_empty());
+
+    // With an index (fresh, then after an edit without re-indexing) output is identical.
+    std::thread::sleep(Duration::from_millis(250));
+    index::sync(root, &index::default_dir(root), &WalkOpts::default()).unwrap();
+    fs::write(root.join("a/b.txt"), "zeta foo\n").unwrap();
+    for pat in ["foo", "zeta", "o+ b"] {
+        let off = rg(&|_| {}, pat);
+        let auto = rg(&|o| o.index = IndexMode::Auto, pat);
+        assert_eq!(off, auto, "{pat}");
+    }
+}

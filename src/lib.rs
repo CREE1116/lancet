@@ -24,5 +24,6 @@ pub mod output;
 pub mod query;
 pub mod read_cmd;
 pub mod refs;
+pub mod rg;
 pub mod search;
 pub mod walk;

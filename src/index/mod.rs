@@ -225,6 +225,10 @@ pub fn rebuild_with_ocr(
             }
         }
     }
+    if dir.join(MANIFEST).exists() {
+        // Otherwise sync would fail to open it again and rebuild forever.
+        bail!("cannot remove the old index in {}", dir.display());
+    }
     sync_with_ocr(root, dir, wopts, ocr)
 }
 
@@ -242,7 +246,12 @@ pub fn sync_with_ocr(root: &Path, dir: &Path, wopts: &WalkOpts, ocr: bool) -> Re
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos() as u64);
     fs::create_dir_all(dir)?;
-    let existing = Index::open(dir)?;
+    // The index is a cache: an old format (or a damaged one) is rebuilt, not an error.
+    let existing = match Index::open(dir) {
+        Ok(ix) => ix,
+        Err(_) if dir.join(MANIFEST).exists() => return rebuild_with_ocr(root, dir, wopts, ocr),
+        Err(e) => return Err(e),
+    };
     let had_existing = existing.is_some();
 
     let entries = walk(root, wopts, &FileFilter::all(), true);

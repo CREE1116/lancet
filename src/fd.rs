@@ -526,6 +526,9 @@ fn collect_from_walk(root: &Path, wopts: &WalkOpts, cf: &CompiledFdFilter) -> Ve
         .threads(wopts.threads)
         .max_depth(cf.max_depth)
         .filter_entry(|e| e.file_name() != crate::index::DIR_NAME);
+    if ig {
+        b.add_custom_ignore_filename(".rgignore"); // as ripgrep does
+    }
 
     b.build_parallel().run(|| {
         let mut g = Flush {
