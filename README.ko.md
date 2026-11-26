@@ -215,9 +215,9 @@ lancet이 **이기지 못하는** 곳: 리터럴 없는 정규식(인덱스가 �
 
 <p align="center"><img src="docs/assets/concurrent-edit.ko.svg" width="100%" alt="동시 수정 및 패치 안전성 규약: 두 에이전트가 같은 rev 9f3a를 읽고, 배타적 OS 파일 잠금 아래에서 inode·rev CAS·Tree-sitter 구문 게이트·파일 정체성 보존 원자적 쓰기를 거쳐 성공 측은 rev_after를 반환하고 충돌 측은 0바이트 쓰기 후 재시도합니다. 800건 중 0건 유실(잠금 없을 때 600건 유실)."></p>
 
-- **낙관적 동시성 제어(`rev` CAS + 배타적 파일 잠금).** 모든 `read`는 파일 바이트의 64비트 FNV-1a 해시 `rev`를 반환합니다. `edit --rev --apply`, `ast --rewrite --apply`, `patch --apply`는 배타적 파일 잠금을 잡은 뒤 `inode`(rename 교체 감지)와 `rev`가 일치할 때만 씁니다. 경합에서 진 쪽은 **0바이트도 쓰지 않은 채** `conflict`(종료 코드 2)를 받아 다시 읽고 재시도하며, 성공 측은 `rev_after`를 받아 재읽기 없이 다음 수정을 이어갈 수 있습니다.
-- **다중 구간·다중 파일 원자성.** `--edits`는 한 파일의 여러 수정을 원본 줄 좌표 기준으로 한 번에 처리하고, `patch --apply`는 쓰기 전에 모든 파일을 먼저 검증하며 쓰는 도중 경합이 나면 이미 쓴 파일까지 롤백합니다.
-- **구문 오류 게이트와 파일 정체성 보존.** 수정 전후를 Tree-sitter로 파싱해 구문 오류가 순증가하면 쓰기를 거부합니다. 또한 심볼릭 링크는 유지한 채 대상 파일만 고치고, 다중 하드 링크 파일은 제자리에 다시 쓰며, OS가 허용하는 범위에서 권한·소유자·그룹을 그대로 보존합니다.
+- **낙관적 동시성 제어(`rev` CAS + 배타적 파일 잠금).** 모든 `read`는 파일 바이트의 XXH3-64 해시 `rev`를 반환합니다. `edit --rev --apply`, `ast --rewrite --apply`, `patch --apply`는 배타적 파일 잠금을 잡은 뒤 `inode`(rename 교체 감지)와 `rev`가 일치할 때만 씁니다. 경합에서 진 쪽은 **0바이트도 쓰지 않은 채** `conflict`(종료 코드 2)를 받아 다시 읽고 재시도하며, 성공 측은 `rev_after`를 받아 재읽기 없이 다음 수정을 이어갈 수 있습니다.
+- **다중 구간·다중 파일 원자성.** `--edits`는 한 파일의 여러 수정을 원본 줄 좌표 기준으로 한 번에 처리하고, `patch --apply`는 쓰기 전에 모든 파일을 먼저 검증하며 쓰는 도중 경합이 나면 이미 쓴 파일까지 롤백합니다. 이 롤백은 best-effort이며 crash-atomic은 아닙니다. 여러 파일 패치 도중 크래시나 정전이 나면 일부 파일만 써진 상태가 남을 수 있습니다.
+- **구문 오류 게이트와 파일 정체성 보존.** 수정 전후를 Tree-sitter로 파싱해 구문 오류가 순증가하면 쓰기를 거부합니다. 또한 심볼릭 링크는 유지한 채 대상 파일만 고치고, 다중 하드 링크 파일은 제자리에 다시 쓰며, OS가 허용하는 범위에서 권한·소유자·그룹을 그대로 보존합니다. 일반 쓰기는 크래시에 안전하지만(임시 파일, fsync, 원자적 rename, 디렉터리 fsync), 하드 링크 파일의 제자리 쓰기는 그렇지 않아 쓰는 도중 크래시가 나면 일부만 써질 수 있습니다.
 
 ### 4 · 3단 AST 리터럴 사전 필터와 상한이 있는 `$$$` 매칭
 
@@ -252,6 +252,8 @@ cargo binstall --git https://github.com/CREE1116/lancet lancet                  
 cargo install --git https://github.com/CREE1116/lancet                               # 전체 빌드
 cargo install --git https://github.com/CREE1116/lancet --no-default-features         # 텍스트·코드 전용: Tree-sitter, 문서 어댑터 제외
 ```
+
+바이너리 크기(macOS arm64 릴리스): 전체 **약 40 MB**(Tree-sitter 문법 24개 + 문서 어댑터), `--no-default-features`는 **약 4 MB**.
 
 ## 라이선스
 

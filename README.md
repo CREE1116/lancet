@@ -215,9 +215,9 @@ Reproducible via [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_com
 
 <p align="center"><img src="docs/assets/concurrent-edit.svg" width="100%" alt="Concurrent edits and patch safety protocol: two agents read rev 9f3a, serialize under an exclusive OS file lock checking inode, rev CAS, Tree-sitter syntax gate, and identity-preserving atomic write; winner returns rev_after, loser writes 0 bytes and gets conflict to retry; 0 of 800 updates lost vs 600 of 800 without lock."></p>
 
-- **Optimistic concurrency (`rev` CAS + exclusive lock).** Every `read` returns a 64-bit FNV-1a `rev` of the exact file bytes. `edit --rev --apply`, `ast --rewrite --apply`, and `patch --apply` acquire an exclusive file lock, verify both the `inode` (catching rename-overs) and `rev`, and commit only if nothing changed. Race losers receive `conflict` (exit 2) with **0 bytes written** and retry cleanly; winners return `rev_after` to chain edits without re-reading.
-- **Multi-hunk & multi-file atomicity.** `--edits` applies all hunks in one file using their original line coordinates; `patch --apply` pre-verifies every file before writing and rolls back already-written files if a concurrent writer wins mid-apply.
-- **Syntax gate & file identity.** Tree-sitter parses before and after the edit and refuses any change that creates a net increase in syntax errors. Writes follow symlinks (keeping the link), rewrite multiply hard-linked files in place, and preserve permissions, owner, and group where the OS allows.
+- **Optimistic concurrency (`rev` CAS + exclusive lock).** Every `read` returns a `rev` (XXH3-64 of the exact file bytes). `edit --rev --apply`, `ast --rewrite --apply`, and `patch --apply` acquire an exclusive file lock, verify both the `inode` (catching rename-overs) and `rev`, and commit only if nothing changed. Race losers receive `conflict` (exit 2) with **0 bytes written** and retry cleanly; winners return `rev_after` to chain edits without re-reading.
+- **Multi-hunk & multi-file atomicity.** `--edits` applies all hunks in one file using their original line coordinates; `patch --apply` pre-verifies every file before writing and rolls back already-written files if a concurrent writer wins mid-apply. That rollback is best effort, not crash-atomic: a crash or power loss in the middle of a multi-file patch can leave some files written.
+- **Syntax gate & file identity.** Tree-sitter parses before and after the edit and refuses any change that creates a net increase in syntax errors. Writes follow symlinks (keeping the link), rewrite multiply hard-linked files in place, and preserve permissions, owner, and group where the OS allows. Ordinary writes are crash-safe (temp file, fsync, atomic rename, directory fsync); the in-place rewrite of a hard-linked file is not — a crash mid-write can leave it partial.
 
 ### 4 · 3-stage AST literal prefiltering & bounded `$$$`
 
@@ -252,6 +252,8 @@ cargo binstall --git https://github.com/CREE1116/lancet lancet                  
 cargo install --git https://github.com/CREE1116/lancet                               # full build
 cargo install --git https://github.com/CREE1116/lancet --no-default-features         # text/code only: no Tree-sitter, no document adapters
 ```
+
+Binary size (macOS arm64 release): **~40 MB** full (24 Tree-sitter grammars + document adapters), **~4 MB** with `--no-default-features`.
 
 ## License
 

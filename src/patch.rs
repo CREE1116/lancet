@@ -519,7 +519,10 @@ fn write_one(p: &Planned) -> Result<(), String> {
                 .write(true)
                 .create_new(true)
                 .open(&p.path)
-                .and_then(|mut f| std::io::Write::write_all(&mut f, new.as_bytes()))
+                .and_then(|mut f| {
+                    std::io::Write::write_all(&mut f, new.as_bytes())?;
+                    f.sync_all()
+                })
                 .map_err(|e| format!("{rel}: {e}"))
         }
         (Some(old), None) => {

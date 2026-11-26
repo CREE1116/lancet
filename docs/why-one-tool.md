@@ -84,7 +84,7 @@ editor) are not serialised, but a change they made before the check still yields
 
 ## 4. Ownership, versions and file identity
 
-- **Content revisions (`rev`).** 64-bit FNV-1a of the file's bytes; reported by `read`,
+- **Content revisions (`rev`).** XXH3-64 of the file's bytes (change detection, not a cryptographic digest); reported by `read`,
   `ast` and `edit`, absent for extracted documents and archive entries (those are
   read-only — there is no byte range to write back to).
 - **Index versions.** The on-disk format is versioned (`LANCET04`). An index from an older
@@ -92,8 +92,10 @@ editor) are not serialised, but a change they made before the check still yields
   never a source of truth.
 - **The edited file stays the same file** (scenario I): symlinks are followed and kept,
   files with several hard links are rewritten in place, permissions are kept, and owner and
-  group too where the OS allows. Everything else is written to a temp file and renamed, so a
-  reader sees the old or the new content, never a mix.
+  group too where the OS allows. Everything else is written to a temp file, fsynced, renamed
+  over the original and the directory fsynced, so a reader — or the file after a crash — has
+  the old or the new content, never a mix. Two paths are best effort, not crash-atomic: the
+  in-place rewrite of a hard-linked file, and `patch`'s rollback across several files.
 - **Freshness, not just mtime.** A file is "unchanged since indexing" only if mtime, size,
   ctime *and* inode all match and it was not written within the filesystem's timestamp
   granularity of the sync ("racy git"). ctime catches tools that restore mtime (`cp -p`,

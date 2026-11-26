@@ -2478,3 +2478,82 @@ fn rg_supports_max_depth_max_filesize_follow_and_color() {
     let colored = run_with(IndexMode::Auto, &|o| o.color = true);
     assert!(colored.contains("\x1b[35m") && colored.contains("\x1b[1;31mneedle\x1b[0m"));
 }
+
+/// Corrupt documents (truncated, bit-flipped, random, spliced) and a deflate bomb must
+/// never crash, hang or hide the intact files next to them.
+#[cfg(feature = "adapters")]
+#[test]
+fn corrupt_documents_are_skipped_safely() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    let docx = make_zip_bytes(&[
+        (
+            "[Content_Types].xml",
+            br#"<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>"#,
+        ),
+        (
+            "word/document.xml",
+            br#"<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>SEEDTOKEN docx</w:t></w:r></w:p></w:body></w:document>"#,
+        ),
+    ]);
+    let seeds: Vec<(&str, Vec<u8>, &str)> = vec![
+        ("pdf", make_minimal_pdf("SEEDTOKEN pdf"), "SEEDTOKEN"),
+        ("xlsx", make_minimal_xlsx(), "weft_xlsx_probe"),
+        ("hwp", make_minimal_hwp("SEEDTOKEN hwp"), "SEEDTOKEN"),
+        (
+            "zip",
+            make_zip_bytes(&[("a.log", b"SEEDTOKEN log\n")]),
+            "SEEDTOKEN",
+        ),
+        ("docx", docx, "SEEDTOKEN"),
+    ];
+    let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+    let mut rnd = |n: usize| {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        (x % n.max(1) as u64) as usize
+    };
+    for (ext, seed, _) in &seeds {
+        fs::write(root.join(format!("ok.{ext}")), seed).unwrap();
+        for i in 0..40 {
+            let mut b = seed.clone();
+            match i % 4 {
+                0 => b.truncate(1 + rnd(b.len() - 1)),
+                1 => {
+                    for _ in 0..1 + rnd(20) {
+                        let at = rnd(b.len());
+                        b[at] = rnd(256) as u8;
+                    }
+                }
+                2 => b = (0..1 + rnd(4000)).map(|_| rnd(256) as u8).collect(),
+                _ => {
+                    let mid = b.len() / 2;
+                    let junk: Vec<u8> = (0..200).map(|_| rnd(256) as u8).collect();
+                    b.splice(mid..mid, junk);
+                }
+            }
+            fs::write(root.join(format!("bad{i:02}.{ext}")), b).unwrap();
+        }
+    }
+    // 128 MiB of one byte compresses to ~130 KB: extraction caps must hold.
+    let big = vec![b'A'; 128 << 20];
+    fs::write(root.join("bomb.zip"), make_zip_bytes(&[("big.txt", &big)])).unwrap();
+    drop(big);
+
+    let t = std::time::Instant::now();
+    for (ext, _, token) in &seeds {
+        let r = search(&format!("\"{token}\""), &opts(root, IndexMode::Off));
+        assert_eq!(r.status, Status::Complete, "{ext}");
+        assert!(
+            r.results.iter().any(|h| h.path == format!("ok.{ext}")),
+            "intact ok.{ext} must still be found"
+        );
+    }
+    for f in fs::read_dir(root).unwrap() {
+        let p = f.unwrap().path();
+        let _ = read_file_range(&ReadOptions::new(p.to_string_lossy().into_owned()));
+    }
+    let _ = build_outline(&OutlineOptions::new(root));
+    assert!(t.elapsed() < Duration::from_secs(60), "{:?}", t.elapsed());
+}

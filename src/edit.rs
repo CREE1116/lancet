@@ -53,15 +53,11 @@ pub fn plan(src: &str, edits: &[Edit]) -> Planned {
     }
 }
 
-/// Content revision of a file: 64-bit FNV-1a of its bytes, as 16 hex digits.
+/// Content revision of a file: XXH3-64 of its bytes, as 16 hex digits.
 /// Commands report it so a later edit can refuse to touch a file that changed.
+/// (Change detection between cooperating writers, not a cryptographic digest.)
 pub fn rev(bytes: &[u8]) -> String {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for &b in bytes {
-        h ^= b as u64;
-        h = h.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    format!("{h:016x}")
+    format!("{:016x}", xxhash_rust::xxh3::xxh3_64(bytes))
 }
 
 /// Replace the contents of `path` with `data`, keeping it the *same file*:
@@ -89,7 +85,13 @@ pub fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
     let tmp = parent.join(format!(".{name}.lancet-tmp.{}.{seq}", std::process::id()));
     // Written first even for the in-place case, so a full disk fails before the
     // original is touched.
-    fs::write(&tmp, data)?;
+    // Data reaches the disk before the rename publishes it; otherwise a power loss
+    // right after the rename can leave an empty or truncated file.
+    {
+        let mut f = File::create(&tmp)?;
+        f.write_all(data)?;
+        f.sync_all()?;
+    }
     let _ = fs::set_permissions(&tmp, meta.permissions());
     #[cfg(unix)]
     {
@@ -110,7 +112,10 @@ pub fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
     }
     for attempt in 0..8 {
         match fs::rename(&tmp, path) {
-            Ok(()) => return Ok(()),
+            Ok(()) => {
+                sync_dir(parent);
+                return Ok(());
+            }
             Err(e)
                 if cfg!(windows) && e.kind() == io::ErrorKind::PermissionDenied && attempt < 7 =>
             {
@@ -274,6 +279,17 @@ fn line_diff(rel: &str, old: &str, new: &str) -> String {
     }
     out
 }
+/// Persist a rename by syncing its directory (Unix; best effort, a failure here
+/// does not undo the already-visible write).
+fn sync_dir(dir: &Path) {
+    #[cfg(unix)]
+    if let Ok(d) = File::open(dir) {
+        let _ = d.sync_all();
+    }
+    #[cfg(not(unix))]
+    let _ = dir;
+}
+
 #[cfg(unix)]
 fn hard_links(m: &fs::Metadata) -> u64 {
     use std::os::unix::fs::MetadataExt;
@@ -442,7 +458,7 @@ mod tests {
 
     #[test]
     fn rev_is_stable_and_content_sensitive() {
-        assert_eq!(rev(b""), "cbf29ce484222325");
+        assert_eq!(rev(b""), "2d06800538d394c2"); // XXH3-64 of the empty input
         assert_ne!(rev(b"fn a() {}"), rev(b"fn a() {} "));
     }
 }
