@@ -57,8 +57,10 @@ esac
 if [ -n "${LANCET_VERSION:-}" ]; then
   TAG="$LANCET_VERSION"
 else
-  TAG="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-    | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+  # Follow github.com's /releases/latest redirect: unlike api.github.com it has no
+  # 60-requests-per-hour limit per IP (shared CI runners and NAT hit that).
+  TAG="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/${REPO}/releases/latest" \
+    | sed -n 's#.*/releases/tag/\([^/?]*\).*#\1#p')"
   if [ -z "$TAG" ]; then
     echo "error: could not determine latest release tag from GitHub" >&2
     exit 1

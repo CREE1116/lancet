@@ -10,8 +10,10 @@ $InstallDir = if ($env:LANCET_INSTALL_DIR) { $env:LANCET_INSTALL_DIR } else { Jo
 if ($env:LANCET_VERSION) {
   $Tag = $env:LANCET_VERSION
 } else {
-  $Rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest"
-  $Tag = $Rel.tag_name
+  # Follow github.com's /releases/latest redirect (api.github.com rate-limits by IP).
+  $Resp = Invoke-WebRequest -Uri "https://github.com/$Repo/releases/latest" -UseBasicParsing -Method Head
+  $Final = if ($Resp.BaseResponse.ResponseUri) { $Resp.BaseResponse.ResponseUri.AbsoluteUri } else { $Resp.BaseResponse.RequestMessage.RequestUri.AbsoluteUri }
+  if ($Final -match '/releases/tag/([^/?]+)') { $Tag = $Matches[1] }
 }
 if (-not $Tag) { throw "Could not determine latest lancet release tag." }
 
