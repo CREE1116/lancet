@@ -28,7 +28,7 @@ Traditional CLI tools assume a human is stitching them together; Lancet is desig
 <p align="center"><img src="docs/assets/pipeline.svg" width="100%" alt="A query compiles to required trigrams, is intersected over the index, files changed since indexing are scanned live, and every candidate is verified by the full-scan evaluator: 86,218 files, 7,814 opened, 7,073 matches."></p>
 
 - The index **only decides what not to open.** Every candidate is checked by the same evaluator a full scan uses, so indexed results are identical to a scan — not "usually the same".
-- Files edited since the last `lancet index` are detected by `(mtime, size, ctime, inode)` plus a racy-timestamp check and scanned live. **No watcher daemon, no reindex step.** (On Windows, where Rust's stdlib exposes only `mtime` and `size`, see [Exactness guarantees](#how-the-index-works).)
+- Files edited since the last `lancet index` are detected by `(mtime, size, ctime, inode)` plus a racy-timestamp check and scanned live. **No watcher daemon, no reindex step.** (On Windows, where Rust's stdlib exposes only `mtime` and `size`, see [Core architecture](#core-architecture).)
 - When you *want* to trade freshness for speed, you say so explicitly: `--trust-index` answers straight from the index (3–86 ms on the Linux kernel).
 
 ### 2 · One coordinate system: find → read → change
@@ -46,8 +46,17 @@ Traditional CLI tools assume a human is stitching them together; Lancet is desig
 ## Quick start
 
 ```bash
-cargo install --git https://github.com/CREE1116/lancet      # Rust 1.89+
-lancet index .                                              # optional: build the .lancet index once
+# macOS / Linux (Homebrew)
+brew install --HEAD CREE1116/lancet/lancet   # (drops --HEAD once v0.1.0 is tagged)
+
+# macOS / Linux (prebuilt release installer, no Rust required)
+curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh
+
+# Windows PowerShell (prebuilt release)
+irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex
+
+# Build the optional .lancet index once
+lancet index .
 ```
 
 ```bash
@@ -62,12 +71,14 @@ lancet edit src/search.rs --symbol execute_one --with-file new.rs --rev <REV> --
 git diff | lancet patch --apply                             # apply a unified diff atomically across files
 ```
 
+> **Agent-first `lancet rg` defaults:** `lancet rg` keeps line numbers (`-n`) **on even when piped** so coordinates stay intact across agent steps, colors output automatically on interactive TTYs (`--color auto`, plain when piped), and defaults `--docs` to off. Pass `-N` for plain piped `rg` behavior.
+
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `lancet <QUERY> [PATH]` | `AND` / `OR` / `NOT`, `near` / `before`, `fuzzy("term", k)`, `regex(...)`, `in function`, `symbol(...)`, pipes like `\| expand parent \| limit 5 \| budget tokens:1500` — see the [query language](./docs/grammar.md) |
-| `lancet rg [FLAGS] PATTERN [PATH...]` | ripgrep-compatible flags, output, and exit codes on lancet's always-fresh index & document extractors — see [ripgrep parity](./docs/rg-parity.md) |
+| `lancet rg [FLAGS] PATTERN [PATH...]` | ripgrep-compatible flags (`-L`, `--max-depth`, `--max-filesize`, `--color`, `-U`, `-w`, `-A`/`-B`/`-C`, `--json`, etc.) on lancet's index & document extractors (`-n` stays on when piped; `-N` disables) — see [ripgrep parity](./docs/rg-parity.md) |
 | `lancet fd` | `.gitignore`-aware file & folder finder, `--tree`, size / recency filters, `--trust-index` lookups |
 | `lancet ast` | Tree-sitter structural search & `--rewrite` (`$X`, `$_`, `$$$ARGS`, plus statement metavariables like `if ($C) $S` and `{ $$$B }` in C-like languages) across **24 languages** |
 | `lancet read` | Exact line ranges, `--symbol`, PDF/PPTX `--page`, spreadsheet `--sheet --rows --cols`, `archive.zip!entry`, `--budget-tokens` with resume cursors |
@@ -182,18 +193,35 @@ Reproducible via [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_com
 
 ---
 
-## How the index works
+## Core architecture
+
+### 1 · Lightweight document-level trigram index (`LANCET04` LSM)
 
 <p align="center"><img src="docs/assets/index-lifecycle.svg" width="100%" alt="Working tree compared by mtime, size, ctime and inode; new files go to immutable mmap segments with tombstones; small segments are merged by tiered compaction. Linux v6.12: 3.33 s cold build, 358 MB peak RAM, 134 MB index (9.5%), 125 ms no-op sync, 15 segments."></p>
 
-1. **Sound trigram lower bounds.** Queries and regex HIRs compile to a boolean trigram formula (`Req`) that every match must satisfy. Posting lists are intersected rarest-first; ultra-common trigrams (> 85% of files) are skipped. The formula is conservative, so the index can narrow but never drop a match.
-2. **Fuzzy search on the index.** By the q-gram lemma, a word with `|G|` trigrams at edit distance `k` keeps at least `|G| − 3k` of them (`|G| − k` for Hangul syllables), so `fuzzy(...)` runs as a `k`-of-`n` posting count instead of a full scan.
-3. **Three-stage AST matching.** Identifier literals in the pattern (a) prune files through the index, (b) gate Tree-sitter behind a SIMD `memmem` check, and (c) skip every subtree that does not contain them, before matching a precompiled `u16 kind_id` pattern tree.
-4. **Unicode case orbits.** Case-equivalent characters (`k`, `K`, Kelvin `K`) fold to one representative in both index and evaluator; ASCII literals use `memchr2` dual-case scans instead of regex automata.
-5. **Zero-copy `LANCET04` segments.** Opening the index reads a 40-byte header of an `mmap`'d file; lookups allocate nothing, and line numbers are computed only for byte spans that actually match.
-6. **LSM upkeep with bounded memory.** Changed files go to new immutable segments and old versions are tombstoned; tiered compaction merges small segments. Build buffers are reused across segments, keeping a Linux-kernel cold build near 350 MB.
+- **Document-level, not positional.** Instead of storing every byte offset (which balloons Zoekt to 2.1–2.8× the source tree), `LANCET04` stores only file-level trigram bitsets/postings — **8–23% of corpus size** (9–30× smaller than Zoekt) and **4–25× faster to build**.
+- **Zero-copy mmap segments & bounded-RAM LSM.** Opening an index reads a 40-byte header on an `mmap`'d segment with zero lookup allocations; line numbers are computed only for matching spans. Changed files append to immutable segments with tombstones and merge via tiered compaction, reusing build buffers to keep a Linux-kernel cold build at **358 MB peak RAM**.
 
-**Exactness guarantees.** Malformed queries, unknown flags, and unparseable patterns fail with exact diagnostics instead of a best guess. `--rewrite`, `edit`, and `patch` never touch a file without `--apply`, `--apply` refuses to combine with `--limit` (no partial rewrites), `edit --rev` refuses to write over a file that changed since it was read, and `patch` verifies all files before writing and restores already-written files if a concurrent write wins a race. Freshness compares mtime, size, ctime and inode; Windows exposes no ctime or inode through the standard library, so there an edit that keeps the size *and* restores the old mtime is only caught by `lancet index` or `--no-index`.
+### 2 · Sound candidate filtering & exact re-verification
+
+- **Conservative trigram lower bounds.** Queries and regex HIRs compile into a boolean trigram formula (`Req`) that every match must satisfy. Posting lists are intersected rarest-first (skipping ultra-common trigrams present in > 85% of files); the formula is sound, so the index narrows files without ever dropping a match.
+- **Full-scan evaluator on every candidate.** Surviving files — plus any file whose `(mtime, size, ctime, inode)` or racy-timestamp window changed since indexing — are checked by the exact same evaluator a full scan uses. Indexed output is **byte-identical to ripgrep** across all 8 corpora.
+- **Fuzzy search on the index & Unicode orbits.** By the q-gram lemma, a word with `|G|` trigrams at edit distance `k` retains at least `|G| − 3k` trigrams (`|G| − k` for Hangul syllables), so `fuzzy(...)` runs as a `k`-of-`n` posting count instead of a full scan. Case-equivalent characters fold to canonical orbits in both index and evaluator, while ASCII literals use `memchr2` dual-case scans instead of regex automata.
+
+### 3 · Multi-agent concurrent edits & patch safety
+
+<p align="center"><img src="docs/assets/concurrent-edit.svg" width="100%" alt="Concurrent edits and patch safety protocol: two agents read rev 9f3a, serialize under an exclusive OS file lock checking inode, rev CAS, Tree-sitter syntax gate, and identity-preserving atomic write; winner returns rev_after, loser writes 0 bytes and gets conflict to retry; 0 of 800 updates lost vs 600 of 800 without lock."></p>
+
+- **Optimistic concurrency (`rev` CAS + exclusive lock).** Every `read` returns a 64-bit FNV-1a `rev` of the exact file bytes. `edit --rev --apply`, `ast --rewrite --apply`, and `patch --apply` acquire an exclusive file lock, verify both the `inode` (catching rename-overs) and `rev`, and commit only if nothing changed. Race losers receive `conflict` (exit 2) with **0 bytes written** and retry cleanly; winners return `rev_after` to chain edits without re-reading.
+- **Multi-hunk & multi-file atomicity.** `--edits` applies all hunks in one file using their original line coordinates; `patch --apply` pre-verifies every file before writing and rolls back already-written files if a concurrent writer wins mid-apply.
+- **Syntax gate & file identity.** Tree-sitter parses before and after the edit and refuses any change that creates a net increase in syntax errors. Writes follow symlinks (keeping the link), rewrite multiply hard-linked files in place, and preserve permissions, owner, and group where the OS allows.
+
+### 4 · 3-stage AST literal prefiltering & bounded `$$$`
+
+- **Skip parsing non-matching files and subtrees.** Pattern identifiers (a) prune files via the trigram index, (b) gate Tree-sitter parsing behind a SIMD `memmem` check, and (c) skip every AST subtree that lacks them before matching a precompiled `u16 kind_id` pattern tree.
+- **Bounded `$$$` backtracking.** Multi-wildcard captures are memoized with a per-node step budget so pathological patterns on large calls finish in ~0.03 s or fail cleanly with a warning instead of hanging.
+
+**Exactness & platform caveats.** Malformed queries, unknown flags, and unparseable patterns fail with exact diagnostics instead of guessing; `--rewrite`, `edit`, and `patch` never touch disk without `--apply`; `--apply` refuses to combine with `--limit` (no partial rewrites). Freshness checks `mtime`, `size`, `ctime`, `inode`, and the filesystem timestamp-granularity window; on Windows, where Rust's stdlib exposes no `ctime` or `inode`, an edit that preserves byte size *and* restores the old `mtime` requires `lancet index` or `--no-index`.
 
 ---
 
@@ -211,8 +239,15 @@ Drop [`docs/agent-instructions.md`](./docs/agent-instructions.md) into your `AGE
 ## Installation options
 
 ```bash
-cargo install --git https://github.com/CREE1116/lancet                          # full build
-cargo install --git https://github.com/CREE1116/lancet --no-default-features    # text/code only: no Tree-sitter, no document adapters
+# Prebuilt binaries (no Rust toolchain required)
+brew tap CREE1116/lancet https://github.com/CREE1116/lancet && brew install --HEAD CREE1116/lancet/lancet
+curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh     # macOS / Linux
+irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex         # Windows x64
+cargo binstall --git https://github.com/CREE1116/lancet lancet                       # cargo-binstall (from tagged releases)
+
+# Build from source (Rust 1.89+)
+cargo install --git https://github.com/CREE1116/lancet                               # full build
+cargo install --git https://github.com/CREE1116/lancet --no-default-features         # text/code only: no Tree-sitter, no document adapters
 ```
 
 ## License

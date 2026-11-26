@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 384" width="920" height="384" role="img" aria-labelledby="title desc">
+<title id="title">동시 수정 및 패치 안전성: rev CAS + 배타적 파일 잠금</title>
+<desc id="desc">두 에이전트가 같은 rev를 읽고 동시에 쓰더라도 하나만 커밋되고, 진 쪽은 0바이트 쓰기 후 conflict를 받아 재시도합니다.</desc>
+<style>
+text{font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR","Malgun Gothic",-apple-system,BlinkMacSystemFont,sans-serif}
+.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+.num{font-variant-numeric:tabular-nums}
+.panel{fill:#fbfbfa;stroke:rgba(27,31,36,.12)}
+.card{fill:#ffffff;stroke:#d0d7de}
+.pill{fill:#f6f8fa;stroke:#d0d7de}
+.hl{fill:#eff6ff;stroke:#2563eb}
+.hlwarn{fill:#fffbeb;stroke:#d97706}
+.ink{fill:#1f2328}.ink2{fill:#59636e}.mut{fill:#7d8590}
+.grid{stroke:#eaeef2}.axis{stroke:#afb8c1}.div{stroke:#d8dee4}
+.flow{stroke:#8c959f;fill:none}.flowacc{stroke:#2563eb;fill:none}
+.head{fill:#8c959f}.headacc{fill:#2563eb}
+.base{fill:#94a3b8}.auto{fill:#2563eb}.trust{fill:#0d9488}
+.zoekt{fill:#d97706;stroke:#ffffff;stroke-width:1.4}
+.warn{fill:#d97706}.bad{fill:#cf222e}.good{fill:#1a7f37}
+.badsoft{fill:#ffebe9;stroke:#ff8182}.goodsoft{fill:#dafbe1;stroke:#4ac26b}
+.track{fill:#eaeef2}
+.f0{fill:#dbeafe}.f1{fill:#60a5fa}.f2{fill:#1d4ed8}
+.cblue{fill:#2563eb}.cteal{fill:#0d9488}.cwarn{fill:#d97706}.cbad{fill:#cf222e}.cgood{fill:#1a7f37}
+@media (prefers-color-scheme: dark){
+.panel{fill:#0d1117;stroke:rgba(240,246,252,.12)}
+.card{fill:#161b22;stroke:#30363d}
+.pill{fill:#21262d;stroke:#30363d}
+.hl{fill:#13233a;stroke:#58a6ff}
+.hlwarn{fill:#271f12;stroke:#f59e0b}
+.ink{fill:#f0f6fc}.ink2{fill:#9da7b3}.mut{fill:#7d8590}
+.grid{stroke:#21262d}.axis{stroke:#484f58}.div{stroke:#30363d}
+.flow{stroke:#6e7681}.flowacc{stroke:#58a6ff}
+.head{fill:#6e7681}.headacc{fill:#58a6ff}
+.base{fill:#6e7681}.auto{fill:#58a6ff}.trust{fill:#2dd4bf}
+.zoekt{fill:#f59e0b;stroke:#161b22;stroke-width:1.4}
+.warn{fill:#f59e0b}.bad{fill:#ff7b72}.good{fill:#3fb950}
+.badsoft{fill:#311618;stroke:#f85149}.goodsoft{fill:#12261e;stroke:#2ea043}
+.track{fill:#21262d}
+.f0{fill:#172b44}.f1{fill:#2f81f7}.f2{fill:#79c0ff}
+.cblue{fill:#58a6ff}.cteal{fill:#2dd4bf}.cwarn{fill:#f59e0b}.cbad{fill:#ff7b72}.cgood{fill:#3fb950}
+}
+</style>
+<defs>
+<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path class="head" d="M0,1 L10,5 L0,9 z"/></marker>
+<marker id="aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path class="headacc" d="M0,1 L10,5 L0,9 z"/></marker>
+</defs>
+<rect class="panel" x="0.5" y="0.5" width="919" height="383" rx="12"/>
+<text x="28.0" y="36.0" class="ink" font-size="17.5" text-anchor="start" font-weight="700">동시 수정 및 패치 안전성: rev CAS + 배타적 파일 잠금</text>
+<text x="28.0" y="58.0" class="ink2" font-size="12" text-anchor="start">두 에이전트가 같은 rev를 읽고 동시에 쓰더라도 하나만 커밋되고, 진 쪽은 0바이트 쓰기 후 conflict를 받아 재시도합니다.</text>
+<rect class="card" x="28.0" y="82.0" width="224.0" height="88.0" rx="9"/>
+<text x="42.0" y="107.0" class="ink" font-size="13.5" text-anchor="start" font-weight="700">에이전트 A · read</text>
+<text x="42.0" y="128.0" class="cblue mono" font-size="11.5" text-anchor="start" font-weight="650">rev: 9f3a…</text>
+<text x="42.0" y="150.0" class="ink2 mono" font-size="11" text-anchor="start">edit --lines 42 --rev 9f3a…</text>
+<rect class="card" x="28.0" y="192.0" width="224.0" height="88.0" rx="9"/>
+<text x="42.0" y="217.0" class="ink" font-size="13.5" text-anchor="start" font-weight="700">에이전트 B · read</text>
+<text x="42.0" y="238.0" class="cblue mono" font-size="11.5" text-anchor="start" font-weight="650">rev: 9f3a…</text>
+<text x="42.0" y="260.0" class="ink2 mono" font-size="11" text-anchor="start">edit --lines 88 --rev 9f3a…</text>
+<path class="flowacc" stroke-width="1.6" d="M255.0,126.0 L286.0,126.0" marker-end="url(#aha)"/>
+<path class="flow" stroke-width="1.6" d="M255.0,236.0 L286.0,236.0" marker-end="url(#ah)"/>
+<rect class="hl" x="290.0" y="82.0" width="316.0" height="198.0" rx="9"/>
+<text x="306.0" y="108.0" class="cblue" font-size="13.5" text-anchor="start" font-weight="700">배타적 OS 파일 잠금 (직렬화)</text>
+<rect class="card" x="302.0" y="122.0" width="292.0" height="42.0" rx="6"/>
+<text x="312.0" y="140.0" class="ink" font-size="12" text-anchor="start" font-weight="650">1 · inode + rev CAS 검증</text>
+<text x="312.0" y="156.0" class="ink2" font-size="11" text-anchor="start">rename 교체·오래된 rev 즉시 거부</text>
+<rect class="card" x="302.0" y="172.0" width="292.0" height="42.0" rx="6"/>
+<text x="312.0" y="190.0" class="ink" font-size="12" text-anchor="start" font-weight="650">2 · Tree-sitter 구문 게이트</text>
+<text x="312.0" y="206.0" class="ink2" font-size="11" text-anchor="start">파싱 오류가 순증가하면 쓰기 거부</text>
+<rect class="card" x="302.0" y="222.0" width="292.0" height="42.0" rx="6"/>
+<text x="312.0" y="240.0" class="ink" font-size="12" text-anchor="start" font-weight="650">3 · 정체성 보존 원자적 쓰기</text>
+<text x="312.0" y="256.0" class="ink2" font-size="11" text-anchor="start">심볼릭·하드 링크·권한·소유자 유지</text>
+<path class="flowacc" stroke-width="1.6" d="M609.0,126.0 L640.0,126.0" marker-end="url(#aha)"/>
+<path class="flow" stroke-width="1.6" d="M609.0,236.0 L640.0,236.0" marker-end="url(#ah)"/>
+<rect class="goodsoft" x="644.0" y="82.0" width="248.0" height="88.0" rx="9"/>
+<text x="658.0" y="107.0" class="cgood" font-size="13.5" text-anchor="start" font-weight="700">에이전트 A · 성공 (exit 0)</text>
+<text x="658.0" y="129.0" class="ink" font-size="11.5" text-anchor="start">rev 일치 → 원자적 쓰기 완료</text>
+<text x="658.0" y="150.0" class="cgood mono" font-size="11.5" text-anchor="start" font-weight="650">rev_after: 4c1b… 반환</text>
+<rect class="hlwarn" x="644.0" y="192.0" width="248.0" height="88.0" rx="9"/>
+<text x="658.0" y="217.0" class="cwarn" font-size="13.5" text-anchor="start" font-weight="700">에이전트 B · 충돌 (exit 2)</text>
+<text x="658.0" y="239.0" class="ink" font-size="11.5" text-anchor="start">9f3a ≠ 4c1b → 0바이트 쓰기</text>
+<text x="658.0" y="260.0" class="ink2" font-size="11.5" text-anchor="start">다시 읽기(4c1b…) → 재적용·재시도</text>
+<path class="flow" stroke-width="1.4" stroke-dasharray="4 4" fill="none" d="M768.0,283.0 C768.0,312.0 140.0,312.0 140.0,286.0" marker-end="url(#ah)"/>
+<text x="460.0" y="322.0" class="mut" font-size="11.5" text-anchor="middle">patch --apply도 쓰기 전 전체 파일을 검증하며, 도중 경합이 발생하면 이미 쓴 파일까지 롤백합니다</text>
+<rect class="pill" x="28.0" y="338.0" width="864.0" height="30.0" rx="7"/>
+<text x="460.0" y="357.5" class="ink num" font-size="11.5" text-anchor="middle" font-weight="600">실측 (에이전트 4개 × 200회 = 800건): 기존 읽기-수정-쓰기 600/800건 유실 (75%)  ·  lancet 0/800건 유실 (충돌 1,199회 감지·재시도)</text>
+</svg>

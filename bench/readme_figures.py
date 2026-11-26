@@ -1171,6 +1171,129 @@ def make_lifecycle(lang: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 8. Concurrent edit & patch safety (concurrent-edit / concurrent-edit.ko)
+# ---------------------------------------------------------------------------
+
+
+def make_concurrent_edit(lang: str) -> str:
+    ko = lang == "ko"
+    W, H = 920, 384
+    bd = FAILURES["B_lost_updates"]
+    ch_tot, ch_lost = bd["chain"]["updates"], bd["chain"]["lost"]
+    la_tot, la_lost, la_retried = bd["lancet"]["updates"], bd["lancet"]["lost"], bd["lancet"]["conflicts_retried"]
+
+    title = (
+        "동시 수정 및 패치 안전성: rev CAS + 배타적 파일 잠금"
+        if ko
+        else "Concurrent edits & patch safety: rev CAS + exclusive file lock"
+    )
+    subtitle = (
+        "두 에이전트가 같은 rev를 읽고 동시에 쓰더라도 하나만 커밋되고, 진 쪽은 0바이트 쓰기 후 conflict를 받아 재시도합니다."
+        if ko
+        else "Two agents read the same rev — only one commits; the loser writes 0 bytes, receives conflict, and retries cleanly."
+    )
+    b = [
+        t(28, 36, title, "ink", 17.5, weight=700),
+        t(28, 58, subtitle, "ink2", 12),
+    ]
+
+    # Left: two concurrent agents
+    lx, lw, lh = 28.0, 224.0, 88.0
+    y_top, y_bot = 82.0, 192.0
+    left_cards = (
+        [
+            ("에이전트 A · read", "rev: 9f3a…", "edit --lines 42 --rev 9f3a…", y_top),
+            ("에이전트 B · read", "rev: 9f3a…", "edit --lines 88 --rev 9f3a…", y_bot),
+        ]
+        if ko
+        else [
+            ("Agent A · read", "rev: 9f3a…", "edit --lines 42 --rev 9f3a…", y_top),
+            ("Agent B · read", "rev: 9f3a…", "edit --lines 88 --rev 9f3a…", y_bot),
+        ]
+    )
+    for head, rev_s, cmd_s, cy in left_cards:
+        b.append(card(lx, cy, lw, lh))
+        b.append(t(lx + 14, cy + 25, head, "ink", 13.5, weight=700))
+        b.append(t(lx + 14, cy + 46, rev_s, "cblue mono", 11.5, weight=650))
+        b.append(t(lx + 14, cy + 68, cmd_s, "ink2 mono", 11))
+
+    # Arrows left -> center lock
+    cx, cw, ch = 290.0, 316.0, 198.0
+    b.append(arrow(lx + lw + 3, y_top + lh / 2, cx - 4, y_top + lh / 2, acc=True))
+    b.append(arrow(lx + lw + 3, y_bot + lh / 2, cx - 4, y_bot + lh / 2, acc=False))
+
+    # Center: Exclusive OS file lock card
+    b.append(card(cx, y_top, cw, ch, "hl"))
+    b.append(t(cx + 16, y_top + 26, "배타적 OS 파일 잠금 (직렬화)" if ko else "Exclusive OS file lock (serialized)", "cblue", 13.5, weight=700))
+
+    inner = (
+        [
+            ("1 · inode + rev CAS 검증", "rename 교체·오래된 rev 즉시 거부"),
+            ("2 · Tree-sitter 구문 게이트", "파싱 오류가 순증가하면 쓰기 거부"),
+            ("3 · 정체성 보존 원자적 쓰기", "심볼릭·하드 링크·권한·소유자 유지"),
+        ]
+        if ko
+        else [
+            ("1 · inode + rev CAS check", "rejects rename-over & stale rev"),
+            ("2 · Tree-sitter syntax gate", "refuses net increase in parse errors"),
+            ("3 · Identity-safe atomic write", "keeps symlink, hard links, mode, owner"),
+        ]
+    )
+    for i, (ih, isub) in enumerate(inner):
+        iy = y_top + 40 + i * 50
+        b.append(card(cx + 12, iy, cw - 24, 42, "card", rx=6))
+        b.append(t(cx + 22, iy + 18, ih, "ink", 12, weight=650))
+        b.append(t(cx + 22, iy + 34, isub, "ink2", 11))
+
+    # Right: winner & loser
+    rx, rw = 644.0, 248.0
+    b.append(arrow(cx + cw + 3, y_top + lh / 2, rx - 4, y_top + lh / 2, acc=True))
+    b.append(arrow(cx + cw + 3, y_bot + lh / 2, rx - 4, y_bot + lh / 2, acc=False))
+
+    # Winner card
+    b.append(card(rx, y_top, rw, lh, "goodsoft"))
+    b.append(t(rx + 14, y_top + 25, "에이전트 A · 성공 (exit 0)" if ko else "Agent A · Winner (exit 0)", "cgood", 13.5, weight=700))
+    b.append(t(rx + 14, y_top + 47, "rev 일치 → 원자적 쓰기 완료" if ko else "rev matched → written atomically", "ink", 11.5))
+    b.append(t(rx + 14, y_top + 68, "rev_after: 4c1b… 반환" if ko else "returns rev_after: 4c1b…", "cgood mono", 11.5, weight=650))
+
+    # Loser card
+    b.append(card(rx, y_bot, rw, lh, "hlwarn"))
+    b.append(t(rx + 14, y_bot + 25, "에이전트 B · 충돌 (exit 2)" if ko else "Agent B · Conflict (exit 2)", "cwarn", 13.5, weight=700))
+    b.append(t(rx + 14, y_bot + 47, "9f3a ≠ 4c1b → 0바이트 쓰기" if ko else "9f3a ≠ 4c1b → 0 bytes written", "ink", 11.5))
+    b.append(t(rx + 14, y_bot + 68, "다시 읽기(4c1b…) → 재적용·재시도" if ko else "re-read (4c1b…) → re-apply & retry", "ink2", 11.5))
+
+    # Dashed loop-back arrow from Loser bottom back to Agent B bottom
+    x_from = rx + rw / 2
+    x_to = lx + lw / 2
+    y_edge = y_bot + lh
+    b.append(
+        f'<path class="flow" stroke-width="1.4" stroke-dasharray="4 4" fill="none" '
+        f'd="M{x_from:.1f},{y_edge + 3} C{x_from:.1f},{y_edge + 32} {x_to:.1f},{y_edge + 32} {x_to:.1f},{y_edge + 6}" marker-end="url(#ah)"/>'
+    )
+    patch_note = (
+        "patch --apply도 쓰기 전 전체 파일을 검증하며, 도중 경합이 발생하면 이미 쓴 파일까지 롤백합니다"
+        if ko
+        else "patch --apply verifies every file first and rolls back written files if a concurrent write wins mid-apply"
+    )
+    b.append(t(W / 2, y_edge + 42, patch_note, "mut", 11.5, anchor="middle"))
+
+    # Evidence strip at bottom
+    ev_y = 338.0
+    b.append(card(28, ev_y, W - 56, 30, "pill", rx=7))
+    ev_txt = (
+        f"실측 (에이전트 {bd['agents']}개 × {bd['chain']['trials']}회 = {ch_tot}건): "
+        f"기존 읽기-수정-쓰기 {ch_lost}/{ch_tot}건 유실 ({100*ch_lost//ch_tot}%)  ·  "
+        f"lancet {la_lost}/{la_tot}건 유실 (충돌 {la_retried:,}회 감지·재시도)"
+        if ko
+        else f"Measured ({bd['agents']} agents × {bd['chain']['trials']} trials = {ch_tot} updates): "
+        f"naive read-modify-write lost {ch_lost}/{ch_tot} ({100*ch_lost//ch_tot}%)  ·  "
+        f"lancet lost {la_lost}/{la_tot} ({la_retried:,} conflicts retried)"
+    )
+    b.append(t(W / 2, ev_y + 19.5, ev_txt, "ink num", 11.5, anchor="middle", weight=600))
+    return svg(W, H, lang, title, subtitle, b)
+
+
+# ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
 
@@ -1185,6 +1308,7 @@ def main() -> None:
         "bench-index-footprint": make_index_footprint,
         "bench-workload-profile": make_workload_profile,
         "index-lifecycle": make_lifecycle,
+        "concurrent-edit": make_concurrent_edit,
     }
     generated: list[Path] = []
     for name, fn in builders.items():

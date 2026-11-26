@@ -28,7 +28,7 @@ Lancet은 `rg` + `fd` + `ast-grep` + `cat` + `pdftotext`로 이어지던 도구 
 <p align="center"><img src="docs/assets/pipeline.ko.svg" width="100%" alt="쿼리는 필수 트라이그램으로 컴파일되어 인덱스에서 교집합되고, 인덱싱 이후 바뀐 파일은 즉시 스캔되며, 모든 후보는 풀스캔과 같은 평가기로 검증됩니다: 파일 86,218개 중 7,814개(9.1%)만 열어 7,073개 매치."></p>
 
 - 인덱스는 **열지 않을 파일만 정합니다.** 모든 후보를 풀스캔과 같은 평가기로 검증하므로 결과가 풀스캔과 "대체로"가 아니라 정확히 같습니다.
-- 마지막 `lancet index` 이후 수정된 파일은 `(mtime, size, ctime, inode)`와 타임스탬프 경계 검사로 감지해 그 자리에서 스캔합니다. **감시 데몬도, 재인덱싱 단계도 없습니다.** (표준 라이브러리가 `mtime`·`size`만 제공하는 Windows의 예외는 아래 [정확성 보장](#인덱스는-어떻게-동작하나) 참고.)
+- 마지막 `lancet index` 이후 수정된 파일은 `(mtime, size, ctime, inode)`와 타임스탬프 경계 검사로 감지해 그 자리에서 스캔합니다. **감시 데몬도, 재인덱싱 단계도 없습니다.** (표준 라이브러리가 `mtime`·`size`만 제공하는 Windows의 예외는 아래 [핵심 기술](#핵심-기술) 참고.)
 - 신선도를 포기하고 속도를 원할 때는 명시적으로 선택합니다: `--trust-index`는 인덱스만 보고 답합니다(Linux 커널에서 3–86 ms).
 
 ### 2 · 하나의 좌표계: 찾기 → 읽기 → 고치기
@@ -46,8 +46,17 @@ Lancet은 `rg` + `fd` + `ast-grep` + `cat` + `pdftotext`로 이어지던 도구 
 ## 빠른 시작
 
 ```bash
-cargo install --git https://github.com/CREE1116/lancet      # Rust 1.89+
-lancet index .                                              # 선택: .lancet 인덱스를 한 번 빌드
+# macOS / Linux (Homebrew)
+brew install --HEAD CREE1116/lancet/lancet   # (v0.1.0 태그 릴리스 후에는 --HEAD 불필요)
+
+# macOS / Linux (빌드 없는 원라인 설치 스크립트)
+curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh
+
+# Windows PowerShell (프리빌트 바이너리)
+irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex
+
+# 선택: .lancet 인덱스를 한 번 빌드
+lancet index .
 ```
 
 ```bash
@@ -62,12 +71,14 @@ lancet edit src/search.rs --symbol execute_one --with-file new.rs --rev <REV> --
 git diff | lancet patch --apply                             # unified diff를 여러 파일에 원자적으로 적용
 ```
 
+> **에이전트 우선 `lancet rg` 기본값:** `lancet rg`는 파이프로 넘길 때도 좌표가 끊기지 않도록 **줄 번호(`-n`)를 기본으로 켠 상태**를 유지하고, 터미널(TTY) 출력에는 자동으로 색상을 입힙니다(`--color auto`, 파이프 시 비활성). ripgrep과 똑같이 파이프 시 줄 번호를 끄려면 `-N`을 넘기면 됩니다.
+
 ## 명령어
 
 | 명령 | 하는 일 |
 |---|---|
 | `lancet <QUERY> [PATH]` | `AND` / `OR` / `NOT`, `near` / `before`, `fuzzy("단어", k)`, `regex(...)`, `in function`, `symbol(...)`, `\| expand parent \| limit 5 \| budget tokens:1500` 같은 파이프 — [쿼리 문법](./docs/grammar.md) 참고 |
-| `lancet rg [FLAGS] PATTERN [PATH...]` | 항상 최신인 lancet 인덱스와 문서 추출기 위에서 동작하는 ripgrep 호환 플래그·출력·종료 코드 — [ripgrep 대조표](./docs/rg-parity.md) 참고 |
+| `lancet rg [FLAGS] PATTERN [PATH...]` | 항상 최신인 lancet 인덱스와 문서 추출기 위에서 동작하는 ripgrep 호환 플래그(`-L`, `--max-depth`, `--max-filesize`, `--color`, `-U`, `-w`, `-A`/`-B`/`-C`, `--json` 등; 파이프 시에도 `-n` 기본, `-N`으로 해제) — [ripgrep 대조표](./docs/rg-parity.md) 참고 |
 | `lancet fd` | `.gitignore` 인식 파일·폴더 탐색, `--tree`, 크기·수정 시각 필터, `--trust-index` 조회 |
 | `lancet ast` | **24개 언어** Tree-sitter 구조 검색과 `--rewrite` (`$X`, `$_`, `$$$ARGS`, C 계열 언어의 `if ($C) $S`·`{ $$$B }` 같은 문장 메타변수 포함) |
 | `lancet read` | 정확한 줄 범위, `--symbol`, PDF/PPTX `--page`, 엑셀 `--sheet --rows --cols`, `archive.zip!항목`, 이어읽기 커서가 있는 `--budget-tokens` |
@@ -182,18 +193,35 @@ lancet이 **이기지 못하는** 곳: 리터럴 없는 정규식(인덱스가 �
 
 ---
 
-## 인덱스는 어떻게 동작하나
+## 핵심 기술
+
+### 1 · 경량 문서 단위 트라이그램 인덱스 (`LANCET04` LSM)
 
 <p align="center"><img src="docs/assets/index-lifecycle.ko.svg" width="100%" alt="작업 트리를 mtime·크기·ctime·inode로 비교하고, 새 파일은 불변 mmap 세그먼트에 쓰며 이전 버전은 툼스톤으로 표시하고, 작은 세그먼트는 계층형 컴팩션으로 합칩니다. Linux v6.12: 콜드 빌드 3.33초, 피크 메모리 358 MB, 인덱스 134 MB(9.5%), 변경 없는 동기화 125 ms, 세그먼트 15개."></p>
 
-1. **보수적인 트라이그램 하한.** 쿼리와 정규식 HIR을 모든 매치가 반드시 만족하는 트라이그램 불리언 식(`Req`)으로 컴파일합니다. 포스팅 리스트는 가장 드문 것부터 교집합하고, 파일의 85% 이상에 나오는 트라이그램은 건너뜁니다. 식이 보수적이라 인덱스는 후보를 줄일 뿐 매치를 놓치지 않습니다.
-2. **인덱스 위의 퍼지 검색.** q-gram 보조정리에 따라 트라이그램이 `|G|`개인 단어는 편집 거리 `k` 안에서 최소 `|G| − 3k`개(한글 음절은 `|G| − k`개)를 유지하므로, `fuzzy(...)`도 풀스캔 대신 `k`-of-`n` 포스팅 집계로 처리합니다.
-3. **3단 AST 매칭.** 패턴의 식별자 리터럴로 (a) 인덱스에서 파일을 거르고, (b) SIMD `memmem` 검사를 통과한 파일만 Tree-sitter로 파싱하고, (c) 리터럴이 없는 서브트리는 아예 건너뛴 뒤, 미리 컴파일한 `u16 kind_id` 패턴 트리로 매칭합니다.
-4. **유니코드 대소문자 궤도.** 대소문자 동치 문자(`k`, `K`, 켈빈 `K`)를 인덱스와 평가기 모두에서 하나의 대표 문자로 접고, ASCII 리터럴은 정규식 오토마타 대신 `memchr2` 양방향 대소문자 스캔을 씁니다.
-5. **제로카피 `LANCET04` 세그먼트.** 인덱스를 열 때는 `mmap`한 파일의 40바이트 헤더만 읽습니다. 조회는 할당이 없고, 줄 번호는 실제로 매치된 구간에서만 계산합니다.
-6. **메모리가 묶인 LSM 유지보수.** 바뀐 파일은 새 불변 세그먼트로 가고 이전 버전은 툼스톤 처리되며, 계층형 컴팩션이 작은 세그먼트를 합칩니다. 빌드 버퍼를 세그먼트 사이에 재사용해 Linux 커널 콜드 빌드도 350 MB 안팎에 머뭅니다.
+- **위치 인덱스가 아닌 문서 단위 인덱스.** 모든 바이트 오프셋을 저장하면 Zoekt처럼 원본의 2.1~2.8배까지 커지지만, `LANCET04`는 파일 단위 트라이그램 포스팅만 저장해 **원본의 8~23% 크기**(Zoekt보다 9~30배 작음)와 **4~25배 빠른 빌드**를 달성합니다.
+- **제로카피 mmap 세그먼트와 메모리 제한 LSM.** 인덱스를 열 때는 `mmap` 파일의 40바이트 헤더만 읽고 조회 시 할당이 없으며, 줄 번호는 실제로 매치된 구간에서만 계산합니다. 수정된 파일은 불변 세그먼트에 추가하고 이전 버전은 툼스톤 처리한 뒤 계층형 컴팩션으로 합치며, 빌드 버퍼를 재사용해 Linux 커널 콜드 빌드도 **피크 358 MB**에 머뭅니다.
 
-**정확성 보장.** 잘못된 쿼리, 모르는 플래그, 파싱할 수 없는 패턴은 추측하지 않고 정확한 진단과 함께 실패합니다. `--rewrite`, `edit`, `patch`는 `--apply` 없이 파일을 건드리지 않고, `--apply`는 `--limit`과 함께 쓸 수 없으며(부분 리라이트 방지), `edit --rev`는 읽은 뒤 바뀐 파일에 덮어쓰지 않고, `patch`는 모든 파일을 검증한 뒤에만 쓰며 쓰는 중 다른 쓰기와 충돌하면 이미 쓴 파일을 되돌립니다. 신선도는 mtime·크기·ctime·inode로 판정합니다. Windows는 표준 라이브러리로 ctime과 inode를 제공하지 않으므로, 크기가 같고 mtime까지 되돌린 수정은 `lancet index`나 `--no-index`로만 잡힙니다.
+### 2 · 보수적 후보 선별과 정확한 재검증
+
+- **보수적인 트라이그램 하한.** 쿼리와 정규식 HIR을 모든 매치가 반드시 만족해야 하는 트라이그램 불리언 식(`Req`)으로 컴파일합니다. 포스팅 리스트는 가장 드문 것부터 교집합하고(파일 85% 이상에 나오는 초고빈도 트라이그램은 건너뜀), 식이 보수적이어서 후보만 줄일 뿐 매치를 절대 빠뜨리지 않습니다.
+- **남은 후보에 풀스캔 평가기 직접 실행.** 선별된 후보 파일과 인덱싱 이후 `(mtime, size, ctime, inode)` 또는 타임스탬프 경계가 바뀐 파일은 풀스캔과 완전히 동일한 평가기로 검증합니다. 그 결과 8개 코퍼스 전체에서 **ripgrep과 바이트 단위로 동일한 출력**을 냅니다.
+- **인덱스 위 퍼지 검색과 유니코드 궤도.** q-gram 보조정리에 따라 트라이그램이 `|G|`개인 단어는 편집 거리 `k` 이내에서 최소 `|G| − 3k`개(한글 음절은 `|G| − k`개)를 유지하므로, `fuzzy(...)`도 풀스캔 없이 `k`-of-`n` 포스팅 집계로 처리합니다. 대소문자 동치 문자는 인덱스와 평가기 모두에서 대표 문자로 접고, ASCII 리터럴은 정규식 오토마타 대신 `memchr2` 양방향 스캔을 씁니다.
+
+### 3 · 다중 에이전트 동시 수정과 패치 안전성
+
+<p align="center"><img src="docs/assets/concurrent-edit.ko.svg" width="100%" alt="동시 수정 및 패치 안전성 규약: 두 에이전트가 같은 rev 9f3a를 읽고, 배타적 OS 파일 잠금 아래에서 inode·rev CAS·Tree-sitter 구문 게이트·파일 정체성 보존 원자적 쓰기를 거쳐 성공 측은 rev_after를 반환하고 충돌 측은 0바이트 쓰기 후 재시도합니다. 800건 중 0건 유실(잠금 없을 때 600건 유실)."></p>
+
+- **낙관적 동시성 제어(`rev` CAS + 배타적 파일 잠금).** 모든 `read`는 파일 바이트의 64비트 FNV-1a 해시 `rev`를 반환합니다. `edit --rev --apply`, `ast --rewrite --apply`, `patch --apply`는 배타적 파일 잠금을 잡은 뒤 `inode`(rename 교체 감지)와 `rev`가 일치할 때만 씁니다. 경합에서 진 쪽은 **0바이트도 쓰지 않은 채** `conflict`(종료 코드 2)를 받아 다시 읽고 재시도하며, 성공 측은 `rev_after`를 받아 재읽기 없이 다음 수정을 이어갈 수 있습니다.
+- **다중 구간·다중 파일 원자성.** `--edits`는 한 파일의 여러 수정을 원본 줄 좌표 기준으로 한 번에 처리하고, `patch --apply`는 쓰기 전에 모든 파일을 먼저 검증하며 쓰는 도중 경합이 나면 이미 쓴 파일까지 롤백합니다.
+- **구문 오류 게이트와 파일 정체성 보존.** 수정 전후를 Tree-sitter로 파싱해 구문 오류가 순증가하면 쓰기를 거부합니다. 또한 심볼릭 링크는 유지한 채 대상 파일만 고치고, 다중 하드 링크 파일은 제자리에 다시 쓰며, OS가 허용하는 범위에서 권한·소유자·그룹을 그대로 보존합니다.
+
+### 4 · 3단 AST 리터럴 사전 필터와 상한이 있는 `$$$` 매칭
+
+- **일치할 리 없는 파일·서브트리 파싱 생략.** 패턴의 식별자 리터럴로 (a) 트라이그램 인덱스에서 파일을 거르고, (b) SIMD `memmem` 검사를 통과한 파일만 Tree-sitter로 파싱하며, (c) 리터럴이 없는 AST 서브트리는 아예 건너뛴 뒤 미리 컴파일한 `u16 kind_id` 패턴 트리로 매칭합니다.
+- **메모이제이션과 시도 예산.** 다중 와일드카드(`$$$`) 백트래킹은 메모이제이션과 노드당 시도 예산으로 묶어, 인자가 많은 호출에서도 약 0.03초 안에 끝나며 병적인 패턴도 멈추지 않고 경고와 함께 종료됩니다.
+
+**정확성 및 플랫폼 예외.** 잘못된 쿼리, 모르는 플래그, 파싱할 수 없는 패턴은 추측하지 않고 정확한 진단과 함께 실패합니다. `--rewrite`, `edit`, `patch`는 `--apply` 없이 디스크를 건드리지 않으며, `--apply`는 `--limit`과 함께 쓸 수 없습니다(부분 리라이트 방지). 신선도는 `mtime`, `size`, `ctime`, `inode` 및 파일시스템 타임스탬프 경계 창으로 판정하며, 표준 라이브러리가 `ctime`과 `inode`를 제공하지 않는 Windows에서는 파일 크기가 같고 `mtime`까지 되돌린 수정만 `lancet index` 또는 `--no-index`로 잡아야 합니다.
 
 ---
 
@@ -211,8 +239,15 @@ lancet이 **이기지 못하는** 곳: 리터럴 없는 정규식(인덱스가 �
 ## 설치 옵션
 
 ```bash
-cargo install --git https://github.com/CREE1116/lancet                          # 전체 빌드
-cargo install --git https://github.com/CREE1116/lancet --no-default-features    # 텍스트·코드 전용: Tree-sitter, 문서 어댑터 제외
+# 프리빌트 바이너리 (Rust 설치 불필요)
+brew tap CREE1116/lancet https://github.com/CREE1116/lancet && brew install --HEAD CREE1116/lancet/lancet
+curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh     # macOS / Linux
+irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex         # Windows x64
+cargo binstall --git https://github.com/CREE1116/lancet lancet                       # cargo-binstall (태그 릴리스 기준)
+
+# 소스 빌드 (Rust 1.89+)
+cargo install --git https://github.com/CREE1116/lancet                               # 전체 빌드
+cargo install --git https://github.com/CREE1116/lancet --no-default-features         # 텍스트·코드 전용: Tree-sitter, 문서 어댑터 제외
 ```
 
 ## 라이선스
