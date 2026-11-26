@@ -338,7 +338,8 @@ struct Ctx<'a> {
 }
 
 /// Search one file and render its output.
-fn search_file(cx: &Ctx<'_>, path: &Path, display: String) -> Option<FileOut> {
+/// `explicit`: named on the command line (searched even if binary, like ripgrep).
+fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Option<FileOut> {
     let o = cx.o;
     let data = match content::load_searchable(path, false) {
         Ok(Some(d)) => d,
@@ -346,6 +347,15 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String) -> Option<FileOut> {
         _ => return None,
     };
     let data: &[u8] = &data;
+    // In directory searches ripgrep treats a NUL byte anywhere as binary and skips the
+    // file; lancet's 8 KiB sniff alone would let late-NUL files (protobufs…) through.
+    if !explicit
+        && !o.text
+        && !crate::adapters::is_adapted_path(path, false)
+        && memchr::memchr(0, data).is_some()
+    {
+        return None;
+    }
     let mut fo = FileOut {
         display,
         out: Vec::new(),
@@ -700,7 +710,10 @@ fn render_json(
 }
 
 /// Every file `lancet rg` would search, as `(path, display)`, sorted by display.
-fn targets(o: &RgOptions, req: &Req) -> Result<(Vec<(PathBuf, String)>, bool), String> {
+/// `(path, display, explicitly named)` triples.
+type TargetList = Vec<(PathBuf, String, bool)>;
+
+fn targets(o: &RgOptions, req: &Req) -> Result<(TargetList, bool), String> {
     let roots: Vec<PathBuf> = if o.paths.is_empty() {
         vec![PathBuf::from(".")]
     } else {
@@ -712,7 +725,7 @@ fn targets(o: &RgOptions, req: &Req) -> Result<(Vec<(PathBuf, String)>, bool), S
     for root in &roots {
         if root.is_file() {
             // Explicitly named files are searched as given, like ripgrep.
-            out.push((root.clone(), root.to_string_lossy().into_owned()));
+            out.push((root.clone(), root.to_string_lossy().into_owned(), true));
             continue;
         }
         if !root.is_dir() {
@@ -754,7 +767,7 @@ fn targets(o: &RgOptions, req: &Req) -> Result<(Vec<(PathBuf, String)>, bool), S
             } else {
                 format!("{base}/{}", t.rel)
             };
-            out.push((t.path, display));
+            out.push((t.path, display, false));
         }
     }
     // Component-wise, like ripgrep's `--sort path` (`a/b.txt` before `a.txt`).
@@ -767,7 +780,7 @@ fn targets(o: &RgOptions, req: &Req) -> Result<(Vec<(PathBuf, String)>, bool), S
 /// `lancet rg --files`: the files that would be searched.
 pub fn list_files(o: &RgOptions, w: &mut dyn Write) -> Result<bool, String> {
     let (ts, _) = targets(o, &Req::All)?;
-    for (_, d) in &ts {
+    for (_, d, _) in &ts {
         let _ = w.write_all(d.as_bytes());
         let _ = w.write_all(if o.null { b"\0" } else { b"\n" });
     }
@@ -795,7 +808,7 @@ pub fn run(o: &RgOptions, w: &mut dyn Write) -> Result<bool, String> {
     };
     let results: Vec<FileOut> = ts
         .par_iter()
-        .filter_map(|(p, d)| search_file(&cx, p, d.clone()))
+        .filter_map(|(p, d, explicit)| search_file(&cx, p, d.clone(), *explicit))
         .collect();
     let mut any = false;
     let mut first_group = true;

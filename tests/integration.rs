@@ -2300,3 +2300,78 @@ fn patch_applies_unified_diffs_all_or_nothing() {
         assert_eq!(fs::read_to_string(root.join("a.rs")).unwrap(), before);
     }
 }
+
+#[cfg(feature = "ast")]
+#[test]
+fn ast_ignores_trailing_commas_like_ast_grep() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("t.py"),
+        "self.assertEqual(a, b)\nself.assertEqual(\n    a,\n    b,\n)\nself.assertEqual(a, b, msg)\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("t.rs"), "fn f() { g(1, 2,); g(1, 2); }\n").unwrap();
+    let count = |pat: &str, lang: &str| {
+        let mut o = AstOptions::new(pat, dir.path());
+        o.lang = Some(lang.into());
+        search_ast(&o).matched
+    };
+    assert_eq!(count("self.assertEqual($A, $B)", "py"), 2); // not the 3-argument call
+    assert_eq!(count("g($A, $B)", "rs"), 2);
+}
+
+#[cfg(feature = "ast")]
+#[test]
+fn ast_pattern_root_is_the_innermost_node_spanning_the_pattern() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("a.go"),
+        "package p\nfunc a() error { return fmt.Errorf(\"x\") }\nfunc b() (int, error) { return 0, fmt.Errorf(\"y\") }\nfunc c() { g(1, fmt.Errorf(\"z\")) }\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("a.c"),
+        "void f(int x){\n  if (x) { a(); } else { b(); }\n  do c(); while (x);\n}\n",
+    )
+    .unwrap();
+    let lines = |pat: &str, lang: &str| -> Vec<usize> {
+        let mut o = AstOptions::new(pat, dir.path());
+        o.lang = Some(lang.into());
+        search_ast(&o)
+            .matches
+            .iter()
+            .map(|m| m.start_line)
+            .collect()
+    };
+    // `_ = f(x)` used to make the pattern root an expression_list: only `return f(x)` matched.
+    assert_eq!(lines("fmt.Errorf($$$A)", "go"), vec![2, 3, 4]);
+    // `else $S` / `do $S` are statement positions too.
+    assert_eq!(lines("if ($C) { $$$B } else $E", "c"), vec![2]);
+    assert_eq!(lines("do $S while ($C);", "c"), vec![3]);
+    assert_eq!(lines("if ($C) $S else $T", "c"), vec![2]);
+}
+
+#[test]
+fn rg_mode_skips_late_nul_binaries_in_directory_searches() {
+    use lancet::rg::{run, RgOptions};
+    let dir = TempDir::new().unwrap();
+    let mut body = b"needle text\n".repeat(2000); // NUL well past the 8 KiB sniff
+    body.extend_from_slice(b"\0tail\n");
+    fs::write(dir.path().join("late.pb"), &body).unwrap();
+    fs::write(dir.path().join("t.txt"), "needle\n").unwrap();
+    let mut o = RgOptions::new(vec!["needle".into()]);
+    o.paths = vec![dir.path().to_path_buf()];
+    o.index = IndexMode::Off;
+    o.files_with_matches = true;
+    let mut out = Vec::new();
+    run(&o, &mut out).unwrap();
+    let out = String::from_utf8(out).unwrap();
+    assert!(
+        out.ends_with("t.txt\n") && !out.contains("late.pb"),
+        "{out}"
+    );
+    // Named explicitly, it is searched (like ripgrep).
+    o.paths = vec![dir.path().join("late.pb")];
+    let mut out = Vec::new();
+    assert!(run(&o, &mut out).unwrap());
+}

@@ -334,34 +334,10 @@ mod imp {
         kind.ends_with("comment")
     }
 
-    fn is_wrapper_container(kind: &str) -> bool {
-        matches!(
-            kind,
-            "source_file"
-                | "program"
-                | "module"
-                | "translation_unit"
-                | "compilation_unit"
-                | "script"
-                | "document"
-                | "stream"
-                | "config_file"
-                | "body"
-                | "stylesheet"
-                | "expression_statement"
-                | "simple_statement"
-                | "statement"
-                | "statements"
-                | "statement_list"
-                | "block_node"
-        )
-    }
-
     fn find_exact_span_node<'a>(
         root: Node<'a>,
         span_start: usize,
         span_end: usize,
-        ends_with_semi: bool,
     ) -> Option<Node<'a>> {
         // Walk down to the outermost node matching `[span_start..span_end]`, then unwrap transparent containers.
         let mut cur = root;
@@ -381,29 +357,12 @@ mod imp {
             }
         }
         let mut node = matched?;
+        // Unwrap every single-child node that spans exactly the pattern: the outer node
+        // adds no text, only context (`_ = f(x)` puts the call in an `expression_list`),
+        // and keeping it would match only where that context repeats — e.g. never
+        // `return 0, f(x)` or `g(1, f(x))`. A trailing `;` in the pattern stays a
+        // statement because the `;` is part of the span.
         loop {
-            let k = node.kind();
-            let should_unwrap = if ends_with_semi {
-                matches!(
-                    k,
-                    "source_file"
-                        | "program"
-                        | "module"
-                        | "translation_unit"
-                        | "compilation_unit"
-                        | "script"
-                        | "document"
-                        | "stream"
-                        | "config_file"
-                        | "body"
-                        | "stylesheet"
-                )
-            } else {
-                is_wrapper_container(k)
-            };
-            if !should_unwrap {
-                break;
-            }
             let mut walk = node.walk();
             let children: Vec<Node<'a>> = node
                 .children(&mut walk)
@@ -536,8 +495,7 @@ mod imp {
             if root.has_error() {
                 continue;
             }
-            let Some(node) = find_exact_span_node(root, span_start, span_end, ends_with_semi)
-            else {
+            let Some(node) = find_exact_span_node(root, span_start, span_end) else {
                 continue;
             };
             if node.is_missing() || node.has_error() {
@@ -606,10 +564,28 @@ mod imp {
         let mut at: Vec<usize> = Vec::new();
         for k in sentinels.keys() {
             for (i, _) in prep.match_indices(k.as_str()) {
-                let before = prep[..i].trim_end().chars().last();
+                let head = prep[..i].trim_end();
+                let before = head.chars().last();
                 let after = prep[i + k.len()..].trim_start().chars().next();
-                if matches!(before, None | Some('{' | ';' | ')' | '}'))
-                    && matches!(after, None | Some('}'))
+                // `else $S` / `do $S`: a keyword also opens a statement position.
+                let after_keyword = ["else", "do"].iter().any(|kw| {
+                    head.ends_with(kw)
+                        && !head[..head.len() - kw.len()]
+                            .chars()
+                            .last()
+                            .is_some_and(|c| c.is_alphanumeric() || c == '_')
+                });
+                // …and a statement ends before `}`, the end, or `else` / `while`.
+                let tail = prep[i + k.len()..].trim_start();
+                let before_keyword = ["else", "while"].iter().any(|kw| {
+                    tail.starts_with(kw)
+                        && !tail[kw.len()..]
+                            .chars()
+                            .next()
+                            .is_some_and(|c| c.is_alphanumeric() || c == '_')
+                });
+                if (matches!(before, None | Some('{' | ';' | ')' | '}')) || after_keyword)
+                    && (matches!(after, None | Some('}')) || before_keyword)
                 {
                     at.push(i + k.len());
                 }
@@ -911,6 +887,21 @@ mod imp {
 
         if s_slice.is_empty() {
             return false;
+        }
+        // A trailing comma before the closing delimiter is insignificant (`f(a, b,)`,
+        // black-formatted calls): skip it where the pattern expects the delimiter.
+        if s_slice.len() >= 2
+            && s_slice[0].kind() == ","
+            && is_closing_delim(s_slice[1])
+            && matches!(
+                p_slice[0],
+                PatNode::Leaf {
+                    is_closing: true,
+                    ..
+                }
+            )
+        {
+            return match_seq(p_slice, &s_slice[1..], src, env);
         }
         let mut next_env = env.clone();
         if !match_node(&p_slice[0], s_slice[0], src, &mut next_env) {
