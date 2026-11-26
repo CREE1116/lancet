@@ -21,6 +21,9 @@ pub enum Target {
     Lines(usize, Option<usize>),
     /// The symbol's lines as `read --symbol` shows them (doc comments included).
     Symbol(String),
+    /// Exact text (not whole lines). It must occur once, or `all` edits every
+    /// occurrence. `\n` in it matches the file's line ending (`\r\n` in CRLF files).
+    Find { text: String, all: bool },
 }
 
 #[derive(Clone, Debug)]
@@ -72,6 +75,9 @@ impl EditOptions {
 struct HunkSpec {
     lines: Option<String>,
     symbol: Option<String>,
+    find: Option<String>,
+    #[serde(default)]
+    all: bool,
     with: Option<String>,
     #[serde(default)]
     delete: bool,
@@ -91,14 +97,22 @@ pub fn parse_hunks(json: &str) -> Result<Vec<Hunk>, String> {
         .enumerate()
         .map(|(i, h)| {
             let n = i + 1;
-            let target = match (h.lines, h.symbol) {
-                (Some(l), None) => {
+            if h.all && h.find.is_none() {
+                return Err(format!("hunk {n}: `all` only applies to `find`"));
+            }
+            let target = match (h.lines, h.symbol, h.find) {
+                (Some(l), None, None) => {
                     let (a, b) = crate::read_cmd::parse_line_spec(&l)
                         .map_err(|e| format!("hunk {n}: {e}"))?;
                     Target::Lines(a, b)
                 }
-                (None, Some(s)) => Target::Symbol(s),
-                _ => return Err(format!("hunk {n}: give exactly one of `lines` or `symbol`")),
+                (None, Some(s), None) => Target::Symbol(s),
+                (None, None, Some(text)) => Target::Find { text, all: h.all },
+                _ => {
+                    return Err(format!(
+                        "hunk {n}: give exactly one of `lines`, `symbol` or `find`"
+                    ))
+                }
             };
             let ops = [
                 h.with.map(Op::Replace),
@@ -228,6 +242,16 @@ pub fn edit_file(o: &EditOptions) -> EditResponse {
             String::new()
         };
         let (a, b) = match &h.target {
+            Target::Find { text, all } => match find_edits(&src, &starts, text, *all, &h.op, eol) {
+                Ok(found) => {
+                    for (span, e) in found {
+                        r.hunks.push(span);
+                        edits.push((i + 1, e));
+                    }
+                    continue;
+                }
+                Err(msg) => return fail(r, Status::InvalidQuery, format!("{tag}{msg}")),
+            },
             Target::Lines(a, b) => (*a, b.unwrap_or(lines.len())),
             Target::Symbol(name) => {
                 match find_symbol_lines(&o.path, src.as_bytes(), &lines, name) {
@@ -316,6 +340,63 @@ pub fn edit_file(o: &EditOptions) -> EditResponse {
     }
     r.elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
     r
+}
+
+/// Edits for every occurrence of `text` (exactly one unless `all`), with the
+/// 1-based lines each occurrence spans.
+fn find_edits(
+    src: &str,
+    starts: &[usize],
+    text: &str,
+    all: bool,
+    op: &Op,
+    eol: &str,
+) -> Result<Vec<([usize; 2], Edit)>, String> {
+    let fix = |t: &str| t.replace("\r\n", "\n").replace('\n', eol);
+    let needle = fix(text);
+    if needle.is_empty() {
+        return Err("--find text is empty".into());
+    }
+    let line_of = |byte: usize| starts.partition_point(|&s| s <= byte);
+    let hits: Vec<usize> = src.match_indices(&needle).map(|(at, _)| at).collect();
+    match hits.len() {
+        0 => return Err("--find text does not occur in the file".into()),
+        1 => {}
+        n if !all => {
+            let at: Vec<String> = hits
+                .iter()
+                .take(5)
+                .map(|&h| line_of(h).to_string())
+                .collect();
+            return Err(format!(
+                "--find text occurs {n} times (lines {}{}); add surrounding text to make it unique, or pass --all",
+                at.join(", "),
+                if n > 5 { ", …" } else { "" }
+            ));
+        }
+        _ => {}
+    }
+    Ok(hits
+        .into_iter()
+        .map(|at| {
+            let end = at + needle.len();
+            let span = [line_of(at), line_of(end - 1)];
+            let (start, end, replacement) = match op {
+                Op::Replace(t) => (at, end, fix(t)),
+                Op::Delete => (at, end, String::new()),
+                Op::InsertBefore(t) => (at, at, fix(t)),
+                Op::InsertAfter(t) => (end, end, fix(t)),
+            };
+            (
+                span,
+                Edit {
+                    start,
+                    end,
+                    replacement,
+                },
+            )
+        })
+        .collect())
 }
 
 /// The byte edit for `op` on the whole lines `src[s..e]`, keeping the file's line

@@ -32,6 +32,33 @@ struct FilePatch {
     old_path: Option<String>,
     new_path: Option<String>,
     hunks: Vec<Hunk>,
+    /// Git `new mode` / `new file mode` (unix permission bits).
+    new_mode: Option<u32>,
+}
+
+/// What a `diff --git` block says before (or instead of) its `---`/`+++` lines.
+#[derive(Default)]
+struct GitHeader {
+    old_path: Option<String>,
+    new_path: Option<String>,
+    rename_from: Option<String>,
+    rename_to: Option<String>,
+    new_mode: Option<u32>,
+    created: bool,
+    deleted: bool,
+}
+
+/// `diff --git a/x b/y` → (x, y), honouring `strip`. Paths with spaces are split at
+/// ` b/` when present, which is what git writes for the default prefixes.
+fn git_paths(rest: &str, strip: usize) -> (Option<String>, Option<String>) {
+    let (a, b) = match rest.find(" b/") {
+        Some(i) if rest.starts_with("a/") => (&rest[..i], &rest[i + 1..]),
+        _ => match rest.split_once(' ') {
+            Some(ab) => ab,
+            None => return (None, None),
+        },
+    };
+    (strip_prefix(a, strip), strip_prefix(b, strip))
 }
 
 fn strip_prefix(p: &str, strip: usize) -> Option<String> {
@@ -65,8 +92,76 @@ fn parse(diff: &str, strip: usize) -> Result<Vec<FilePatch>, String> {
     let mut files = Vec::new();
     let mut i = 0;
     while i < lines.len() {
+        let mut git = None;
+        if let Some(rest) = lines[i].strip_prefix("diff --git ") {
+            let (a, b) = git_paths(rest, strip);
+            let mut h = GitHeader {
+                old_path: a,
+                new_path: b,
+                ..Default::default()
+            };
+            i += 1;
+            while i < lines.len()
+                && !lines[i].starts_with("diff --git ")
+                && !lines[i].starts_with("--- ")
+            {
+                let l = lines[i];
+                let mode = |m: &str| u32::from_str_radix(m.trim(), 8).ok();
+                if let Some(x) = l.strip_prefix("rename from ") {
+                    h.rename_from = Some(x.to_string());
+                } else if let Some(x) = l.strip_prefix("rename to ") {
+                    h.rename_to = Some(x.to_string());
+                } else if let Some(m) = l.strip_prefix("new file mode ") {
+                    (h.created, h.new_mode) = (true, mode(m));
+                } else if l.starts_with("deleted file mode ") {
+                    h.deleted = true;
+                } else if let Some(m) = l.strip_prefix("new mode ") {
+                    h.new_mode = mode(m);
+                } else if l.starts_with("copy from ") || l.starts_with("copy to ") {
+                    return Err(format!("line {}: copies are not supported", i + 1));
+                } else if l.starts_with("Binary files ") || l == "GIT binary patch" {
+                    return Err(format!(
+                        "line {}: binary changes are not supported ({})",
+                        i + 1,
+                        h.new_path.as_deref().unwrap_or("?")
+                    ));
+                }
+                i += 1;
+            }
+            if h.rename_from.is_some() {
+                h.old_path = h.rename_from.clone();
+                h.new_path = h.rename_to.clone();
+            }
+            if h.created {
+                h.old_path = None;
+            }
+            if h.deleted {
+                h.new_path = None;
+            }
+            if !lines.get(i).is_some_and(|l| l.starts_with("--- ")) {
+                // A change with no text hunks: rename, mode change, empty file.
+                if h.old_path.is_none() && h.new_path.is_none() {
+                    return Err("`diff --git` header names no file".into());
+                }
+                let fp = FilePatch {
+                    old_path: h.old_path,
+                    new_path: h.new_path,
+                    hunks: Vec::new(),
+                    new_mode: h.new_mode,
+                };
+                if fp.old_path == fp.new_path && fp.new_mode.is_none() {
+                    return Err(format!(
+                        "{}: `diff --git` block with no change lancet can apply",
+                        fp.new_path.as_deref().unwrap_or("?")
+                    ));
+                }
+                files.push(fp);
+                continue;
+            }
+            git = Some(h);
+        }
         let Some(old) = lines[i].strip_prefix("--- ") else {
-            i += 1; // `diff --git`, `index`, mode lines… are ignored
+            i += 1; // text before the first file, `index` lines…
             continue;
         };
         let new = lines
@@ -77,6 +172,7 @@ fn parse(diff: &str, strip: usize) -> Result<Vec<FilePatch>, String> {
             old_path: strip_prefix(old, strip),
             new_path: strip_prefix(new, strip),
             hunks: Vec::new(),
+            new_mode: git.as_ref().and_then(|g| g.new_mode),
         };
         i += 2;
         while i < lines.len() && lines[i].starts_with("@@ ") {
@@ -143,16 +239,11 @@ fn parse(diff: &str, strip: usize) -> Result<Vec<FilePatch>, String> {
             }
             fp.hunks.push(h);
         }
-        if fp.hunks.is_empty() && fp.old_path.is_some() && fp.new_path.is_some() {
+        if fp.hunks.is_empty() && fp.old_path == fp.new_path && fp.new_mode.is_none() {
             return Err(format!(
-                "{}: no hunks (renames and mode changes are not supported)",
+                "{}: `---`/`+++` with no hunks",
                 fp.new_path.as_deref().unwrap_or("?")
             ));
-        }
-        if let (Some(a), Some(b)) = (&fp.old_path, &fp.new_path) {
-            if a != b {
-                return Err(format!("{a} -> {b}: renames are not supported"));
-            }
         }
         files.push(fp);
     }
@@ -165,8 +256,11 @@ fn parse(diff: &str, strip: usize) -> Result<Vec<FilePatch>, String> {
 #[derive(Clone, Debug, Serialize)]
 pub struct PatchFileResult {
     pub path: String,
-    /// `modify`, `create` or `delete`.
+    /// `modify`, `create`, `delete`, `rename` or `mode`.
     pub action: &'static str,
+    /// For `rename`: the path the file had before.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
     pub hunks: usize,
     /// Per hunk: lines it was found away from its header's position (0 = exact).
     pub offsets: Vec<isize>,
@@ -214,11 +308,16 @@ impl PatchOptions {
 /// A verified change, ready to write.
 struct Planned {
     path: PathBuf,
-    result: PatchFileResult,
+    rel: String,
+    /// Shown to the caller; `None` for the removal half of a rename.
+    result: Option<PatchFileResult>,
     /// Content we verified against; `None` for a file to create.
     old: Option<String>,
     /// New content; `None` to delete.
     new: Option<String>,
+    /// Permission bits to set after writing, and the ones to restore on undo.
+    mode: Option<u32>,
+    old_mode: Option<u32>,
 }
 
 pub fn apply_patch(o: &PatchOptions) -> PatchResponse {
@@ -249,11 +348,21 @@ pub fn apply_patch(o: &PatchOptions) -> PatchResponse {
     let mut plans = Vec::with_capacity(files.len());
     for fp in &files {
         match plan_file(o, fp) {
-            Ok(p) => plans.push(p),
+            Ok(p) => plans.extend(p),
             Err((status, msg)) => return fail(r, status, msg),
         }
     }
-    r.files = plans.iter().map(|p| p.result.clone()).collect();
+    // Two changes to one path (or a rename onto a path the patch also touches) would
+    // verify against stale content; refuse rather than guess an order.
+    let mut seen = std::collections::HashSet::new();
+    if let Some(p) = plans.iter().find(|p| !seen.insert(p.rel.clone())) {
+        return fail(
+            r,
+            Status::InvalidQuery,
+            format!("invalid patch: {} is changed more than once", p.rel),
+        );
+    }
+    r.files = plans.iter().filter_map(|p| p.result.clone()).collect();
     if !o.apply {
         r.elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
         return r;
@@ -285,52 +394,88 @@ pub fn apply_patch(o: &PatchOptions) -> PatchResponse {
     r
 }
 
-fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Planned, (Status, String)> {
-    let invalid = |m: String| (Status::InvalidQuery, m);
-    let rel = fp
-        .new_path
-        .clone()
-        .or_else(|| fp.old_path.clone())
-        .ok_or_else(|| invalid("patch names neither an old nor a new file".into()))?;
-    if Path::new(&rel).is_absolute() || rel.split('/').any(|c| c == "..") {
-        return Err(invalid(format!("{rel}: paths must stay inside the root")));
+fn mode_of(path: &Path) -> Option<u32> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::metadata(path)
+            .ok()
+            .map(|m| m.permissions().mode() & 0o7777)
     }
-    let path = o.root.join(&rel);
-    if crate::adapters::is_adapted_path(&path, false) {
-        return Err((
-            Status::Unsupported,
-            format!("{rel}: documents and archives are read-only"),
-        ));
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        None
     }
+}
 
-    if fp.old_path.is_none() {
-        // Creation: the patch is the whole file.
+fn set_mode(path: &Path, mode: Option<u32>) -> std::io::Result<()> {
+    #[cfg(unix)]
+    if let Some(m) = mode {
+        use std::os::unix::fs::PermissionsExt;
+        return fs::set_permissions(path, fs::Permissions::from_mode(m & 0o7777));
+    }
+    // Windows has no executable bit; git there ignores mode changes too.
+    let _ = (path, mode);
+    Ok(())
+}
+
+fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Vec<Planned>, (Status, String)> {
+    let invalid = |m: String| (Status::InvalidQuery, m);
+    let check = |rel: &String| -> Result<PathBuf, (Status, String)> {
+        if Path::new(rel).is_absolute() || rel.split('/').any(|c| c == "..") {
+            return Err(invalid(format!("{rel}: paths must stay inside the root")));
+        }
+        let path = o.root.join(rel);
+        if crate::adapters::is_adapted_path(&path, false) {
+            return Err((
+                Status::Unsupported,
+                format!("{rel}: documents and archives are read-only"),
+            ));
+        }
+        Ok(path)
+    };
+    let new_target = fp.new_path.as_ref().map(&check).transpose()?;
+    let old_target = fp.old_path.as_ref().map(&check).transpose()?;
+    // Git spells a regular file's mode in full (100755); keep the permission bits.
+    let want_mode = fp.new_mode.map(|m| m & 0o7777);
+
+    let Some(path) = old_target else {
+        // Creation: the patch is the whole file (an empty file has no hunk).
+        let (rel, path) = (fp.new_path.clone().unwrap(), new_target.unwrap());
         if path.exists() {
             return Err((Status::Conflict, format!("{rel}: already exists")));
         }
-        let h = fp
-            .hunks
-            .first()
-            .ok_or_else(|| invalid(format!("{rel}: empty creation")))?;
-        let mut new = h.new.join("\n");
-        if !h.new.is_empty() && !h.new_no_eol {
-            new.push('\n');
+        if fp.hunks.len() > 1 {
+            return Err(invalid(format!("{rel}: a new file must be one hunk")));
         }
-        return Ok(Planned {
-            path,
-            result: PatchFileResult {
+        let new = fp.hunks.first().map_or(String::new(), |h| {
+            let mut new = h.new.join("\n");
+            if !h.new.is_empty() && !h.new_no_eol {
+                new.push('\n');
+            }
+            new
+        });
+        return Ok(vec![Planned {
+            result: Some(PatchFileResult {
                 path: rel.clone(),
                 action: "create",
+                from: None,
                 hunks: fp.hunks.len(),
-                offsets: vec![0],
+                offsets: vec![0; fp.hunks.len()],
                 rev: None,
                 rev_after: Some(edit::rev(new.as_bytes())),
                 diff: edit::unified_diff(&rel, "", &new),
-            },
+            }),
+            path,
+            rel,
             old: None,
             new: Some(new),
-        });
-    }
+            mode: want_mode,
+            old_mode: None,
+        }]);
+    };
+    let rel = fp.old_path.clone().unwrap();
 
     let bytes = edit::read_shared(&path).map_err(|e| invalid(format!("{rel}: {e}")))?;
     if crate::content::is_binary(&bytes) {
@@ -339,6 +484,7 @@ fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Planned, (Status, Strin
     let src = String::from_utf8(bytes)
         .map_err(|_| (Status::Unsupported, format!("{rel}: not valid UTF-8")))?;
     let rev = edit::rev(src.as_bytes());
+    let old_mode = mode_of(&path);
     let lines: Vec<&str> = src.lines().collect();
     let starts: Vec<usize> = std::iter::once(0)
         .chain(memchr::memchr_iter(b'\n', src.as_bytes()).map(|i| i + 1))
@@ -351,30 +497,39 @@ fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Planned, (Status, Strin
     let strip_cr = |l: &str| l.strip_suffix('\r').unwrap_or(l).to_string();
     let file_lines: Vec<String> = lines.iter().map(|l| strip_cr(l)).collect();
 
-    if fp.new_path.is_none() {
-        // Deletion: the old side must be the whole file.
-        let h = &fp.hunks[0];
-        if fp.hunks.len() != 1 || h.old != file_lines {
+    let Some(new_path) = new_target else {
+        // Deletion: the old side must be the whole file (an empty file has no hunk).
+        let whole = match fp.hunks.as_slice() {
+            [] => src.is_empty(),
+            [h] => h.old == file_lines,
+            _ => false,
+        };
+        if !whole {
             return Err((
                 Status::Conflict,
                 format!("{rel}: file differs from the patch; not deleted"),
             ));
         }
-        return Ok(Planned {
-            path,
-            result: PatchFileResult {
+        return Ok(vec![Planned {
+            result: Some(PatchFileResult {
                 path: rel.clone(),
                 action: "delete",
-                hunks: 1,
-                offsets: vec![0],
+                from: None,
+                hunks: fp.hunks.len(),
+                offsets: vec![0; fp.hunks.len()],
                 rev: Some(rev),
                 rev_after: None,
                 diff: edit::unified_diff(&rel, &src, ""),
-            },
+            }),
+            path,
+            rel,
             old: Some(src),
             new: None,
-        });
-    }
+            mode: None,
+            old_mode,
+        }]);
+    };
+    let new_rel = fp.new_path.clone().unwrap();
 
     let mut edits = Vec::with_capacity(fp.hunks.len());
     let mut offsets = Vec::with_capacity(fp.hunks.len());
@@ -432,33 +587,85 @@ fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Planned, (Status, Strin
         });
     }
     let new = edit::plan(&src, &edits).new_src;
-    if !o.allow_syntax_errors {
+    if !o.allow_syntax_errors && !edits.is_empty() {
         if let (Some(b0), Some(b1)) = (
             crate::code::syntax_errors(&path, src.as_bytes()),
-            crate::code::syntax_errors(&path, new.as_bytes()),
+            crate::code::syntax_errors(&new_path, new.as_bytes()),
         ) {
             if b1 > b0 {
                 return Err(invalid(format!(
-                    "{rel}: patch would add {} syntax error(s) ({b0} -> {b1}); nothing applied (pass --allow-syntax-errors to write anyway)",
+                    "{new_rel}: patch would add {} syntax error(s) ({b0} -> {b1}); nothing applied (pass --allow-syntax-errors to write anyway)",
                     b1 - b0
                 )));
             }
         }
     }
-    Ok(Planned {
-        path,
-        result: PatchFileResult {
-            path: rel.clone(),
-            action: "modify",
-            hunks: fp.hunks.len(),
-            offsets,
-            rev: Some(rev),
-            rev_after: Some(edit::rev(new.as_bytes())),
-            diff: edit::unified_diff(&rel, &src, &new),
+    let mode_note = match (old_mode, want_mode) {
+        (Some(a), Some(b)) if a != b => format!("mode {a:o} -> {b:o} {new_rel}\n"),
+        _ => String::new(),
+    };
+
+    if new_rel == rel {
+        let action = if edits.is_empty() { "mode" } else { "modify" };
+        return Ok(vec![Planned {
+            result: Some(PatchFileResult {
+                path: rel.clone(),
+                action,
+                from: None,
+                hunks: fp.hunks.len(),
+                offsets,
+                rev: Some(rev),
+                rev_after: Some(edit::rev(new.as_bytes())),
+                diff: mode_note + &edit::unified_diff(&rel, &src, &new),
+            }),
+            path,
+            rel,
+            old: Some(src),
+            new: Some(new),
+            mode: want_mode,
+            old_mode,
+        }]);
+    }
+
+    // Rename: create the new path (create_new, so an existing file is never
+    // overwritten), then remove the old one if it is still what we verified.
+    if new_path.exists() {
+        return Err((
+            Status::Conflict,
+            format!("{rel} -> {new_rel}: {new_rel} already exists"),
+        ));
+    }
+    let diff = format!("rename {rel} -> {new_rel}\n{mode_note}")
+        + &edit::unified_diff(&new_rel, &src, &new);
+    Ok(vec![
+        Planned {
+            result: Some(PatchFileResult {
+                path: new_rel.clone(),
+                action: "rename",
+                from: Some(rel.clone()),
+                hunks: fp.hunks.len(),
+                offsets,
+                rev: Some(rev.clone()),
+                rev_after: Some(edit::rev(new.as_bytes())),
+                diff,
+            }),
+            path: new_path,
+            rel: new_rel,
+            old: None,
+            new: Some(new),
+            mode: want_mode.or(old_mode),
+            old_mode: None,
         },
-        old: Some(src),
-        new: Some(new),
-    })
+        Planned {
+            result: None,
+            path,
+            rel,
+            old: Some(src),
+            new: None,
+            mode: None,
+            old_mode,
+        },
+    ])
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -499,8 +706,18 @@ fn locate(file: &[String], old: &[String], want: usize, min: usize) -> Located {
 }
 
 fn write_one(p: &Planned) -> Result<(), String> {
-    let rel = &p.result.path;
+    let rel = &p.rel;
+    write_content(p)?;
+    if p.new.is_some() && p.mode.is_some() && p.mode != p.old_mode {
+        set_mode(&p.path, p.mode).map_err(|e| format!("{rel}: {e}"))?;
+    }
+    Ok(())
+}
+
+fn write_content(p: &Planned) -> Result<(), String> {
+    let rel = &p.rel;
     match (&p.old, &p.new) {
+        (Some(old), Some(new)) if old == new => Ok(()), // mode-only change
         (Some(old), Some(new)) => {
             match edit::write_if_rev(&p.path, &edit::rev(old.as_bytes()), new.as_bytes()) {
                 Ok(()) => Ok(()),
@@ -540,14 +757,19 @@ fn write_one(p: &Planned) -> Result<(), String> {
 }
 
 fn undo_one(p: &Planned) -> Result<(), String> {
-    let rel = &p.result.path;
+    let rel = &p.rel;
     match (&p.old, &p.new) {
         (Some(old), Some(new)) => {
-            edit::write_if_rev(&p.path, &edit::rev(new.as_bytes()), old.as_bytes())
-                .map_err(|_| format!("{rel} could not be restored"))
+            if old != new {
+                edit::write_if_rev(&p.path, &edit::rev(new.as_bytes()), old.as_bytes())
+                    .map_err(|_| format!("{rel} could not be restored"))?;
+            }
+            set_mode(&p.path, p.old_mode).map_err(|e| format!("{rel}: {e}"))
         }
         (None, Some(_)) => fs::remove_file(&p.path).map_err(|e| format!("{rel}: {e}")),
-        (Some(old), None) => fs::write(&p.path, old).map_err(|e| format!("{rel}: {e}")),
+        (Some(old), None) => fs::write(&p.path, old)
+            .and_then(|_| set_mode(&p.path, p.old_mode))
+            .map_err(|e| format!("{rel}: {e}")),
         (None, None) => Ok(()),
     }
 }

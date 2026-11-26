@@ -61,6 +61,9 @@ Supported languages (24): `rs`, `py`, `js`, `ts`, `tsx`, `go`, `c`, `cpp`, `zig`
   - `lancet edit src/search.rs --lines 120:135 --with-file - < patch.txt`
   - `lancet edit src/search.rs --lines 42 --insert-after '    log::debug!("x");'`
   - `lancet edit src/search.rs --lines 42:44 --delete`
+- **Exact text instead of line numbers** (like a `str_replace` edit tool): `--find TEXT` changes that text, which may be part of a line or span several lines. It must occur exactly once, otherwise the edit is refused and the error lists the lines where it occurs — add surrounding text until it is unique, or pass `--all` to change every occurrence. `\n` in the text also matches CRLF files.
+  - `lancet edit src/x.rs --find 'let retries = 3;' --with 'let retries = 5;' --rev <REV> --apply`
+  - In `--edits`: `{"find": "old_name(", "with": "new_name(", "all": true}`
 - `--symbol` covers the doc comments and attributes above the declaration, exactly as `read --symbol` shows them; include them in the replacement or they are removed.
 - **Several changes to one file → one call.** Put them in `--edits` (JSON file or `-` for stdin), all using the line numbers you *read*; lancet resolves every hunk against the original file, so earlier hunks never shift later ones. Overlapping hunks are refused; either all hunks land or none do.
   - `lancet edit src/x.rs --rev <REV> --apply --edits - <<'JSON'`
@@ -76,5 +79,6 @@ Supported languages (24): `rs`, `py`, `js`, `ts`, `tsx`, `go`, `c`, `cpp`, `zig`
   - `lancet patch changes.diff` (dry-run preview)
   - `git diff | lancet patch --apply`
   - `lancet patch changes.diff --root subdir -p 0 --apply`
+- Handles what `git diff` prints: renames (`git diff -M`, with or without content changes), mode changes (`chmod +x`), new and deleted files including empty ones. Binary changes and copies are refused, and nothing in the patch is written.
 - Flags: `--root <DIR>` (working directory for patch paths, default `.`), `-p N` / `--strip N` (leading path components to strip, default `1` for `a/` and `b/`), `--apply`, `--allow-syntax-errors`, `--json`.
 - **Exactness & atomicity:** Every hunk's context and removed lines must match exactly (relocates to the nearest unique exact offset if line numbers shifted; never fuzzy). All files in the patch are verified before anything is written, writes use locked compare-and-swap with rollback if a concurrent write wins a race, and any net increase in Tree-sitter syntax errors is refused unless `--allow-syntax-errors` is set. Default is dry-run unless `--apply` is passed.

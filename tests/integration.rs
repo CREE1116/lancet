@@ -2557,3 +2557,151 @@ fn corrupt_documents_are_skipped_safely() {
     let _ = build_outline(&OutlineOptions::new(root));
     assert!(t.elapsed() < Duration::from_secs(60), "{:?}", t.elapsed());
 }
+
+#[test]
+fn patch_handles_git_renames_modes_and_refuses_binary() {
+    use lancet::patch::{apply_patch, PatchOptions};
+
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    fs::write(root.join("y.txt"), "1\n2\n3\n").unwrap();
+    fs::write(root.join("r.txt"), "keep\n").unwrap();
+    fs::write(root.join("m.sh"), "m\n").unwrap();
+    fs::write(root.join("e.txt"), "").unwrap();
+    let apply = |diff: &str, write: bool| {
+        let mut o = PatchOptions::new(diff, root);
+        o.apply = write;
+        apply_patch(&o)
+    };
+    // What `git diff -M` prints: a pure rename has no `---`/`+++` lines at all.
+    let diff = "\
+diff --git a/r.txt b/r2.txt
+similarity index 100%
+rename from r.txt
+rename to r2.txt
+diff --git a/y.txt b/sub/z.txt
+similarity index 60%
+rename from y.txt
+rename to sub/z.txt
+index 1..2 100644
+--- a/y.txt
++++ b/sub/z.txt
+@@ -1,3 +1,3 @@
+ 1
+-2
++two
+ 3
+diff --git a/m.sh b/m.sh
+old mode 100644
+new mode 100755
+diff --git a/e.txt b/e.txt
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/new_empty b/new_empty
+new file mode 100644
+index 0000000..e69de29
+";
+    let r = apply(diff, true);
+    assert!(r.applied, "{:?}", r.error);
+    let actions: Vec<_> = r
+        .files
+        .iter()
+        .map(|f| (f.action, f.path.as_str()))
+        .collect();
+    assert_eq!(
+        actions,
+        vec![
+            ("rename", "r2.txt"),
+            ("rename", "sub/z.txt"),
+            ("mode", "m.sh"),
+            ("delete", "e.txt"),
+            ("create", "new_empty")
+        ]
+    );
+    assert!(!root.join("r.txt").exists() && !root.join("y.txt").exists());
+    assert_eq!(fs::read_to_string(root.join("r2.txt")).unwrap(), "keep\n");
+    assert_eq!(
+        fs::read_to_string(root.join("sub/z.txt")).unwrap(),
+        "1\ntwo\n3\n"
+    );
+    assert!(!root.join("e.txt").exists());
+    assert_eq!(fs::read(root.join("new_empty")).unwrap(), b"");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let m = fs::metadata(root.join("m.sh"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(m & 0o777, 0o755);
+    }
+
+    // Renaming onto an existing file is a conflict, and nothing else is written.
+    fs::write(root.join("a.txt"), "a\n").unwrap();
+    let r = apply(
+        "diff --git a/a.txt b/r2.txt\nrename from a.txt\nrename to r2.txt\n",
+        true,
+    );
+    assert_eq!(r.status, Status::Conflict);
+    assert!(root.join("a.txt").exists());
+
+    // Binary changes used to be skipped silently; now the whole patch is refused.
+    let r = apply(
+        "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a\n+b\ndiff --git a/x.bin b/x.bin\nindex 1..2 100644\nBinary files a/x.bin and b/x.bin differ\n",
+        true,
+    );
+    assert_eq!(r.status, Status::InvalidQuery);
+    assert_eq!(fs::read_to_string(root.join("a.txt")).unwrap(), "a\n");
+}
+
+#[test]
+fn edit_find_replaces_exact_text_once_or_all() {
+    use lancet::edit_cmd::{edit_file, parse_hunks, EditOptions, Op, Target};
+
+    let dir = TempDir::new().unwrap();
+    let f = dir.path().join("f.txt");
+    fs::write(&f, "alpha x\r\nbeta x\r\ngamma\r\n").unwrap();
+    let find = |text: &str, all: bool, op: Op| {
+        let mut o = EditOptions::new(
+            &f,
+            Target::Find {
+                text: text.into(),
+                all,
+            },
+            op,
+        );
+        o.apply = true;
+        edit_file(&o)
+    };
+    // Ambiguous text is refused, naming the lines; nothing is written.
+    let r = find("x", false, Op::Replace("y".into()));
+    assert_eq!(r.status, Status::InvalidQuery);
+    assert!(r.error.unwrap().message.contains("lines 1, 2"));
+    // `\n` in the text matches CRLF, and the replacement keeps CRLF.
+    let r = find("x\nbeta", false, Op::Replace("X\nBETA".into()));
+    assert!(r.applied, "{:?}", r.error);
+    assert_eq!(r.hunks, vec![[1, 2]]);
+    assert_eq!(
+        fs::read_to_string(&f).unwrap(),
+        "alpha X\r\nBETA x\r\ngamma\r\n"
+    );
+    let r = find("a", true, Op::Delete);
+    assert!(r.applied);
+    assert_eq!(
+        fs::read_to_string(&f).unwrap(),
+        "lph X\r\nBETA x\r\ngmm\r\n"
+    );
+    assert_eq!(find("zzz", false, Op::Delete).status, Status::InvalidQuery);
+    // JSON hunks: find mixes with line hunks in one atomic write.
+    let hunks =
+        parse_hunks(r#"[{"find": "BETA", "with": "beta"}, {"lines": "3", "with": "last"}]"#)
+            .unwrap();
+    let mut o = EditOptions::multi(&f, hunks);
+    o.apply = true;
+    assert!(edit_file(&o).applied);
+    assert_eq!(
+        fs::read_to_string(&f).unwrap(),
+        "lph X\r\nbeta x\r\nlast\r\n"
+    );
+    assert!(parse_hunks(r#"[{"lines": "1", "all": true, "delete": true}]"#).is_err());
+}

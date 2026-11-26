@@ -286,7 +286,7 @@ struct AstCli {
     /// Directory or file to search
     #[arg(default_value = ".")]
     path: PathBuf,
-    /// Source language (rs/rust, py/python, js, ts, tsx, go)
+    /// Source language: rs, py, js, ts, tsx, go, c, cpp, zig, java, cs, kt, scala, swift, rb, php, sh, lua, hcl, html, css, json, yaml, toml
     #[arg(short = 'l', long)]
     lang: Option<String>,
     /// Rewrite matched AST nodes using captured metavariables (dry-run unified diff by default)
@@ -416,7 +416,7 @@ struct RefsCli {
     /// Directory or file to search
     #[arg(default_value = ".")]
     path: PathBuf,
-    /// Restrict to a specific AST language (`rs`, `py`, `js`, `ts`, `tsx`, `go`)
+    /// Restrict to one AST language: rs, py, js, ts, tsx, go, c, cpp, zig, java, cs, kt, scala, swift, rb, php, sh, lua, hcl, html, css, json, yaml, toml
     #[arg(short = 'l', long)]
     lang: Option<String>,
     /// Filter by file extension (comma-separated or repeatable)
@@ -1383,10 +1383,7 @@ fn run_edit(cli: EditCli) -> ExitCode {
             Err(msg) => return cli_invalid(cli.json, &msg),
         },
         (None, Some(s), _) => Target::Symbol(s),
-        (None, None, Some(text)) => Target::Find {
-            text,
-            all: cli.all,
-        },
+        (None, None, Some(text)) => Target::Find { text, all: cli.all },
         (None, None, None) => unreachable!("clap requires --lines, --symbol, --find or --edits"),
     };
     let op = if cli.delete {
