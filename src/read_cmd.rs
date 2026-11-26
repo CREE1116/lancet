@@ -55,6 +55,10 @@ pub struct ReadLine {
 pub struct ReadResponse {
     pub status: Status,
     pub path: String,
+    /// Content revision of the file on disk (see [`crate::edit::rev`]); present
+    /// only for plain-text files, i.e. the ones an edit can write back.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rev: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub section: Option<String>,
     pub total_lines: usize,
@@ -76,6 +80,7 @@ impl ReadResponse {
         ReadResponse {
             status,
             path,
+            rev: None,
             section: None,
             total_lines: 0,
             start_line: 0,
@@ -492,6 +497,9 @@ pub fn read_file_range(opts: &ReadOptions) -> ReadResponse {
         .collect();
 
     let effective_entry = opts.entry.as_deref().or(bang_entry.as_deref());
+    // Extracted text (PDF, HWP, archive entries…) can't be written back, so no rev.
+    let rev = (effective_entry.is_none() && !crate::adapters::is_adapted_path(&path, opts.ocr))
+        .then(|| crate::edit::rev(&data));
     let effective_lines = opts.lines.or(inline_lines);
 
     let mut section: Option<String> = None;
@@ -602,6 +610,7 @@ pub fn read_file_range(opts: &ReadOptions) -> ReadResponse {
             Status::Complete
         },
         path: path_str,
+        rev,
         section,
         total_lines,
         start_line,

@@ -1215,6 +1215,7 @@ fn ast_rewrite_dry_run_and_apply() {
     assert!(!r_dry.diffs[0].applied);
     assert_eq!(r_dry.diffs[0].replacements, 2);
     assert_eq!(r_dry.diffs[0].skipped_overlaps, 1);
+    assert_eq!(r_dry.diffs[0].rev, lancet::edit::rev(orig.as_bytes()));
     assert!(r_dry.diffs[0].diff.contains("--- a/sample.rs"));
     assert!(r_dry.diffs[0].diff.contains("-    let v = a.unwrap();"));
     assert!(r_dry.diffs[0].diff.contains("+    let v = a?;"));
@@ -1233,6 +1234,7 @@ fn ast_rewrite_dry_run_and_apply() {
     // Second pass catches the remaining inner `b.unwrap()?` -> `b??`!
     let r_apply2 = search_ast(&apply);
     assert_eq!(r_apply2.matched, 1);
+    assert_eq!(r_apply2.diffs[0].rev, lancet::edit::rev(updated.as_bytes()));
     assert!(fs::read_to_string(&rs_path)
         .unwrap()
         .contains("let w = b??;"));
@@ -1296,6 +1298,8 @@ pub fn invoke_engine() -> f64 {
     assert_eq!(r_lines.start_line, 1);
     assert_eq!(r_lines.end_line, 4);
     assert_eq!(r_lines.returned_lines, 4);
+    let train = fs::read(root.join("src/train.py")).unwrap();
+    assert_eq!(r_lines.rev, Some(lancet::edit::rev(&train)));
 
     let mut r_budget_opts =
         ReadOptions::new(root.join("docs/big.txt").to_string_lossy().into_owned());
@@ -1313,6 +1317,7 @@ pub fn invoke_engine() -> f64 {
         assert_eq!(r_zip.returned_lines, 2);
         assert_eq!(r_zip.lines[0].text, "line2_beta");
         assert_eq!(r_zip.lines[1].text, "line3_gamma");
+        assert_eq!(r_zip.rev, None, "archive entries can't be written back");
     }
 
     // 3. `lancet read --symbol` (includes doc comment above `invoke_engine`)

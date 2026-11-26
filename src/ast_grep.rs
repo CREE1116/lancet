@@ -59,6 +59,8 @@ pub struct AstMatch {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct FileDiff {
     pub path: String,
+    /// Content revision of the file before the rewrite (see [`crate::edit::rev`]).
+    pub rev: String,
     pub replacements: usize,
     pub skipped_overlaps: usize,
     pub diff: String,
@@ -130,6 +132,7 @@ impl AstResponse {
 mod imp {
     use super::{AstMatch, AstOptions, AstResponse, AstStats, FileDiff};
     use crate::code::Lang;
+    use crate::edit;
     use crate::index::{self, Req};
     use crate::output::{Stats, Status};
     use crate::query::{Expr, Filters, Matcher};
@@ -142,7 +145,6 @@ mod imp {
     use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
     use std::fs;
     use std::io::{self, Write};
-    use std::path::Path;
     use std::time::Instant;
     use tree_sitter::{Node, Parser, Tree};
 
@@ -1025,32 +1027,24 @@ mod imp {
         let mut diff = None;
         let mut warning = None;
         if rewrite.is_some() {
-            let mut ordered: Vec<&AstMatch> = matches.iter().collect();
-            ordered.sort_by_key(|m| (m.start_byte, Reverse(m.end_byte)));
-            let mut chosen: Vec<&AstMatch> = Vec::with_capacity(ordered.len());
-            let mut last_end = 0usize;
-            let mut skipped_overlaps = 0usize;
-            for m in ordered {
-                if m.start_byte >= last_end {
-                    last_end = m.end_byte;
-                    chosen.push(m);
-                } else {
-                    skipped_overlaps += 1;
-                }
-            }
-
-            let mut new_src = src.clone();
-            for m in chosen.iter().rev() {
-                if let Some(rep) = &m.replacement {
-                    new_src.replace_range(m.start_byte..m.end_byte, rep);
-                }
-            }
+            let edits: Vec<edit::Edit> = matches
+                .iter()
+                .filter_map(|m| {
+                    Some(edit::Edit {
+                        start: m.start_byte,
+                        end: m.end_byte,
+                        replacement: m.replacement.clone()?,
+                    })
+                })
+                .collect();
+            let planned = edit::plan(&src, &edits);
+            let new_src = planned.new_src;
 
             if new_src != src {
-                let udiff = unified_diff(&target.rel, &src, &new_src);
+                let udiff = edit::unified_diff(&target.rel, &src, &new_src);
                 let mut applied = false;
                 if apply {
-                    match write_atomic_preserving_perms(&target.path, new_src.as_bytes()) {
+                    match edit::write_atomic(&target.path, new_src.as_bytes()) {
                         Ok(()) => applied = true,
                         Err(e) => {
                             warning =
@@ -1060,8 +1054,9 @@ mod imp {
                 }
                 diff = Some(FileDiff {
                     path: target.rel.clone(),
-                    replacements: chosen.len(),
-                    skipped_overlaps,
+                    rev: edit::rev(src.as_bytes()),
+                    replacements: planned.applied,
+                    skipped_overlaps: planned.skipped_overlaps,
                     diff: udiff,
                     applied,
                 });
@@ -1074,153 +1069,6 @@ mod imp {
             diff,
             warning,
         })
-    }
-
-    fn write_atomic_preserving_perms(path: &Path, data: &[u8]) -> io::Result<()> {
-        let perms = fs::metadata(path)?.permissions();
-        let parent = path
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or_else(|| Path::new("."));
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("lancet_tmp");
-        let tmp = parent.join(format!(".{name}.lancet-tmp.{}", std::process::id()));
-        fs::write(&tmp, data)?;
-        let _ = fs::set_permissions(&tmp, perms);
-        if let Err(e) = fs::rename(&tmp, path) {
-            let _ = fs::remove_file(&tmp);
-            return Err(e);
-        }
-        Ok(())
-    }
-
-    /// Compute a standard unified diff (`--- a/...`, `+++ b/...`) with 3 context lines.
-    fn unified_diff(rel: &str, old: &str, new: &str) -> String {
-        let old_lines: Vec<&str> = old.lines().collect();
-        let new_lines: Vec<&str> = new.lines().collect();
-        let n = old_lines.len();
-        let m = new_lines.len();
-
-        // LCS DP when size is reasonable; fallback to single coarse hunk for huge files.
-        let mut ops: Vec<(char, usize, usize)> = Vec::new();
-        if n.saturating_mul(m) <= 2_000_000 {
-            let mut dp = vec![0u32; (n + 1) * (m + 1)];
-            let stride = m + 1;
-            for i in (0..n).rev() {
-                for j in (0..m).rev() {
-                    dp[i * stride + j] = if old_lines[i] == new_lines[j] {
-                        dp[(i + 1) * stride + (j + 1)] + 1
-                    } else {
-                        dp[(i + 1) * stride + j].max(dp[i * stride + (j + 1)])
-                    };
-                }
-            }
-            let (mut i, mut j) = (0, 0);
-            while i < n && j < m {
-                if old_lines[i] == new_lines[j] {
-                    ops.push((' ', i, j));
-                    i += 1;
-                    j += 1;
-                } else if dp[(i + 1) * stride + j] >= dp[i * stride + (j + 1)] {
-                    ops.push(('-', i, j));
-                    i += 1;
-                } else {
-                    ops.push(('+', i, j));
-                    j += 1;
-                }
-            }
-            while i < n {
-                ops.push(('-', i, j));
-                i += 1;
-            }
-            while j < m {
-                ops.push(('+', i, j));
-                j += 1;
-            }
-        } else {
-            let mut pref = 0;
-            while pref < n && pref < m && old_lines[pref] == new_lines[pref] {
-                ops.push((' ', pref, pref));
-                pref += 1;
-            }
-            let mut suff = 0;
-            while suff + pref < n
-                && suff + pref < m
-                && old_lines[n - 1 - suff] == new_lines[m - 1 - suff]
-            {
-                suff += 1;
-            }
-            for idx in pref..(n - suff) {
-                ops.push(('-', idx, pref));
-            }
-            for idx in pref..(m - suff) {
-                ops.push(('+', n - suff, idx));
-            }
-            for k in 0..suff {
-                ops.push((' ', n - suff + k, m - suff + k));
-            }
-        }
-
-        let ctx = 3usize;
-        let change_idxs: Vec<usize> = ops
-            .iter()
-            .enumerate()
-            .filter_map(|(k, &(op, _, _))| (op != ' ').then_some(k))
-            .collect();
-        if change_idxs.is_empty() {
-            return String::new();
-        }
-
-        let mut hunks: Vec<(usize, usize)> = Vec::new();
-        let mut h_start = change_idxs[0].saturating_sub(ctx);
-        let mut h_end = (change_idxs[0] + ctx + 1).min(ops.len());
-        for &ci in &change_idxs[1..] {
-            let s = ci.saturating_sub(ctx);
-            let e = (ci + ctx + 1).min(ops.len());
-            if s <= h_end {
-                h_end = e;
-            } else {
-                hunks.push((h_start, h_end));
-                h_start = s;
-                h_end = e;
-            }
-        }
-        hunks.push((h_start, h_end));
-
-        let mut out = format!("--- a/{rel}\n+++ b/{rel}\n");
-        for (s, e) in hunks {
-            let slice = &ops[s..e];
-            let old_start = slice.first().map_or(0, |&(_, oi, _)| oi) + 1;
-            let new_start = slice.first().map_or(0, |&(_, _, nj)| nj) + 1;
-            let old_cnt = slice.iter().filter(|&&(op, _, _)| op != '+').count();
-            let new_cnt = slice.iter().filter(|&&(op, _, _)| op != '-').count();
-            out.push_str(&format!(
-                "@@ -{old_start},{old_cnt} +{new_start},{new_cnt} @@\n"
-            ));
-            for &(op, oi, nj) in slice {
-                match op {
-                    ' ' => {
-                        out.push(' ');
-                        out.push_str(old_lines[oi]);
-                        out.push('\n');
-                    }
-                    '-' => {
-                        out.push('-');
-                        out.push_str(old_lines[oi]);
-                        out.push('\n');
-                    }
-                    '+' => {
-                        out.push('+');
-                        out.push_str(new_lines[nj]);
-                        out.push('\n');
-                    }
-                    _ => {}
-                }
-            }
-        }
-        out
     }
 
     pub fn search_ast(opts: &AstOptions) -> AstResponse {

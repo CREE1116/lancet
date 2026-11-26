@@ -12,6 +12,7 @@ pub mod adapters;
 pub mod ast_grep;
 pub mod code;
 pub mod content;
+pub mod edit;
 pub mod eval;
 pub mod fd;
 pub mod fold;

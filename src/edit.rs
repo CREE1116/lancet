@@ -1,0 +1,243 @@
+//! The single write path for every file-changing command: byte-span edits,
+//! overlap resolution, content revisions, unified diffs, and atomic writes.
+//!
+//! Commands only *compute* [`Edit`]s from their own coordinates (AST matches,
+//! line ranges, symbols, reference sites); everything that touches disk is here,
+//! so every command gets the same safety guarantees.
+
+use std::fs;
+use std::io;
+use std::path::Path;
+
+/// Replace `src[start..end]` with `replacement` (byte offsets on char boundaries).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Edit {
+    pub start: usize,
+    pub end: usize,
+    pub replacement: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Planned {
+    pub new_src: String,
+    /// Edits actually applied.
+    pub applied: usize,
+    /// Edits dropped because they overlapped an earlier (or longer) one.
+    pub skipped_overlaps: usize,
+}
+
+/// Apply non-overlapping edits to `src`. On overlap the edit starting first wins,
+/// and among equal starts the longest wins; the rest are counted, never merged.
+pub fn plan(src: &str, edits: &[Edit]) -> Planned {
+    let mut order: Vec<&Edit> = edits.iter().collect();
+    order.sort_by_key(|e| (e.start, std::cmp::Reverse(e.end)));
+    let mut chosen: Vec<&Edit> = Vec::with_capacity(order.len());
+    let mut last_end = 0usize;
+    let mut skipped_overlaps = 0usize;
+    for e in order {
+        if e.start >= last_end {
+            last_end = e.end;
+            chosen.push(e);
+        } else {
+            skipped_overlaps += 1;
+        }
+    }
+    let mut new_src = src.to_string();
+    for e in chosen.iter().rev() {
+        new_src.replace_range(e.start..e.end, &e.replacement);
+    }
+    Planned {
+        new_src,
+        applied: chosen.len(),
+        skipped_overlaps,
+    }
+}
+
+/// Content revision of a file: 64-bit FNV-1a of its bytes, as 16 hex digits.
+/// Commands report it so a later edit can refuse to touch a file that changed.
+pub fn rev(bytes: &[u8]) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for &b in bytes {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{h:016x}")
+}
+
+pub fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
+    let perms = fs::metadata(path)?.permissions();
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("lancet_tmp");
+    let tmp = parent.join(format!(".{name}.lancet-tmp.{}", std::process::id()));
+    fs::write(&tmp, data)?;
+    let _ = fs::set_permissions(&tmp, perms);
+    if let Err(e) = fs::rename(&tmp, path) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
+    Ok(())
+}
+
+/// Compute a standard unified diff (`--- a/...`, `+++ b/...`) with 3 context lines.
+pub fn unified_diff(rel: &str, old: &str, new: &str) -> String {
+    let old_lines: Vec<&str> = old.lines().collect();
+    let new_lines: Vec<&str> = new.lines().collect();
+    let n = old_lines.len();
+    let m = new_lines.len();
+
+    // LCS DP when size is reasonable; fallback to single coarse hunk for huge files.
+    let mut ops: Vec<(char, usize, usize)> = Vec::new();
+    if n.saturating_mul(m) <= 2_000_000 {
+        let mut dp = vec![0u32; (n + 1) * (m + 1)];
+        let stride = m + 1;
+        for i in (0..n).rev() {
+            for j in (0..m).rev() {
+                dp[i * stride + j] = if old_lines[i] == new_lines[j] {
+                    dp[(i + 1) * stride + (j + 1)] + 1
+                } else {
+                    dp[(i + 1) * stride + j].max(dp[i * stride + (j + 1)])
+                };
+            }
+        }
+        let (mut i, mut j) = (0, 0);
+        while i < n && j < m {
+            if old_lines[i] == new_lines[j] {
+                ops.push((' ', i, j));
+                i += 1;
+                j += 1;
+            } else if dp[(i + 1) * stride + j] >= dp[i * stride + (j + 1)] {
+                ops.push(('-', i, j));
+                i += 1;
+            } else {
+                ops.push(('+', i, j));
+                j += 1;
+            }
+        }
+        while i < n {
+            ops.push(('-', i, j));
+            i += 1;
+        }
+        while j < m {
+            ops.push(('+', i, j));
+            j += 1;
+        }
+    } else {
+        let mut pref = 0;
+        while pref < n && pref < m && old_lines[pref] == new_lines[pref] {
+            ops.push((' ', pref, pref));
+            pref += 1;
+        }
+        let mut suff = 0;
+        while suff + pref < n
+            && suff + pref < m
+            && old_lines[n - 1 - suff] == new_lines[m - 1 - suff]
+        {
+            suff += 1;
+        }
+        for idx in pref..(n - suff) {
+            ops.push(('-', idx, pref));
+        }
+        for idx in pref..(m - suff) {
+            ops.push(('+', n - suff, idx));
+        }
+        for k in 0..suff {
+            ops.push((' ', n - suff + k, m - suff + k));
+        }
+    }
+
+    let ctx = 3usize;
+    let change_idxs: Vec<usize> = ops
+        .iter()
+        .enumerate()
+        .filter_map(|(k, &(op, _, _))| (op != ' ').then_some(k))
+        .collect();
+    if change_idxs.is_empty() {
+        return String::new();
+    }
+
+    let mut hunks: Vec<(usize, usize)> = Vec::new();
+    let mut h_start = change_idxs[0].saturating_sub(ctx);
+    let mut h_end = (change_idxs[0] + ctx + 1).min(ops.len());
+    for &ci in &change_idxs[1..] {
+        let s = ci.saturating_sub(ctx);
+        let e = (ci + ctx + 1).min(ops.len());
+        if s <= h_end {
+            h_end = e;
+        } else {
+            hunks.push((h_start, h_end));
+            h_start = s;
+            h_end = e;
+        }
+    }
+    hunks.push((h_start, h_end));
+
+    let mut out = format!("--- a/{rel}\n+++ b/{rel}\n");
+    for (s, e) in hunks {
+        let slice = &ops[s..e];
+        let old_start = slice.first().map_or(0, |&(_, oi, _)| oi) + 1;
+        let new_start = slice.first().map_or(0, |&(_, _, nj)| nj) + 1;
+        let old_cnt = slice.iter().filter(|&&(op, _, _)| op != '+').count();
+        let new_cnt = slice.iter().filter(|&&(op, _, _)| op != '-').count();
+        out.push_str(&format!(
+            "@@ -{old_start},{old_cnt} +{new_start},{new_cnt} @@\n"
+        ));
+        for &(op, oi, nj) in slice {
+            match op {
+                ' ' => {
+                    out.push(' ');
+                    out.push_str(old_lines[oi]);
+                    out.push('\n');
+                }
+                '-' => {
+                    out.push('-');
+                    out.push_str(old_lines[oi]);
+                    out.push('\n');
+                }
+                '+' => {
+                    out.push('+');
+                    out.push_str(new_lines[nj]);
+                    out.push('\n');
+                }
+                _ => {}
+            }
+        }
+    }
+    out
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn e(start: usize, end: usize, r: &str) -> Edit {
+        Edit {
+            start,
+            end,
+            replacement: r.into(),
+        }
+    }
+
+    #[test]
+    fn plan_applies_back_to_front_and_drops_overlaps() {
+        let p = plan(
+            "aaa bbb ccc",
+            &[e(8, 11, "C"), e(0, 3, "A"), e(1, 2, "x"), e(4, 7, "B")],
+        );
+        assert_eq!(p.new_src, "A B C");
+        assert_eq!((p.applied, p.skipped_overlaps), (3, 1));
+        // equal starts: the longer edit wins
+        let p = plan("abcdef", &[e(0, 2, "X"), e(0, 4, "Y")]);
+        assert_eq!(p.new_src, "Yef");
+    }
+
+    #[test]
+    fn rev_is_stable_and_content_sensitive() {
+        assert_eq!(rev(b""), "cbf29ce484222325");
+        assert_ne!(rev(b"fn a() {}"), rev(b"fn a() {} "));
+    }
+}
