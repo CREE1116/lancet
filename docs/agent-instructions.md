@@ -21,6 +21,9 @@ Use `lancet` as your unified, deterministic CLI replacement for `rg`, `fd`, `ast
   - `lancet 'near("gradient", "clip", 30) in function | expand parent'`
   - `lancet '("OOM" OR "out of memory") NOT "CPU" in line'`
   - `lancet 'fuzzy("transmte", 1) | limit 10 | budget tokens:1500'`
+- Need familiar `ripgrep` flags or output (`-w`, `-i`/`-S`, `-A`/`-B`/`-C`, `-g`, `-t`, `--json`, `--vimgrep`, `--files`)? Use `lancet rg` as a drop-in entrypoint:
+  - `lancet rg -w -t rs 'execute_one' src`
+  - Uses `.lancet` automatically (always fresh), always sorts output by path, and enables line numbers (`-n`) by default. See [ripgrep parity](./rg-parity.md) for the flag table and differences (`-L`, `--max-depth`, `--max-filesize` are unsupported).
 - Searches source code, `.pdf`, `.docx`, `.pptx`, `.odt`, `.hwp` (5.0 OLE), `.hwpx`, `.epub`, `.xlsx/.xls/.ods`, and `.zip/.tar.gz` natively in-process.
 - Run `lancet index .` once on large repositories (`>5k` files); `Auto` mode verifies `mtime + size` automatically so results are **never stale** (`Scan == Auto`).
 
@@ -43,7 +46,7 @@ Use `lancet` as your unified, deterministic CLI replacement for `rg`, `fd`, `ast
 
 Supported languages (24): `rs`, `py`, `js`, `ts`, `tsx`, `go`, `c`, `cpp`, `zig`, `java`, `cs`, `kt`, `scala`, `swift`, `rb`, `php`, `bash`, `lua`, `hcl`, `html`, `css`, `json`, `yaml`, `toml`.
 
-- Match syntax trees (`$VAR` single node, `$_` wildcard, `$$$ARGS` 0+ sibling nodes):
+- Match syntax trees (`$VAR` single node, `$_` wildcard, `$$$ARGS` 0+ sibling nodes; statement metavariables like `if ($C) $S` and `{ $$$B }` work in C-like languages):
   - `lancet ast '$X.unwrap()' src --lang rs`
   - `lancet ast 'panic!($$$ARGS)' src --lang rs`
   - `lancet ast '$X == $X' src --lang py`
@@ -66,3 +69,12 @@ Supported languages (24): `rs`, `py`, `js`, `ts`, `tsx`, `go`, `c`, `cpp`, `zig`
 - **Always pass the `rev` you read** (`lancet read --json` → `"rev"`): `--rev <REV>` makes the edit fail with `conflict` if the file changed since. Chain edits with the returned `rev_after`.
 - **Several agents on one repository:** the read → `--rev` → `--apply` cycle is a compare-and-swap. lancet locks the file while it re-checks the rev and writes, so when two agents edit the same revision exactly one wins and the other gets `conflict` (exit 2) instead of overwriting it. On `conflict`: `lancet read` again, re-apply your change to the new content, retry with the new `rev`. Never retry blindly with `--allow-syntax-errors` or without `--rev`.
 - Default is a dry-run diff; add `--apply` to write atomically. Edits that **increase** the number of Tree-sitter syntax errors are refused (a file that is already broken can still be repaired step by step); `--allow-syntax-errors` overrides. PDFs, Office files, HWP, and archive entries are read-only.
+
+## 7. Apply Unified Diffs (`lancet patch` — replaces `patch` / `git apply`)
+
+- Apply a unified diff (`git diff` or `diff -u`) from a file or stdin (`-`):
+  - `lancet patch changes.diff` (dry-run preview)
+  - `git diff | lancet patch --apply`
+  - `lancet patch changes.diff --root subdir -p 0 --apply`
+- Flags: `--root <DIR>` (working directory for patch paths, default `.`), `-p N` / `--strip N` (leading path components to strip, default `1` for `a/` and `b/`), `--apply`, `--allow-syntax-errors`, `--json`.
+- **Exactness & atomicity:** Every hunk's context and removed lines must match exactly (relocates to the nearest unique exact offset if line numbers shifted; never fuzzy). All files in the patch are verified before anything is written, writes use locked compare-and-swap with rollback if a concurrent write wins a race, and any net increase in Tree-sitter syntax errors is refused unless `--allow-syntax-errors` is set. Default is dry-run unless `--apply` is passed.

@@ -7,7 +7,7 @@
 [![CI](https://github.com/CREE1116/lancet/actions/workflows/ci.yml/badge.svg)](https://github.com/CREE1116/lancet/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-[한국어](./README.ko.md) · [Query language](./docs/grammar.md) · [Agent instructions](./docs/agent-instructions.md) · [Benchmarks](#benchmarks)
+[한국어](./README.ko.md) · [Query language](./docs/grammar.md) · [ripgrep parity](./docs/rg-parity.md) · [Agent instructions](./docs/agent-instructions.md) · [Benchmarks](#benchmarks)
 
 </div>
 
@@ -38,7 +38,8 @@ It is built for AI coding agents and the developers working beside them: structu
 - A search hit at line 42 is line 42 in `lancet read` — even inside a `.pdf`, `.xlsx`, `.hwp`, or `bundle.zip!node.log`, because search and read run the **same in-process extraction**.
 - `read --symbol`, `outline`, `refs`, and `ast` all resolve the same Tree-sitter spans, so an agent never guesses where a function ends.
 - `lancet edit` changes the exact lines `read` showed. Pass the `rev` that `read` reported and the edit refuses to run if the file changed in between; edits that add syntax errors are refused too.
-- Rewrites and edits are dry-run diffs by default and land atomically with `--apply`; the next query already sees them.
+- `lancet patch` applies unified diffs (`git diff` / `diff -u`) across multiple files with the same guarantees: exact hunk matching, all-or-nothing pre-verification with race rollback, and syntax-error refusal.
+- Rewrites, edits, and patches are dry-run diffs by default and land atomically with `--apply`; the next query already sees them.
 
 ---
 
@@ -52,11 +53,13 @@ lancet index .                                              # optional: build th
 ```bash
 lancet fd --tree --max-depth 2 .                            # orient
 lancet 'near("gradient", "clip", 30) in function' src       # search: boolean, proximity, fuzzy, AST scope
+lancet rg -w spin_lock src                                  # ripgrep-compatible CLI on lancet's index
 lancet read src/search.rs --symbol execute_one              # read one symbol, doc comments included
 lancet refs SearchOptions src                               # definitions + references, comments/strings excluded
 lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'      # preview a structural rewrite …
 lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply   # … and apply it atomically
 lancet edit src/search.rs --symbol execute_one --with-file new.rs --rev <REV> --apply  # edit by read's coordinates
+git diff | lancet patch --apply                             # apply a unified diff atomically across files
 ```
 
 ## Commands
@@ -64,10 +67,12 @@ lancet edit src/search.rs --symbol execute_one --with-file new.rs --rev <REV> --
 | Command | What it does |
 |---|---|
 | `lancet <QUERY> [PATH]` | `AND` / `OR` / `NOT`, `near` / `before`, `fuzzy("term", k)`, `regex(...)`, `in function`, `symbol(...)`, pipes like `\| expand parent \| limit 5 \| budget tokens:1500` — see the [query language](./docs/grammar.md) |
+| `lancet rg [FLAGS] PATTERN [PATH...]` | ripgrep-compatible flags, output, and exit codes on lancet's always-fresh index & document extractors — see [ripgrep parity](./docs/rg-parity.md) |
 | `lancet fd` | `.gitignore`-aware file & folder finder, `--tree`, size / recency filters, `--trust-index` lookups |
-| `lancet ast` | Tree-sitter structural search & `--rewrite` (`$X`, `$_`, `$$$ARGS`) across **24 languages** |
+| `lancet ast` | Tree-sitter structural search & `--rewrite` (`$X`, `$_`, `$$$ARGS`, plus statement metavariables like `if ($C) $S` and `{ $$$B }` in C-like languages) across **24 languages** |
 | `lancet read` | Exact line ranges, `--symbol`, PDF/PPTX `--page`, spreadsheet `--sheet --rows --cols`, `archive.zip!entry`, `--budget-tokens` with resume cursors |
 | `lancet edit` | Replace / delete / insert lines addressed like `read` (`--lines`, `--symbol`, or many hunks at once with `--edits`); a locked compare-and-swap on `--rev`, so concurrent agents never overwrite each other; refuses a net increase in syntax errors; dry-run unless `--apply` |
+| `lancet patch` | Apply unified diffs (`git diff`, `diff -u`) with exact hunk matching (unique nearest-offset relocation, never fuzzy), all-or-nothing multi-file verification with race rollback, and syntax-error refusal; dry-run unless `--apply` |
 | `lancet outline` | Declaration skeletons, Markdown headings, workbook schemas, archive manifests |
 | `lancet refs` | Index-accelerated `[def]` / `[ref]` lookup that skips comments and string literals |
 | `lancet batch` | Many queries over one shared index open and directory walk |
@@ -143,7 +148,7 @@ Reproducible via [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_com
 5. **Zero-copy `LANCET04` segments.** Opening the index reads a 40-byte header of an `mmap`'d file; lookups allocate nothing, and line numbers are computed only for byte spans that actually match.
 6. **LSM upkeep with bounded memory.** Changed files go to new immutable segments and old versions are tombstoned; tiered compaction merges small segments. Build buffers are reused across segments, keeping a Linux-kernel cold build near 350 MB.
 
-**Exactness guarantees.** Malformed queries, unknown flags, and unparseable patterns fail with exact diagnostics instead of a best guess. `--rewrite` and `edit` never touch a file without `--apply`, `--apply` refuses to combine with `--limit` (no partial rewrites), and `edit --rev` refuses to write over a file that changed since it was read. Freshness compares mtime, size, ctime and inode; Windows exposes no ctime or inode through the standard library, so there an edit that keeps the size *and* restores the old mtime is only caught by `lancet index` or `--no-index`.
+**Exactness guarantees.** Malformed queries, unknown flags, and unparseable patterns fail with exact diagnostics instead of a best guess. `--rewrite`, `edit`, and `patch` never touch a file without `--apply`, `--apply` refuses to combine with `--limit` (no partial rewrites), `edit --rev` refuses to write over a file that changed since it was read, and `patch` verifies all files before writing and restores already-written files if a concurrent write wins a race. Freshness compares mtime, size, ctime and inode; Windows exposes no ctime or inode through the standard library, so there an edit that keeps the size *and* restores the old mtime is only caught by `lancet index` or `--no-index`.
 
 ---
 
