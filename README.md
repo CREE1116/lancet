@@ -83,7 +83,40 @@ git diff | lancet patch --apply                             # apply a unified di
 
 ---
 
+## Why one tool?
+
+Chained tools fail **between** the steps — they disagree on coordinates, files, binaries and time, and none of them knows another agent is editing the same file. Reproduced with the real tools ([`bench/failure_modes.py`](./bench/failure_modes.py)):
+
+| Tool chain | What actually happened | lancet |
+|---|---|---|
+| `rg -n` → two `sed -i` edits | The second edit overwrote the **wrong line**; both exited 0 | `edit --edits` (original coordinates) or a `conflict` |
+| 4 agents: read → change → write back | **600 of 800** updates lost, silently | `edit --rev`: **0 of 80** lost |
+| `patch -p1` with one stale hunk | One file changed, one rejected — **half-applied** | `patch`: nothing written, `conflict` |
+| `sed` rename | Also rewrote comments/strings: **0.3–11.7%** of occurrences | `refs` / `ast` see code only |
+| `rga` → `pandoc` on a `.docx` | **0 of 40** lines read contained the hit | **40 of 40** (one extraction for search and read) |
+| zoekt right after editing 20 files | New text found in **0**, deleted text in **20** | auto: **20** and **0** |
+| `sed -i` / `perl -pi` / editor writes | Broke **hard links** and **symlinks**, lost `0640` | Same file: links, mode, owner kept |
+
+The full write-up — the multi-agent protocol (`rev`, compare-and-swap, `conflict`), ownership and file identity, why documents are in scope, each design choice against its alternative, and where lancet still loses — is in **[docs/why-one-tool.md](./docs/why-one-tool.md)**.
+
+---
+
 ## Benchmarks
+
+**8 codebases, 7 languages** ([`bench/suite.py`](./bench/suite.py), full tables in [`bench/results/SUITE.md`](./bench/results/SUITE.md)): every lancet output was checked byte-for-byte against ripgrep and AST match sets against ast-grep.
+
+| Corpus | Files | Index build · size (lancet / zoekt) | Text: auto / trust vs rg | AST w/ literal vs ast-grep |
+|---|---:|---|---|---|
+| Linux v6.12 (C) | 86,680 | 3.3 s · 134 MB / 82 s · 2.9 GB | 5.8–7.5× / 13–403× | 4.0× |
+| LLVM 19.1 (C++) | 146,319 | 4.7 s · 122 MB / 53 s · 3.7 GB | 6.1–8.0× / 34–786× | 2.3× |
+| rust 1.83 (Rust) | 49,964 | 1.2 s · 29 MB / 4.9 s · 327 MB | 1.5–9.6× / 2–273× | 1.8× |
+| kubernetes 1.31 (Go) | 26,232 | 1.0 s · 30 MB / 4.1 s · 537 MB | 3.5–5.8× / 9–210× | 1.9× |
+| VS Code 1.95 (TS) | 7,708 | 0.4 s · 12 MB / 2.4 s · 245 MB | 2.1–3.9× / 4–63× | 2.7× |
+| Django 5.1 (Python) | 6,815 | 0.2 s · 7 MB / 1.2 s · 95 MB | 2.4–2.9× / 10–60× | 1.4× |
+| CPython 3.13 (C/Python) | 4,882 | 0.3 s · 10 MB / 3.7 s · 227 MB | 3.0–5.4× / 5–30× | 2.6× |
+| Spring 6.1 (Java) | 10,163 | 0.3 s · 12 MB / 1.9 s · 146 MB | 2.9–5.3× / 6–95× | 3.1× |
+
+Where lancet does **not** win: literal-free regex (the index can't narrow it — ripgrep's speed or up to 1.4× slower) and literal-free structural AST patterns (0.6–1.0× ast-grep's speed). Details in [docs/why-one-tool.md §7](./docs/why-one-tool.md#7-where-lancet-does-not-win).
 
 The chart at the top is the Linux kernel v6.12 (86,218 files, 1.4 GB) on an Apple M4 Pro, reproducible with [`bench/scale_bench.py`](./bench/scale_bench.py) and redrawn by [`bench/readme_figures.py`](./bench/readme_figures.py). Without an index (`scan` mode) lancet runs at ripgrep's speed on text; the index is where the multiples come from.
 

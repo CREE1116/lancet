@@ -1,0 +1,5339 @@
+{
+ "stamp": "20261126 (llvm text/AST re-measured after the rg --docs fix)",
+ "env": {
+  "machine": "arm64 macOS-27.3-arm64-arm-64bit-Mach-O",
+  "runs": 5,
+  "tools": {
+   "lancet": "lancet 0.1.0",
+   "ripgrep": "ripgrep 15.2.0",
+   "ugrep": "ugrep 7.8.5 aarch64-apple-darwin27.0.0 +neon/AArch64; -P:pcre2jit; -z:zlib,bzip2,lzma,lz4,zstd,brotli,7z,tar/pax/cpio/zip",
+   "git": "git version 2.53.0",
+   "fd": "fd 10.5.2",
+   "ast-grep": "ast-grep 0.51.3",
+   "zoekt": "latest (go install)",
+   "hyperfine": "hyperfine 2.0.0"
+  }
+ },
+ "corpora": {
+  "linux": {
+   "tag": "v6.12",
+   "lang": "c",
+   "files": 86680,
+   "mib": 1408.3,
+   "lancet_index": {
+    "build_s": 3.33,
+    "peak_rss_mib": 358,
+    "size_mib": 133.6,
+    "segments": 15,
+    "noop_sync_ms": 124.61
+   },
+   "zoekt_index": {
+    "build_s": 82.27,
+    "peak_rss_mib": 1187,
+    "size_mib": 2907.9,
+    "ok": true
+   },
+   "text": [
+    {
+     "query": "rare literal",
+     "args": [
+      "-n",
+      "-F",
+      "PM_RESUME"
+     ],
+     "lines": 38,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 38,
+      "ugrep": 38,
+      "git grep": 38,
+      "zoekt": 38
+     },
+     "ms": {
+      "rg": {
+       "median": 1086.34,
+       "mean": 1087.4,
+       "stddev": 10.06,
+       "min": 1077.75,
+       "max": 1103.96,
+       "peak_rss_mib": 15.2
+      },
+      "lancet rg": {
+       "median": 147.98,
+       "mean": 148.45,
+       "stddev": 1.95,
+       "min": 146.89,
+       "max": 151.64,
+       "peak_rss_mib": 96.6
+      },
+      "lancet rg --trust-index": {
+       "median": 40.5,
+       "mean": 40.63,
+       "stddev": 0.76,
+       "min": 39.8,
+       "max": 41.6,
+       "peak_rss_mib": 57.2
+      },
+      "lancet rg --no-index": {
+       "median": 1113.43,
+       "mean": 1113.85,
+       "stddev": 31.65,
+       "min": 1065.25,
+       "max": 1149.75,
+       "peak_rss_mib": 79.1
+      },
+      "ugrep": {
+       "median": 815.82,
+       "mean": 815.5,
+       "stddev": 42.79,
+       "min": 762.77,
+       "max": 874.94,
+       "peak_rss_mib": 7.9
+      },
+      "git grep": {
+       "median": 1136.03,
+       "mean": 1144.79,
+       "stddev": 17.21,
+       "min": 1130.91,
+       "max": 1172.34,
+       "peak_rss_mib": 221.8
+      },
+      "zoekt": {
+       "median": 44.32,
+       "mean": 44.32,
+       "stddev": 0.45,
+       "min": 43.79,
+       "max": 44.99,
+       "peak_rss_mib": 200.7
+      }
+     }
+    },
+    {
+     "query": "common identifier",
+     "args": [
+      "-n",
+      "-F",
+      "spin_lock"
+     ],
+     "lines": 44826,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 44826,
+      "ugrep": 44826,
+      "git grep": 44828,
+      "zoekt": 44826
+     },
+     "ms": {
+      "rg": {
+       "median": 1122.71,
+       "mean": 1126.75,
+       "stddev": 36.21,
+       "min": 1091.69,
+       "max": 1167.99,
+       "peak_rss_mib": 14.8
+      },
+      "lancet rg": {
+       "median": 194.08,
+       "mean": 195.09,
+       "stddev": 2.0,
+       "min": 193.29,
+       "max": 197.93,
+       "peak_rss_mib": 73.9
+      },
+      "lancet rg --trust-index": {
+       "median": 86.39,
+       "mean": 87.55,
+       "stddev": 3.09,
+       "min": 85.06,
+       "max": 92.62,
+       "peak_rss_mib": 49.1
+      },
+      "lancet rg --no-index": {
+       "median": 1189.88,
+       "mean": 1174.86,
+       "stddev": 49.63,
+       "min": 1091.42,
+       "max": 1219.3,
+       "peak_rss_mib": 81.1
+      },
+      "ugrep": {
+       "median": 783.34,
+       "mean": 784.49,
+       "stddev": 10.41,
+       "min": 773.24,
+       "max": 797.08,
+       "peak_rss_mib": 7.9
+      },
+      "git grep": {
+       "median": 1254.35,
+       "mean": 1255.83,
+       "stddev": 12.55,
+       "min": 1239.59,
+       "max": 1273.01,
+       "peak_rss_mib": 216.2
+      },
+      "zoekt": {
+       "median": 80.69,
+       "mean": 80.43,
+       "stddev": 1.04,
+       "min": 79.32,
+       "max": 81.73,
+       "peak_rss_mib": 397.0
+      }
+     }
+    },
+    {
+     "query": "ignore case",
+     "args": [
+      "-n",
+      "-i",
+      "mutex_lock"
+     ],
+     "lines": 26188,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 26188,
+      "ugrep": 26188
+     },
+     "ms": {
+      "rg": {
+       "median": 1216.41,
+       "mean": 1203.76,
+       "stddev": 21.73,
+       "min": 1179.67,
+       "max": 1222.08,
+       "peak_rss_mib": 15.2
+      },
+      "lancet rg": {
+       "median": 172.9,
+       "mean": 173.24,
+       "stddev": 1.53,
+       "min": 171.77,
+       "max": 175.69,
+       "peak_rss_mib": 96.2
+      },
+      "lancet rg --trust-index": {
+       "median": 68.77,
+       "mean": 69.92,
+       "stddev": 2.38,
+       "min": 68.52,
+       "max": 74.11,
+       "peak_rss_mib": 65.2
+      },
+      "lancet rg --no-index": {
+       "median": 1159.78,
+       "mean": 1159.67,
+       "stddev": 2.39,
+       "min": 1155.92,
+       "max": 1162.5,
+       "peak_rss_mib": 95.8
+      },
+      "ugrep": {
+       "median": 775.89,
+       "mean": 779.44,
+       "stddev": 16.21,
+       "min": 763.83,
+       "max": 804.71,
+       "peak_rss_mib": 7.9
+      }
+     }
+    },
+    {
+     "query": "word",
+     "args": [
+      "-n",
+      "-w",
+      "spin_lock"
+     ],
+     "lines": 11360,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 11360,
+      "ugrep": 11360
+     },
+     "ms": {
+      "rg": {
+       "median": 1130.81,
+       "mean": 1104.84,
+       "stddev": 50.47,
+       "min": 1043.93,
+       "max": 1152.1,
+       "peak_rss_mib": 15.2
+      },
+      "lancet rg": {
+       "median": 186.74,
+       "mean": 187.74,
+       "stddev": 3.83,
+       "min": 184.36,
+       "max": 193.78,
+       "peak_rss_mib": 94.7
+      },
+      "lancet rg --trust-index": {
+       "median": 85.41,
+       "mean": 88.29,
+       "stddev": 7.4,
+       "min": 83.67,
+       "max": 101.44,
+       "peak_rss_mib": 73.4
+      },
+      "lancet rg --no-index": {
+       "median": 1115.52,
+       "mean": 1108.4,
+       "stddev": 59.33,
+       "min": 1023.75,
+       "max": 1177.58,
+       "peak_rss_mib": 83.4
+      },
+      "ugrep": {
+       "median": 896.3,
+       "mean": 892.86,
+       "stddev": 25.61,
+       "min": 859.68,
+       "max": 929.18,
+       "peak_rss_mib": 7.9
+      }
+     }
+    },
+    {
+     "query": "regex with literal",
+     "args": [
+      "-n",
+      "\\w+_irqsave\\("
+     ],
+     "lines": 18377,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 18377,
+      "ugrep": 18377
+     },
+     "ms": {
+      "rg": {
+       "median": 1070.31,
+       "mean": 1063.67,
+       "stddev": 25.32,
+       "min": 1020.67,
+       "max": 1086.76,
+       "peak_rss_mib": 16.1
+      },
+      "lancet rg": {
+       "median": 156.21,
+       "mean": 156.17,
+       "stddev": 1.96,
+       "min": 154.24,
+       "max": 158.73,
+       "peak_rss_mib": 44.9
+      },
+      "lancet rg --trust-index": {
+       "median": 45.66,
+       "mean": 45.48,
+       "stddev": 0.88,
+       "min": 44.11,
+       "max": 46.4,
+       "peak_rss_mib": 17.0
+      },
+      "lancet rg --no-index": {
+       "median": 1090.32,
+       "mean": 1091.61,
+       "stddev": 19.9,
+       "min": 1068.21,
+       "max": 1122.69,
+       "peak_rss_mib": 81.9
+      },
+      "ugrep": {
+       "median": 815.41,
+       "mean": 815.78,
+       "stddev": 13.98,
+       "min": 801.96,
+       "max": 834.11,
+       "peak_rss_mib": 24.5
+      }
+     }
+    },
+    {
+     "query": "regex, no literal",
+     "args": [
+      "-n",
+      "\\w+\\s*=\\s*\\d{6,}"
+     ],
+     "lines": 9487,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 9487,
+      "ugrep": 9487
+     },
+     "ms": {
+      "rg": {
+       "median": 1102.59,
+       "mean": 1102.68,
+       "stddev": 7.35,
+       "min": 1094.19,
+       "max": 1113.25,
+       "peak_rss_mib": 16.9
+      },
+      "lancet rg": {
+       "median": 1070.09,
+       "mean": 1061.23,
+       "stddev": 29.42,
+       "min": 1010.16,
+       "max": 1082.91,
+       "peak_rss_mib": 105.6
+      },
+      "lancet rg --trust-index": {
+       "median": 999.14,
+       "mean": 997.47,
+       "stddev": 27.56,
+       "min": 961.8,
+       "max": 1034.65,
+       "peak_rss_mib": 73.3
+      },
+      "lancet rg --no-index": {
+       "median": 1063.86,
+       "mean": 1066.13,
+       "stddev": 34.06,
+       "min": 1024.18,
+       "max": 1119.08,
+       "peak_rss_mib": 85.3
+      },
+      "ugrep": {
+       "median": 7568.28,
+       "mean": 7672.49,
+       "stddev": 380.62,
+       "min": 7308.63,
+       "max": 8165.48,
+       "peak_rss_mib": 50.0
+      }
+     }
+    },
+    {
+     "query": "no hit",
+     "args": [
+      "-n",
+      "-F",
+      "zqxjkvbnm_no_such_token"
+     ],
+     "lines": 0,
+     "rg_exit": 1,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 0,
+      "ugrep": 0,
+      "git grep": 0,
+      "zoekt": 0
+     },
+     "ms": {
+      "rg": {
+       "median": 1132.82,
+       "mean": 1151.86,
+       "stddev": 56.29,
+       "min": 1098.13,
+       "max": 1239.63,
+       "peak_rss_mib": 15.7
+      },
+      "lancet rg": {
+       "median": 150.83,
+       "mean": 152.85,
+       "stddev": 4.56,
+       "min": 149.86,
+       "max": 160.71,
+       "peak_rss_mib": 43.4
+      },
+      "lancet rg --trust-index": {
+       "median": 2.81,
+       "mean": 2.85,
+       "stddev": 0.14,
+       "min": 2.72,
+       "max": 3.08,
+       "peak_rss_mib": 4.6
+      },
+      "lancet rg --no-index": {
+       "median": 1255.81,
+       "mean": 1243.61,
+       "stddev": 28.76,
+       "min": 1192.24,
+       "max": 1258.25,
+       "peak_rss_mib": 79.2
+      },
+      "ugrep": {
+       "median": 871.8,
+       "mean": 868.98,
+       "stddev": 37.1,
+       "min": 808.65,
+       "max": 907.35,
+       "peak_rss_mib": 8.0
+      },
+      "git grep": {
+       "median": 1008.33,
+       "mean": 1007.51,
+       "stddev": 17.62,
+       "min": 980.04,
+       "max": 1027.86,
+       "peak_rss_mib": 212.9
+      },
+      "zoekt": {
+       "median": 46.69,
+       "mean": 46.49,
+       "stddev": 1.28,
+       "min": 45.05,
+       "max": 48.38,
+       "peak_rss_mib": 174.9
+      }
+     }
+    },
+    {
+     "query": "count -c",
+     "args": [
+      "-c",
+      "-F",
+      "spin_lock"
+     ],
+     "lines": 7021,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 7021
+     },
+     "ms": {
+      "rg": {
+       "median": 1148.8,
+       "mean": 1183.82,
+       "stddev": 88.05,
+       "min": 1113.71,
+       "max": 1320.61,
+       "peak_rss_mib": 14.9
+      },
+      "lancet rg": {
+       "median": 188.97,
+       "mean": 188.13,
+       "stddev": 5.4,
+       "min": 181.31,
+       "max": 194.19,
+       "peak_rss_mib": 84.9
+      },
+      "lancet rg --trust-index": {
+       "median": 79.79,
+       "mean": 80.56,
+       "stddev": 1.62,
+       "min": 79.28,
+       "max": 83.3,
+       "peak_rss_mib": 43.6
+      },
+      "lancet rg --no-index": {
+       "median": 1076.73,
+       "mean": 1075.87,
+       "stddev": 13.06,
+       "min": 1061.35,
+       "max": 1093.94,
+       "peak_rss_mib": 97.8
+      }
+     }
+    }
+   ],
+   "ast": [
+    {
+     "query": "ast, literal",
+     "pattern": "kmalloc($SZ, $FLAGS)",
+     "lancet_matches": 4913,
+     "lancet_status": "complete",
+     "ast_grep_matches": 4913,
+     "ms": {
+      "lancet ast": {
+       "median": 2319.74,
+       "mean": 2096.23,
+       "stddev": 474.02,
+       "min": 1551.78,
+       "max": 2417.18,
+       "peak_rss_mib": 98.1
+      },
+      "lancet ast --trust-index": {
+       "median": 2208.64,
+       "mean": 2226.1,
+       "stddev": 33.42,
+       "min": 2205.02,
+       "max": 2264.64,
+       "peak_rss_mib": 87.3
+      },
+      "lancet ast --no-index": {
+       "median": 2624.63,
+       "mean": 2709.69,
+       "stddev": 221.81,
+       "min": 2543.01,
+       "max": 2961.44,
+       "peak_rss_mib": 138.8
+      },
+      "ast-grep": {
+       "median": 9177.9,
+       "mean": 9070.03,
+       "stddev": 196.05,
+       "min": 8843.74,
+       "max": 9188.47,
+       "peak_rss_mib": 637.7
+      }
+     }
+    },
+    {
+     "query": "ast, no literal",
+     "pattern": "if ($C) { $$$B }",
+     "lancet_matches": 473060,
+     "lancet_status": "complete",
+     "ast_grep_matches": 592005,
+     "ms": {
+      "lancet ast": {
+       "median": 10782.43,
+       "mean": 10715.95,
+       "stddev": 233.85,
+       "min": 10456.06,
+       "max": 10909.36,
+       "peak_rss_mib": 902.3
+      },
+      "lancet ast --trust-index": {
+       "median": 10477.6,
+       "mean": 10595.63,
+       "stddev": 299.99,
+       "min": 10372.61,
+       "max": 10936.69,
+       "peak_rss_mib": 912.8
+      },
+      "lancet ast --no-index": {
+       "median": 10475.17,
+       "mean": 10465.82,
+       "stddev": 923.23,
+       "min": 9537.96,
+       "max": 11384.34,
+       "peak_rss_mib": 934.8
+      },
+      "ast-grep": {
+       "median": 10212.65,
+       "mean": 9923.34,
+       "stddev": 564.6,
+       "min": 9272.72,
+       "max": 10284.65,
+       "peak_rss_mib": 563.9
+      }
+     }
+    }
+   ],
+   "fd": {
+    "query": "-e c",
+    "ms": {
+     "lancet fd": {
+      "median": 78.47,
+      "mean": 78.67,
+      "stddev": 0.8,
+      "min": 77.68,
+      "max": 79.61,
+      "peak_rss_mib": 24.1
+     },
+     "lancet fd --trust-index": {
+      "median": 14.64,
+      "mean": 14.82,
+      "stddev": 0.39,
+      "min": 14.47,
+      "max": 15.32,
+      "peak_rss_mib": 14.8
+     },
+     "fd": {
+      "median": 72.09,
+      "mean": 72.69,
+      "stddev": 2.25,
+      "min": 70.29,
+      "max": 76.32,
+      "peak_rss_mib": 11.9
+     }
+    }
+   }
+  },
+  "llvm": {
+   "tag": "llvmorg-19.1.0",
+   "lang": "cpp",
+   "files": 146319,
+   "mib": 1575.7,
+   "text": [
+    {
+     "query": "rare literal",
+     "args": [
+      "-n",
+      "-F",
+      "getNumSuccessors"
+     ],
+     "lines": 348,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 348,
+      "ugrep": 348,
+      "git grep": 348,
+      "zoekt": 341
+     },
+     "ms": {
+      "rg": {
+       "median": 1874.89,
+       "mean": 1861.89,
+       "stddev": 62.5,
+       "min": 1753.82,
+       "max": 1910.6,
+       "peak_rss_mib": 29.6
+      },
+      "lancet rg": {
+       "median": 243.81,
+       "mean": 241.54,
+       "stddev": 5.47,
+       "min": 232.93,
+       "max": 246.84,
+       "peak_rss_mib": 83.4
+      },
+      "lancet rg --trust-index": {
+       "median": 6.42,
+       "mean": 6.58,
+       "stddev": 0.3,
+       "min": 6.27,
+       "max": 6.91,
+       "peak_rss_mib": 19.2
+      },
+      "lancet rg --no-index": {
+       "median": 1995.57,
+       "mean": 2002.01,
+       "stddev": 10.62,
+       "min": 1992.55,
+       "max": 2014.37,
+       "peak_rss_mib": 110.9
+      },
+      "ugrep": {
+       "median": 1555.84,
+       "mean": 1593.22,
+       "stddev": 136.14,
+       "min": 1488.95,
+       "max": 1831.69,
+       "peak_rss_mib": 10.4
+      },
+      "git grep": {
+       "median": 1853.81,
+       "mean": 1879.58,
+       "stddev": 107.07,
+       "min": 1802.05,
+       "max": 2064.91,
+       "peak_rss_mib": 98.9
+      },
+      "zoekt": {
+       "median": 44.96,
+       "mean": 45.07,
+       "stddev": 0.25,
+       "min": 44.84,
+       "max": 45.45,
+       "peak_rss_mib": 198.0
+      }
+     }
+    },
+    {
+     "query": "common identifier",
+     "args": [
+      "-n",
+      "-F",
+      "getContext"
+     ],
+     "lines": 12703,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 12703,
+      "ugrep": 12703,
+      "git grep": 12703,
+      "zoekt": 12056
+     },
+     "ms": {
+      "rg": {
+       "median": 1949.69,
+       "mean": 1975.2,
+       "stddev": 153.0,
+       "min": 1803.68,
+       "max": 2224.41,
+       "peak_rss_mib": 30.4
+      },
+      "lancet rg": {
+       "median": 309.64,
+       "mean": 308.54,
+       "stddev": 4.36,
+       "min": 302.68,
+       "max": 314.05,
+       "peak_rss_mib": 82.3
+      },
+      "lancet rg --trust-index": {
+       "median": 55.06,
+       "mean": 56.81,
+       "stddev": 4.4,
+       "min": 54.58,
+       "max": 64.66,
+       "peak_rss_mib": 20.6
+      },
+      "lancet rg --no-index": {
+       "median": 1911.35,
+       "mean": 1930.0,
+       "stddev": 56.4,
+       "min": 1865.12,
+       "max": 2002.81,
+       "peak_rss_mib": 115.3
+      },
+      "ugrep": {
+       "median": 1630.3,
+       "mean": 1632.85,
+       "stddev": 26.26,
+       "min": 1610.39,
+       "max": 1674.48,
+       "peak_rss_mib": 10.0
+      },
+      "git grep": {
+       "median": 1834.62,
+       "mean": 1862.79,
+       "stddev": 59.18,
+       "min": 1803.86,
+       "max": 1950.3,
+       "peak_rss_mib": 101.0
+      },
+      "zoekt": {
+       "median": 64.05,
+       "mean": 63.97,
+       "stddev": 1.01,
+       "min": 62.44,
+       "max": 65.26,
+       "peak_rss_mib": 287.5
+      }
+     }
+    },
+    {
+     "query": "ignore case",
+     "args": [
+      "-n",
+      "-i",
+      "dyn_cast"
+     ],
+     "lines": 29547,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 29547,
+      "ugrep": 29547
+     },
+     "ms": {
+      "rg": {
+       "median": 1851.78,
+       "mean": 1852.9,
+       "stddev": 34.36,
+       "min": 1804.82,
+       "max": 1892.97,
+       "peak_rss_mib": 29.9
+      },
+      "lancet rg": {
+       "median": 281.05,
+       "mean": 279.69,
+       "stddev": 3.89,
+       "min": 273.58,
+       "max": 283.91,
+       "peak_rss_mib": 81.4
+      },
+      "lancet rg --trust-index": {
+       "median": 36.37,
+       "mean": 36.06,
+       "stddev": 0.67,
+       "min": 35.16,
+       "max": 36.79,
+       "peak_rss_mib": 26.0
+      },
+      "lancet rg --no-index": {
+       "median": 1987.28,
+       "mean": 1999.36,
+       "stddev": 43.14,
+       "min": 1958.48,
+       "max": 2056.25,
+       "peak_rss_mib": 123.5
+      },
+      "ugrep": {
+       "median": 1593.25,
+       "mean": 1615.87,
+       "stddev": 78.46,
+       "min": 1518.78,
+       "max": 1717.62,
+       "peak_rss_mib": 10.3
+      }
+     }
+    },
+    {
+     "query": "word",
+     "args": [
+      "-n",
+      "-w",
+      "getContext"
+     ],
+     "lines": 12473,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 12473,
+      "ugrep": 12473
+     },
+     "ms": {
+      "rg": {
+       "median": 1931.45,
+       "mean": 1907.42,
+       "stddev": 102.86,
+       "min": 1791.32,
+       "max": 2050.99,
+       "peak_rss_mib": 29.8
+      },
+      "lancet rg": {
+       "median": 300.94,
+       "mean": 301.0,
+       "stddev": 4.79,
+       "min": 295.56,
+       "max": 307.34,
+       "peak_rss_mib": 84.0
+      },
+      "lancet rg --trust-index": {
+       "median": 57.22,
+       "mean": 57.24,
+       "stddev": 0.92,
+       "min": 55.92,
+       "max": 58.41,
+       "peak_rss_mib": 23.9
+      },
+      "lancet rg --no-index": {
+       "median": 1914.49,
+       "mean": 1916.52,
+       "stddev": 16.79,
+       "min": 1895.98,
+       "max": 1938.93,
+       "peak_rss_mib": 119.2
+      },
+      "ugrep": {
+       "median": 1573.79,
+       "mean": 1938.99,
+       "stddev": 603.05,
+       "min": 1505.59,
+       "max": 2891.34,
+       "peak_rss_mib": 10.2
+      }
+     }
+    },
+    {
+     "query": "regex with literal",
+     "args": [
+      "-n",
+      "llvm::\\w+Pass\\b"
+     ],
+     "lines": 923,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 923,
+      "ugrep": 923
+     },
+     "ms": {
+      "rg": {
+       "median": 1780.89,
+       "mean": 1794.98,
+       "stddev": 22.45,
+       "min": 1777.42,
+       "max": 1827.82,
+       "peak_rss_mib": 29.0
+      },
+      "lancet rg": {
+       "median": 291.43,
+       "mean": 289.73,
+       "stddev": 8.9,
+       "min": 277.56,
+       "max": 299.16,
+       "peak_rss_mib": 83.8
+      },
+      "lancet rg --trust-index": {
+       "median": 47.4,
+       "mean": 47.11,
+       "stddev": 0.77,
+       "min": 46.22,
+       "max": 47.95,
+       "peak_rss_mib": 20.9
+      },
+      "lancet rg --no-index": {
+       "median": 1973.2,
+       "mean": 2077.54,
+       "stddev": 285.62,
+       "min": 1899.42,
+       "max": 2584.07,
+       "peak_rss_mib": 110.8
+      },
+      "ugrep": {
+       "median": 1416.71,
+       "mean": 1543.56,
+       "stddev": 193.35,
+       "min": 1393.69,
+       "max": 1819.78,
+       "peak_rss_mib": 34.9
+      }
+     }
+    },
+    {
+     "query": "regex, no literal",
+     "args": [
+      "-n",
+      "\\w+\\s*=\\s*\\d{6,}"
+     ],
+     "lines": 2991,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 2991,
+      "ugrep": 2989
+     },
+     "ms": {
+      "rg": {
+       "median": 1815.25,
+       "mean": 1819.87,
+       "stddev": 32.66,
+       "min": 1784.83,
+       "max": 1867.77,
+       "peak_rss_mib": 31.1
+      },
+      "lancet rg": {
+       "median": 1931.33,
+       "mean": 1937.48,
+       "stddev": 50.59,
+       "min": 1877.62,
+       "max": 1989.79,
+       "peak_rss_mib": 128.9
+      },
+      "lancet rg --trust-index": {
+       "median": 1650.81,
+       "mean": 1657.63,
+       "stddev": 18.44,
+       "min": 1638.03,
+       "max": 1685.87,
+       "peak_rss_mib": 96.0
+      },
+      "lancet rg --no-index": {
+       "median": 1948.68,
+       "mean": 1989.91,
+       "stddev": 176.89,
+       "min": 1822.23,
+       "max": 2273.19,
+       "peak_rss_mib": 116.8
+      },
+      "ugrep": {
+       "median": 5449.91,
+       "mean": 5386.98,
+       "stddev": 207.19,
+       "min": 5113.83,
+       "max": 5628.44,
+       "peak_rss_mib": 52.6
+      }
+     }
+    },
+    {
+     "query": "no hit",
+     "args": [
+      "-n",
+      "-F",
+      "zqxjkvbnm_no_such_token"
+     ],
+     "lines": 0,
+     "rg_exit": 1,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 0,
+      "ugrep": 0,
+      "git grep": 0,
+      "zoekt": 0
+     },
+     "ms": {
+      "rg": {
+       "median": 1901.18,
+       "mean": 1896.08,
+       "stddev": 25.96,
+       "min": 1869.06,
+       "max": 1930.22,
+       "peak_rss_mib": 30.2
+      },
+      "lancet rg": {
+       "median": 238.67,
+       "mean": 238.61,
+       "stddev": 7.27,
+       "min": 228.2,
+       "max": 247.96,
+       "peak_rss_mib": 82.9
+      },
+      "lancet rg --trust-index": {
+       "median": 2.42,
+       "mean": 2.46,
+       "stddev": 0.12,
+       "min": 2.35,
+       "max": 2.64,
+       "peak_rss_mib": 5.4
+      },
+      "lancet rg --no-index": {
+       "median": 1945.86,
+       "mean": 2067.88,
+       "stddev": 294.78,
+       "min": 1919.88,
+       "max": 2594.81,
+       "peak_rss_mib": 114.4
+      },
+      "ugrep": {
+       "median": 2009.62,
+       "mean": 2110.06,
+       "stddev": 363.18,
+       "min": 1613.19,
+       "max": 2505.99,
+       "peak_rss_mib": 10.3
+      },
+      "git grep": {
+       "median": 1777.38,
+       "mean": 1774.93,
+       "stddev": 35.67,
+       "min": 1740.27,
+       "max": 1823.45,
+       "peak_rss_mib": 99.9
+      },
+      "zoekt": {
+       "median": 49.93,
+       "mean": 50.15,
+       "stddev": 1.54,
+       "min": 48.67,
+       "max": 52.08,
+       "peak_rss_mib": 193.0
+      }
+     }
+    },
+    {
+     "query": "count -c",
+     "args": [
+      "-c",
+      "-F",
+      "getContext"
+     ],
+     "lines": 1903,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 1903
+     },
+     "ms": {
+      "rg": {
+       "median": 2034.57,
+       "mean": 2015.46,
+       "stddev": 42.72,
+       "min": 1952.32,
+       "max": 2050.6,
+       "peak_rss_mib": 29.3
+      },
+      "lancet rg": {
+       "median": 290.79,
+       "mean": 291.65,
+       "stddev": 7.41,
+       "min": 281.04,
+       "max": 301.6,
+       "peak_rss_mib": 82.6
+      },
+      "lancet rg --trust-index": {
+       "median": 59.89,
+       "mean": 59.93,
+       "stddev": 1.19,
+       "min": 58.69,
+       "max": 61.85,
+       "peak_rss_mib": 20.3
+      },
+      "lancet rg --no-index": {
+       "median": 1941.26,
+       "mean": 1948.13,
+       "stddev": 72.46,
+       "min": 1857.58,
+       "max": 2044.58,
+       "peak_rss_mib": 115.3
+      }
+     }
+    }
+   ],
+   "ast": [
+    {
+     "query": "ast, literal",
+     "pattern": "dyn_cast<$T>($X)",
+     "lancet_matches": 23816,
+     "lancet_status": "complete",
+     "ast_grep_matches": 23104,
+     "ms": {
+      "lancet ast": {
+       "median": 1700.4,
+       "mean": 1767.11,
+       "stddev": 118.12,
+       "min": 1697.44,
+       "max": 1903.49,
+       "peak_rss_mib": 166.2
+      },
+      "lancet ast --trust-index": {
+       "median": 1516.72,
+       "mean": 1489.42,
+       "stddev": 52.97,
+       "min": 1428.36,
+       "max": 1523.16,
+       "peak_rss_mib": 142.4
+      },
+      "lancet ast --no-index": {
+       "median": 1701.74,
+       "mean": 1716.69,
+       "stddev": 30.5,
+       "min": 1696.55,
+       "max": 1751.79,
+       "peak_rss_mib": 179.5
+      },
+      "ast-grep": {
+       "median": 3957.37,
+       "mean": 3922.21,
+       "stddev": 674.36,
+       "min": 3230.96,
+       "max": 4578.31,
+       "peak_rss_mib": 205.1
+      }
+     }
+    },
+    {
+     "query": "ast, no literal",
+     "pattern": "if ($C) { $$$B }",
+     "lancet_matches": 148502,
+     "lancet_status": "complete",
+     "ast_grep_matches": 185918,
+     "ms": {
+      "lancet ast": {
+       "median": 5402.35,
+       "mean": 5489.14,
+       "stddev": 526.92,
+       "min": 5010.99,
+       "max": 6054.06,
+       "peak_rss_mib": 624.9
+      },
+      "lancet ast --trust-index": {
+       "median": 4943.01,
+       "mean": 5356.57,
+       "stddev": 886.38,
+       "min": 4752.55,
+       "max": 6374.15,
+       "peak_rss_mib": 600.2
+      },
+      "lancet ast --no-index": {
+       "median": 5268.33,
+       "mean": 5384.83,
+       "stddev": 291.07,
+       "min": 5170.05,
+       "max": 5716.11,
+       "peak_rss_mib": 602.6
+      },
+      "ast-grep": {
+       "median": 4218.94,
+       "mean": 4231.93,
+       "stddev": 433.53,
+       "min": 3805.04,
+       "max": 4671.8,
+       "peak_rss_mib": 211.7
+      }
+     }
+    }
+   ],
+   "fd": {
+    "query": "-e cpp",
+    "ms": {
+     "lancet fd": {
+      "median": 179.52,
+      "mean": 178.35,
+      "stddev": 4.44,
+      "min": 170.64,
+      "max": 181.95,
+      "peak_rss_mib": 35.5
+     },
+     "lancet fd --trust-index": {
+      "median": 23.42,
+      "mean": 23.37,
+      "stddev": 0.47,
+      "min": 22.67,
+      "max": 23.99,
+      "peak_rss_mib": 21.2
+     },
+     "fd": {
+      "median": 176.41,
+      "mean": 176.24,
+      "stddev": 8.5,
+      "min": 165.32,
+      "max": 188.31,
+      "peak_rss_mib": 13.6
+     }
+    }
+   },
+   "lancet_index": {
+    "build_s": 4.68,
+    "peak_rss_mib": 280,
+    "size_mib": 122.0,
+    "segments": 17,
+    "noop_sync_ms": 251.06
+   },
+   "zoekt_index": {
+    "build_s": 53.21,
+    "peak_rss_mib": 1252,
+    "size_mib": 3704.9,
+    "ok": true
+   }
+  },
+  "rust": {
+   "tag": "1.83.0",
+   "lang": "rs",
+   "files": 49964,
+   "mib": 127.4,
+   "lancet_index": {
+    "build_s": 1.16,
+    "peak_rss_mib": 184,
+    "size_mib": 28.8,
+    "segments": 2,
+    "noop_sync_ms": 81.9
+   },
+   "zoekt_index": {
+    "build_s": 4.85,
+    "peak_rss_mib": 739,
+    "size_mib": 326.8,
+    "ok": true
+   },
+   "text": [
+    {
+     "query": "rare literal",
+     "args": [
+      "-n",
+      "-F",
+      "DefPathHash"
+     ],
+     "lines": 187,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 187,
+      "ugrep": 187,
+      "git grep": 187,
+      "zoekt": 187
+     },
+     "ms": {
+      "rg": {
+       "median": 675.18,
+       "mean": 674.17,
+       "stddev": 5.7,
+       "min": 667.52,
+       "max": 680.32,
+       "peak_rss_mib": 17.7
+      },
+      "lancet rg": {
+       "median": 70.45,
+       "mean": 69.68,
+       "stddev": 3.11,
+       "min": 66.34,
+       "max": 72.97,
+       "peak_rss_mib": 34.3
+      },
+      "lancet rg --trust-index": {
+       "median": 2.82,
+       "mean": 2.86,
+       "stddev": 0.11,
+       "min": 2.76,
+       "max": 3.03,
+       "peak_rss_mib": 6.3
+      },
+      "lancet rg --no-index": {
+       "median": 665.91,
+       "mean": 662.33,
+       "stddev": 27.83,
+       "min": 619.94,
+       "max": 697.67,
+       "peak_rss_mib": 49.5
+      },
+      "ugrep": {
+       "median": 425.77,
+       "mean": 430.79,
+       "stddev": 12.72,
+       "min": 418.3,
+       "max": 445.41,
+       "peak_rss_mib": 8.9
+      },
+      "git grep": {
+       "median": 685.23,
+       "mean": 686.33,
+       "stddev": 30.26,
+       "min": 644.77,
+       "max": 717.26,
+       "peak_rss_mib": 27.2
+      },
+      "zoekt": {
+       "median": 36.23,
+       "mean": 36.26,
+       "stddev": 0.42,
+       "min": 35.78,
+       "max": 36.86,
+       "peak_rss_mib": 61.1
+      }
+     }
+    },
+    {
+     "query": "common identifier",
+     "args": [
+      "-n",
+      "-F",
+      "unwrap"
+     ],
+     "lines": 20208,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 20208,
+      "ugrep": 20208,
+      "git grep": 20141,
+      "zoekt": 20185
+     },
+     "ms": {
+      "rg": {
+       "median": 721.77,
+       "mean": 721.33,
+       "stddev": 10.63,
+       "min": 706.35,
+       "max": 735.75,
+       "peak_rss_mib": 19.2
+      },
+      "lancet rg": {
+       "median": 122.94,
+       "mean": 123.49,
+       "stddev": 3.7,
+       "min": 118.88,
+       "max": 128.11,
+       "peak_rss_mib": 42.9
+      },
+      "lancet rg --trust-index": {
+       "median": 52.02,
+       "mean": 52.47,
+       "stddev": 2.23,
+       "min": 50.27,
+       "max": 55.96,
+       "peak_rss_mib": 21.3
+      },
+      "lancet rg --no-index": {
+       "median": 683.73,
+       "mean": 678.52,
+       "stddev": 16.91,
+       "min": 657.15,
+       "max": 698.98,
+       "peak_rss_mib": 50.2
+      },
+      "ugrep": {
+       "median": 452.43,
+       "mean": 457.48,
+       "stddev": 17.48,
+       "min": 444.24,
+       "max": 487.19,
+       "peak_rss_mib": 8.9
+      },
+      "git grep": {
+       "median": 694.92,
+       "mean": 694.24,
+       "stddev": 11.69,
+       "min": 676.14,
+       "max": 708.74,
+       "peak_rss_mib": 28.3
+      },
+      "zoekt": {
+       "median": 61.25,
+       "mean": 61.62,
+       "stddev": 0.91,
+       "min": 60.91,
+       "max": 63.19,
+       "peak_rss_mib": 141.9
+      }
+     }
+    },
+    {
+     "query": "ignore case",
+     "args": [
+      "-n",
+      "-i",
+      "tyctxt"
+     ],
+     "lines": 4314,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 4314,
+      "ugrep": 4314
+     },
+     "ms": {
+      "rg": {
+       "median": 689.18,
+       "mean": 687.31,
+       "stddev": 16.28,
+       "min": 664.26,
+       "max": 709.29,
+       "peak_rss_mib": 18.4
+      },
+      "lancet rg": {
+       "median": 79.61,
+       "mean": 80.1,
+       "stddev": 2.87,
+       "min": 77.45,
+       "max": 84.97,
+       "peak_rss_mib": 34.0
+      },
+      "lancet rg --trust-index": {
+       "median": 11.29,
+       "mean": 12.1,
+       "stddev": 2.23,
+       "min": 9.84,
+       "max": 15.72,
+       "peak_rss_mib": 9.3
+      },
+      "lancet rg --no-index": {
+       "median": 691.26,
+       "mean": 695.19,
+       "stddev": 11.43,
+       "min": 684.04,
+       "max": 714.26,
+       "peak_rss_mib": 49.3
+      },
+      "ugrep": {
+       "median": 437.77,
+       "mean": 437.43,
+       "stddev": 5.44,
+       "min": 429.94,
+       "max": 442.64,
+       "peak_rss_mib": 8.9
+      }
+     }
+    },
+    {
+     "query": "word",
+     "args": [
+      "-n",
+      "-w",
+      "unwrap"
+     ],
+     "lines": 13955,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 13955,
+      "ugrep": 13955
+     },
+     "ms": {
+      "rg": {
+       "median": 703.29,
+       "mean": 701.39,
+       "stddev": 9.09,
+       "min": 690.05,
+       "max": 713.19,
+       "peak_rss_mib": 18.9
+      },
+      "lancet rg": {
+       "median": 120.69,
+       "mean": 119.92,
+       "stddev": 1.82,
+       "min": 116.74,
+       "max": 121.28,
+       "peak_rss_mib": 47.2
+      },
+      "lancet rg --trust-index": {
+       "median": 50.18,
+       "mean": 50.34,
+       "stddev": 0.88,
+       "min": 49.21,
+       "max": 51.65,
+       "peak_rss_mib": 24.8
+      },
+      "lancet rg --no-index": {
+       "median": 675.28,
+       "mean": 676.88,
+       "stddev": 13.37,
+       "min": 658.58,
+       "max": 692.5,
+       "peak_rss_mib": 53.8
+      },
+      "ugrep": {
+       "median": 461.09,
+       "mean": 455.73,
+       "stddev": 14.81,
+       "min": 439.56,
+       "max": 472.51,
+       "peak_rss_mib": 8.9
+      }
+     }
+    },
+    {
+     "query": "regex with literal",
+     "args": [
+      "-n",
+      "fn \\w+_\\w+\\("
+     ],
+     "lines": 74623,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 74623,
+      "ugrep": 74623
+     },
+     "ms": {
+      "rg": {
+       "median": 794.33,
+       "mean": 794.89,
+       "stddev": 7.35,
+       "min": 784.3,
+       "max": 802.12,
+       "peak_rss_mib": 20.5
+      },
+      "lancet rg": {
+       "median": 519.9,
+       "mean": 511.76,
+       "stddev": 19.67,
+       "min": 487.13,
+       "max": 531.77,
+       "peak_rss_mib": 59.1
+      },
+      "lancet rg --trust-index": {
+       "median": 451.62,
+       "mean": 453.23,
+       "stddev": 27.66,
+       "min": 420.7,
+       "max": 496.35,
+       "peak_rss_mib": 42.4
+      },
+      "lancet rg --no-index": {
+       "median": 699.41,
+       "mean": 703.93,
+       "stddev": 10.37,
+       "min": 694.63,
+       "max": 719.92,
+       "peak_rss_mib": 59.9
+      },
+      "ugrep": {
+       "median": 523.82,
+       "mean": 529.54,
+       "stddev": 13.22,
+       "min": 521.4,
+       "max": 552.73,
+       "peak_rss_mib": 48.3
+      }
+     }
+    },
+    {
+     "query": "regex, no literal",
+     "args": [
+      "-n",
+      "\\w+\\s*=\\s*\\d{6,}"
+     ],
+     "lines": 339,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 339,
+      "ugrep": 339
+     },
+     "ms": {
+      "rg": {
+       "median": 654.07,
+       "mean": 654.97,
+       "stddev": 18.56,
+       "min": 629.08,
+       "max": 679.21,
+       "peak_rss_mib": 20.4
+      },
+      "lancet rg": {
+       "median": 667.19,
+       "mean": 667.39,
+       "stddev": 3.38,
+       "min": 662.57,
+       "max": 671.04,
+       "peak_rss_mib": 52.3
+      },
+      "lancet rg --trust-index": {
+       "median": 600.22,
+       "mean": 601.84,
+       "stddev": 6.83,
+       "min": 595.08,
+       "max": 612.53,
+       "peak_rss_mib": 38.6
+      },
+      "lancet rg --no-index": {
+       "median": 662.99,
+       "mean": 657.92,
+       "stddev": 8.72,
+       "min": 647.48,
+       "max": 665.63,
+       "peak_rss_mib": 51.3
+      },
+      "ugrep": {
+       "median": 717.45,
+       "mean": 706.42,
+       "stddev": 31.07,
+       "min": 651.67,
+       "max": 726.09,
+       "peak_rss_mib": 50.6
+      }
+     }
+    },
+    {
+     "query": "no hit",
+     "args": [
+      "-n",
+      "-F",
+      "zqxjkvbnm_no_such_token"
+     ],
+     "lines": 0,
+     "rg_exit": 1,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 0,
+      "ugrep": 0,
+      "git grep": 0,
+      "zoekt": 0
+     },
+     "ms": {
+      "rg": {
+       "median": 674.96,
+       "mean": 655.59,
+       "stddev": 33.42,
+       "min": 617.88,
+       "max": 683.06,
+       "peak_rss_mib": 18.5
+      },
+      "lancet rg": {
+       "median": 72.04,
+       "mean": 72.1,
+       "stddev": 2.31,
+       "min": 68.72,
+       "max": 75.02,
+       "peak_rss_mib": 33.0
+      },
+      "lancet rg --trust-index": {
+       "median": 2.47,
+       "mean": 2.43,
+       "stddev": 0.15,
+       "min": 2.24,
+       "max": 2.63,
+       "peak_rss_mib": 5.0
+      },
+      "lancet rg --no-index": {
+       "median": 647.33,
+       "mean": 655.32,
+       "stddev": 29.22,
+       "min": 619.07,
+       "max": 691.63,
+       "peak_rss_mib": 47.0
+      },
+      "ugrep": {
+       "median": 441.86,
+       "mean": 455.56,
+       "stddev": 42.66,
+       "min": 410.69,
+       "max": 515.19,
+       "peak_rss_mib": 8.8
+      },
+      "git grep": {
+       "median": 698.15,
+       "mean": 719.98,
+       "stddev": 60.75,
+       "min": 651.54,
+       "max": 812.22,
+       "peak_rss_mib": 26.9
+      },
+      "zoekt": {
+       "median": 39.66,
+       "mean": 39.59,
+       "stddev": 0.15,
+       "min": 39.39,
+       "max": 39.72,
+       "peak_rss_mib": 59.5
+      }
+     }
+    },
+    {
+     "query": "count -c",
+     "args": [
+      "-c",
+      "-F",
+      "unwrap"
+     ],
+     "lines": 3560,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 3560
+     },
+     "ms": {
+      "rg": {
+       "median": 729.16,
+       "mean": 711.04,
+       "stddev": 33.17,
+       "min": 656.35,
+       "max": 736.76,
+       "peak_rss_mib": 18.8
+      },
+      "lancet rg": {
+       "median": 117.94,
+       "mean": 117.71,
+       "stddev": 2.46,
+       "min": 113.78,
+       "max": 120.18,
+       "peak_rss_mib": 40.0
+      },
+      "lancet rg --trust-index": {
+       "median": 47.43,
+       "mean": 47.59,
+       "stddev": 0.67,
+       "min": 46.77,
+       "max": 48.57,
+       "peak_rss_mib": 17.9
+      },
+      "lancet rg --no-index": {
+       "median": 700.42,
+       "mean": 691.1,
+       "stddev": 22.77,
+       "min": 663.34,
+       "max": 712.18,
+       "peak_rss_mib": 49.9
+      }
+     }
+    }
+   ],
+   "ast": [
+    {
+     "query": "ast, literal",
+     "pattern": "$X.unwrap()",
+     "lancet_matches": 9546,
+     "lancet_status": "complete",
+     "ast_grep_matches": 9547,
+     "ms": {
+      "lancet ast": {
+       "median": 477.76,
+       "mean": 470.35,
+       "stddev": 23.8,
+       "min": 443.73,
+       "max": 489.56,
+       "peak_rss_mib": 66.1
+      },
+      "lancet ast --trust-index": {
+       "median": 494.72,
+       "mean": 460.53,
+       "stddev": 125.97,
+       "min": 321.0,
+       "max": 565.88,
+       "peak_rss_mib": 52.8
+      },
+      "lancet ast --no-index": {
+       "median": 567.67,
+       "mean": 589.6,
+       "stddev": 49.97,
+       "min": 554.34,
+       "max": 646.78,
+       "peak_rss_mib": 68.6
+      },
+      "ast-grep": {
+       "median": 847.67,
+       "mean": 830.47,
+       "stddev": 30.42,
+       "min": 795.35,
+       "max": 848.38,
+       "peak_rss_mib": 73.5
+      }
+     }
+    },
+    {
+     "query": "ast, no literal",
+     "pattern": "if $C { $$$B }",
+     "lancet_matches": 31680,
+     "lancet_status": "complete",
+     "ast_grep_matches": 54363,
+     "ms": {
+      "lancet ast": {
+       "median": 1162.64,
+       "mean": 1107.84,
+       "stddev": 97.28,
+       "min": 995.52,
+       "max": 1165.36,
+       "peak_rss_mib": 122.4
+      },
+      "lancet ast --trust-index": {
+       "median": 873.98,
+       "mean": 1023.65,
+       "stddev": 296.23,
+       "min": 832.11,
+       "max": 1364.84,
+       "peak_rss_mib": 120.6
+      },
+      "lancet ast --no-index": {
+       "median": 1054.73,
+       "mean": 1053.5,
+       "stddev": 13.83,
+       "min": 1039.09,
+       "max": 1066.67,
+       "peak_rss_mib": 128.7
+      },
+      "ast-grep": {
+       "median": 914.12,
+       "mean": 898.11,
+       "stddev": 32.7,
+       "min": 860.49,
+       "max": 919.72,
+       "peak_rss_mib": 80.9
+      }
+     }
+    }
+   ],
+   "fd": {
+    "query": "-e rs",
+    "ms": {
+     "lancet fd": {
+      "median": 53.61,
+      "mean": 54.61,
+      "stddev": 2.74,
+      "min": 51.79,
+      "max": 58.84,
+      "peak_rss_mib": 25.3
+     },
+     "lancet fd --trust-index": {
+      "median": 10.81,
+      "mean": 10.79,
+      "stddev": 0.08,
+      "min": 10.65,
+      "max": 10.86,
+      "peak_rss_mib": 12.7
+     },
+     "fd": {
+      "median": 52.81,
+      "mean": 53.3,
+      "stddev": 1.92,
+      "min": 51.15,
+      "max": 56.04,
+      "peak_rss_mib": 12.0
+     }
+    }
+   }
+  },
+  "kubernetes": {
+   "tag": "v1.31.0",
+   "lang": "go",
+   "files": 26232,
+   "mib": 220.0,
+   "lancet_index": {
+    "build_s": 0.97,
+    "peak_rss_mib": 224,
+    "size_mib": 30.1,
+    "segments": 3,
+    "noop_sync_ms": 80.48
+   },
+   "zoekt_index": {
+    "build_s": 4.07,
+    "peak_rss_mib": 1005,
+    "size_mib": 537.0,
+    "ok": true
+   },
+   "text": [
+    {
+     "query": "rare literal",
+     "args": [
+      "-n",
+      "-F",
+      "ShouldPodContainersBeTerminating"
+     ],
+     "lines": 17,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 17,
+      "ugrep": 17,
+      "git grep": 17,
+      "zoekt": 17
+     },
+     "ms": {
+      "rg": {
+       "median": 423.83,
+       "mean": 421.03,
+       "stddev": 24.12,
+       "min": 391.12,
+       "max": 455.59,
+       "peak_rss_mib": 15.0
+      },
+      "lancet rg": {
+       "median": 82.02,
+       "mean": 81.3,
+       "stddev": 1.56,
+       "min": 79.59,
+       "max": 82.72,
+       "peak_rss_mib": 25.4
+      },
+      "lancet rg --trust-index": {
+       "median": 2.6,
+       "mean": 2.61,
+       "stddev": 0.04,
+       "min": 2.56,
+       "max": 2.67,
+       "peak_rss_mib": 6.9
+      },
+      "lancet rg --no-index": {
+       "median": 452.46,
+       "mean": 456.63,
+       "stddev": 11.02,
+       "min": 448.68,
+       "max": 476.01,
+       "peak_rss_mib": 68.1
+      },
+      "ugrep": {
+       "median": 274.73,
+       "mean": 279.33,
+       "stddev": 9.1,
+       "min": 270.4,
+       "max": 290.95,
+       "peak_rss_mib": 8.8
+      },
+      "git grep": {
+       "median": 433.72,
+       "mean": 419.9,
+       "stddev": 30.49,
+       "min": 365.58,
+       "max": 436.07,
+       "peak_rss_mib": 33.2
+      },
+      "zoekt": {
+       "median": 42.76,
+       "mean": 52.69,
+       "stddev": 19.73,
+       "min": 41.68,
+       "max": 87.53,
+       "peak_rss_mib": 67.2
+      }
+     }
+    },
+    {
+     "query": "common identifier",
+     "args": [
+      "-n",
+      "-F",
+      "fmt.Errorf"
+     ],
+     "lines": 23778,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 23778,
+      "ugrep": 23769,
+      "git grep": 23778,
+      "zoekt": 23778
+     },
+     "ms": {
+      "rg": {
+       "median": 443.9,
+       "mean": 449.48,
+       "stddev": 22.2,
+       "min": 420.03,
+       "max": 479.86,
+       "peak_rss_mib": 16.0
+      },
+      "lancet rg": {
+       "median": 126.31,
+       "mean": 126.93,
+       "stddev": 3.87,
+       "min": 122.97,
+       "max": 133.0,
+       "peak_rss_mib": 30.5
+      },
+      "lancet rg --trust-index": {
+       "median": 51.75,
+       "mean": 51.56,
+       "stddev": 1.66,
+       "min": 49.09,
+       "max": 53.06,
+       "peak_rss_mib": 20.3
+      },
+      "lancet rg --no-index": {
+       "median": 436.55,
+       "mean": 439.54,
+       "stddev": 10.94,
+       "min": 427.16,
+       "max": 454.96,
+       "peak_rss_mib": 74.5
+      },
+      "ugrep": {
+       "median": 291.42,
+       "mean": 296.15,
+       "stddev": 9.62,
+       "min": 286.28,
+       "max": 309.83,
+       "peak_rss_mib": 8.9
+      },
+      "git grep": {
+       "median": 409.17,
+       "mean": 411.3,
+       "stddev": 8.16,
+       "min": 400.77,
+       "max": 419.71,
+       "peak_rss_mib": 36.6
+      },
+      "zoekt": {
+       "median": 78.36,
+       "mean": 78.68,
+       "stddev": 2.21,
+       "min": 76.0,
+       "max": 82.09,
+       "peak_rss_mib": 180.0
+      }
+     }
+    },
+    {
+     "query": "ignore case",
+     "args": [
+      "-n",
+      "-i",
+      "podspec"
+     ],
+     "lines": 4562,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 4562,
+      "ugrep": 4562
+     },
+     "ms": {
+      "rg": {
+       "median": 432.5,
+       "mean": 431.17,
+       "stddev": 10.17,
+       "min": 416.27,
+       "max": 443.3,
+       "peak_rss_mib": 15.8
+      },
+      "lancet rg": {
+       "median": 83.91,
+       "mean": 84.24,
+       "stddev": 2.7,
+       "min": 80.98,
+       "max": 88.08,
+       "peak_rss_mib": 47.7
+      },
+      "lancet rg --trust-index": {
+       "median": 13.11,
+       "mean": 13.07,
+       "stddev": 0.66,
+       "min": 12.38,
+       "max": 13.82,
+       "peak_rss_mib": 40.7
+      },
+      "lancet rg --no-index": {
+       "median": 428.71,
+       "mean": 433.61,
+       "stddev": 13.36,
+       "min": 422.07,
+       "max": 455.76,
+       "peak_rss_mib": 71.9
+      },
+      "ugrep": {
+       "median": 307.31,
+       "mean": 309.8,
+       "stddev": 8.83,
+       "min": 300.75,
+       "max": 324.31,
+       "peak_rss_mib": 9.2
+      }
+     }
+    },
+    {
+     "query": "word",
+     "args": [
+      "-n",
+      "-w",
+      "fmt.Errorf"
+     ],
+     "lines": 23776,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 23776,
+      "ugrep": 23767
+     },
+     "ms": {
+      "rg": {
+       "median": 475.18,
+       "mean": 484.0,
+       "stddev": 19.3,
+       "min": 462.78,
+       "max": 505.75,
+       "peak_rss_mib": 16.7
+      },
+      "lancet rg": {
+       "median": 128.21,
+       "mean": 126.46,
+       "stddev": 4.04,
+       "min": 121.71,
+       "max": 131.25,
+       "peak_rss_mib": 35.8
+      },
+      "lancet rg --trust-index": {
+       "median": 55.43,
+       "mean": 54.6,
+       "stddev": 2.38,
+       "min": 51.06,
+       "max": 56.89,
+       "peak_rss_mib": 26.7
+      },
+      "lancet rg --no-index": {
+       "median": 447.83,
+       "mean": 451.99,
+       "stddev": 12.23,
+       "min": 441.61,
+       "max": 470.18,
+       "peak_rss_mib": 82.9
+      },
+      "ugrep": {
+       "median": 293.1,
+       "mean": 293.43,
+       "stddev": 1.77,
+       "min": 291.15,
+       "max": 295.43,
+       "peak_rss_mib": 8.8
+      }
+     }
+    },
+    {
+     "query": "regex with literal",
+     "args": [
+      "-n",
+      "func \\(\\w+ \\*\\w+\\) Get\\w+\\("
+     ],
+     "lines": 5140,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 5140,
+      "ugrep": 5140
+     },
+     "ms": {
+      "rg": {
+       "median": 450.91,
+       "mean": 443.02,
+       "stddev": 26.36,
+       "min": 415.4,
+       "max": 476.77,
+       "peak_rss_mib": 17.9
+      },
+      "lancet rg": {
+       "median": 103.93,
+       "mean": 104.47,
+       "stddev": 4.13,
+       "min": 100.73,
+       "max": 111.36,
+       "peak_rss_mib": 28.7
+      },
+      "lancet rg --trust-index": {
+       "median": 30.77,
+       "mean": 30.59,
+       "stddev": 1.16,
+       "min": 29.15,
+       "max": 32.05,
+       "peak_rss_mib": 17.7
+      },
+      "lancet rg --no-index": {
+       "median": 450.12,
+       "mean": 444.9,
+       "stddev": 12.82,
+       "min": 427.52,
+       "max": 456.57,
+       "peak_rss_mib": 73.6
+      },
+      "ugrep": {
+       "median": 328.23,
+       "mean": 330.17,
+       "stddev": 4.48,
+       "min": 327.81,
+       "max": 338.16,
+       "peak_rss_mib": 56.3
+      }
+     }
+    },
+    {
+     "query": "regex, no literal",
+     "args": [
+      "-n",
+      "\\w+\\s*=\\s*\\d{6,}"
+     ],
+     "lines": 226,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 226,
+      "ugrep": 226
+     },
+     "ms": {
+      "rg": {
+       "median": 475.26,
+       "mean": 476.41,
+       "stddev": 4.68,
+       "min": 471.44,
+       "max": 482.27,
+       "peak_rss_mib": 17.2
+      },
+      "lancet rg": {
+       "median": 444.7,
+       "mean": 441.65,
+       "stddev": 13.1,
+       "min": 425.94,
+       "max": 455.88,
+       "peak_rss_mib": 46.6
+      },
+      "lancet rg --trust-index": {
+       "median": 372.58,
+       "mean": 374.5,
+       "stddev": 9.42,
+       "min": 363.27,
+       "max": 386.22,
+       "peak_rss_mib": 40.9
+      },
+      "lancet rg --no-index": {
+       "median": 437.71,
+       "mean": 439.42,
+       "stddev": 3.24,
+       "min": 436.19,
+       "max": 443.76,
+       "peak_rss_mib": 71.5
+      },
+      "ugrep": {
+       "median": 674.15,
+       "mean": 676.45,
+       "stddev": 8.96,
+       "min": 668.4,
+       "max": 690.19,
+       "peak_rss_mib": 51.0
+      }
+     }
+    },
+    {
+     "query": "no hit",
+     "args": [
+      "-n",
+      "-F",
+      "zqxjkvbnm_no_such_token"
+     ],
+     "lines": 0,
+     "rg_exit": 1,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 0,
+      "ugrep": 0,
+      "git grep": 0,
+      "zoekt": 0
+     },
+     "ms": {
+      "rg": {
+       "median": 480.71,
+       "mean": 480.14,
+       "stddev": 4.94,
+       "min": 473.43,
+       "max": 487.17,
+       "peak_rss_mib": 14.9
+      },
+      "lancet rg": {
+       "median": 83.59,
+       "mean": 82.75,
+       "stddev": 2.99,
+       "min": 78.39,
+       "max": 86.36,
+       "peak_rss_mib": 24.4
+      },
+      "lancet rg --trust-index": {
+       "median": 2.29,
+       "mean": 2.3,
+       "stddev": 0.08,
+       "min": 2.2,
+       "max": 2.41,
+       "peak_rss_mib": 5.1
+      },
+      "lancet rg --no-index": {
+       "median": 484.01,
+       "mean": 483.73,
+       "stddev": 6.16,
+       "min": 476.06,
+       "max": 490.39,
+       "peak_rss_mib": 69.7
+      },
+      "ugrep": {
+       "median": 283.87,
+       "mean": 283.34,
+       "stddev": 2.09,
+       "min": 280.69,
+       "max": 286.17,
+       "peak_rss_mib": 8.8
+      },
+      "git grep": {
+       "median": 459.0,
+       "mean": 458.81,
+       "stddev": 2.75,
+       "min": 454.29,
+       "max": 461.04,
+       "peak_rss_mib": 33.5
+      },
+      "zoekt": {
+       "median": 36.37,
+       "mean": 36.57,
+       "stddev": 0.82,
+       "min": 35.93,
+       "max": 37.99,
+       "peak_rss_mib": 66.8
+      }
+     }
+    },
+    {
+     "query": "count -c",
+     "args": [
+      "-c",
+      "-F",
+      "fmt.Errorf"
+     ],
+     "lines": 3233,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 3233
+     },
+     "ms": {
+      "rg": {
+       "median": 465.38,
+       "mean": 461.77,
+       "stddev": 13.54,
+       "min": 446.04,
+       "max": 478.78,
+       "peak_rss_mib": 14.7
+      },
+      "lancet rg": {
+       "median": 130.11,
+       "mean": 131.03,
+       "stddev": 3.51,
+       "min": 127.65,
+       "max": 136.96,
+       "peak_rss_mib": 26.7
+      },
+      "lancet rg --trust-index": {
+       "median": 53.29,
+       "mean": 52.72,
+       "stddev": 3.89,
+       "min": 46.98,
+       "max": 57.59,
+       "peak_rss_mib": 15.8
+      },
+      "lancet rg --no-index": {
+       "median": 440.38,
+       "mean": 431.59,
+       "stddev": 24.54,
+       "min": 389.13,
+       "max": 452.23,
+       "peak_rss_mib": 71.5
+      }
+     }
+    }
+   ],
+   "ast": [
+    {
+     "query": "ast, literal",
+     "pattern": "fmt.Errorf($A, $B)",
+     "lancet_matches": 11936,
+     "lancet_status": "complete",
+     "ast_grep_matches": 11936,
+     "ms": {
+      "lancet ast": {
+       "median": 910.48,
+       "mean": 964.81,
+       "stddev": 123.72,
+       "min": 877.55,
+       "max": 1106.4,
+       "peak_rss_mib": 127.1
+      },
+      "lancet ast --trust-index": {
+       "median": 1048.95,
+       "mean": 1076.56,
+       "stddev": 110.26,
+       "min": 982.73,
+       "max": 1198.0,
+       "peak_rss_mib": 118.0
+      },
+      "lancet ast --no-index": {
+       "median": 828.45,
+       "mean": 825.91,
+       "stddev": 52.96,
+       "min": 771.72,
+       "max": 877.54,
+       "peak_rss_mib": 174.5
+      },
+      "ast-grep": {
+       "median": 1737.02,
+       "mean": 1845.26,
+       "stddev": 292.39,
+       "min": 1622.43,
+       "max": 2176.34,
+       "peak_rss_mib": 153.7
+      }
+     }
+    },
+    {
+     "query": "ast, no literal",
+     "pattern": "if $C { $$$B }",
+     "lancet_matches": 220028,
+     "lancet_status": "complete",
+     "ast_grep_matches": 232579,
+     "ms": {
+      "lancet ast": {
+       "median": 1971.61,
+       "mean": 1947.03,
+       "stddev": 86.61,
+       "min": 1850.78,
+       "max": 2018.69,
+       "peak_rss_mib": 495.0
+      },
+      "lancet ast --trust-index": {
+       "median": 1853.97,
+       "mean": 1919.39,
+       "stddev": 148.15,
+       "min": 1815.21,
+       "max": 2088.99,
+       "peak_rss_mib": 482.3
+      },
+      "lancet ast --no-index": {
+       "median": 1920.37,
+       "mean": 1959.41,
+       "stddev": 119.79,
+       "min": 1864.02,
+       "max": 2093.85,
+       "peak_rss_mib": 485.6
+      },
+      "ast-grep": {
+       "median": 2001.44,
+       "mean": 1963.94,
+       "stddev": 143.62,
+       "min": 1805.28,
+       "max": 2085.09,
+       "peak_rss_mib": 219.5
+      }
+     }
+    }
+   ],
+   "fd": {
+    "query": "-e go",
+    "ms": {
+     "lancet fd": {
+      "median": 72.03,
+      "mean": 72.62,
+      "stddev": 2.67,
+      "min": 69.06,
+      "max": 75.54,
+      "peak_rss_mib": 15.4
+     },
+     "lancet fd --trust-index": {
+      "median": 7.47,
+      "mean": 7.49,
+      "stddev": 0.08,
+      "min": 7.38,
+      "max": 7.57,
+      "peak_rss_mib": 8.0
+     },
+     "fd": {
+      "median": 76.36,
+      "mean": 75.9,
+      "stddev": 1.66,
+      "min": 73.06,
+      "max": 77.2,
+      "peak_rss_mib": 10.5
+     }
+    }
+   }
+  },
+  "vscode": {
+   "tag": "1.95.0",
+   "lang": "ts",
+   "files": 7708,
+   "mib": 113.9,
+   "lancet_index": {
+    "build_s": 0.38,
+    "peak_rss_mib": 114,
+    "size_mib": 11.9,
+    "segments": 2,
+    "noop_sync_ms": 33.99
+   },
+   "zoekt_index": {
+    "build_s": 2.35,
+    "peak_rss_mib": 573,
+    "size_mib": 244.8,
+    "ok": true
+   },
+   "text": [
+    {
+     "query": "rare literal",
+     "args": [
+      "-n",
+      "-F",
+      "IWorkspaceTrustManagementService"
+     ],
+     "lines": 93,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 93,
+      "ugrep": 93,
+      "git grep": 93,
+      "zoekt": 93
+     },
+     "ms": {
+      "rg": {
+       "median": 139.36,
+       "mean": 138.06,
+       "stddev": 3.9,
+       "min": 131.15,
+       "max": 140.41,
+       "peak_rss_mib": 16.3
+      },
+      "lancet rg": {
+       "median": 37.69,
+       "mean": 37.74,
+       "stddev": 0.72,
+       "min": 36.81,
+       "max": 38.46,
+       "peak_rss_mib": 26.7
+      },
+      "lancet rg --trust-index": {
+       "median": 4.24,
+       "mean": 4.25,
+       "stddev": 0.12,
+       "min": 4.08,
+       "max": 4.39,
+       "peak_rss_mib": 25.9
+      },
+      "lancet rg --no-index": {
+       "median": 142.01,
+       "mean": 135.2,
+       "stddev": 13.4,
+       "min": 113.17,
+       "max": 144.83,
+       "peak_rss_mib": 23.7
+      },
+      "ugrep": {
+       "median": 95.35,
+       "mean": 95.39,
+       "stddev": 0.74,
+       "min": 94.53,
+       "max": 96.34,
+       "peak_rss_mib": 16.3
+      },
+      "git grep": {
+       "median": 128.9,
+       "mean": 128.29,
+       "stddev": 4.18,
+       "min": 121.48,
+       "max": 132.55,
+       "peak_rss_mib": 31.1
+      },
+      "zoekt": {
+       "median": 37.02,
+       "mean": 36.87,
+       "stddev": 0.6,
+       "min": 35.83,
+       "max": 37.33,
+       "peak_rss_mib": 54.4
+      }
+     }
+    },
+    {
+     "query": "common identifier",
+     "args": [
+      "-n",
+      "-F",
+      "this._register"
+     ],
+     "lines": 7543,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 7543,
+      "ugrep": 7543,
+      "git grep": 7544,
+      "zoekt": 7544
+     },
+     "ms": {
+      "rg": {
+       "median": 147.85,
+       "mean": 145.67,
+       "stddev": 7.71,
+       "min": 135.31,
+       "max": 154.95,
+       "peak_rss_mib": 14.4
+      },
+      "lancet rg": {
+       "median": 55.21,
+       "mean": 55.72,
+       "stddev": 2.05,
+       "min": 54.06,
+       "max": 59.21,
+       "peak_rss_mib": 13.5
+      },
+      "lancet rg --trust-index": {
+       "median": 22.47,
+       "mean": 22.65,
+       "stddev": 0.47,
+       "min": 22.3,
+       "max": 23.42,
+       "peak_rss_mib": 10.0
+      },
+      "lancet rg --no-index": {
+       "median": 137.32,
+       "mean": 137.49,
+       "stddev": 7.21,
+       "min": 127.06,
+       "max": 147.37,
+       "peak_rss_mib": 25.9
+      },
+      "ugrep": {
+       "median": 95.19,
+       "mean": 95.33,
+       "stddev": 1.29,
+       "min": 93.55,
+       "max": 96.7,
+       "peak_rss_mib": 16.9
+      },
+      "git grep": {
+       "median": 115.7,
+       "mean": 114.92,
+       "stddev": 8.15,
+       "min": 106.05,
+       "max": 125.32,
+       "peak_rss_mib": 32.2
+      },
+      "zoekt": {
+       "median": 88.88,
+       "mean": 89.34,
+       "stddev": 1.36,
+       "min": 88.29,
+       "max": 91.72,
+       "peak_rss_mib": 98.3
+      }
+     }
+    },
+    {
+     "query": "ignore case",
+     "args": [
+      "-n",
+      "-i",
+      "disposable"
+     ],
+     "lines": 21208,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 21208,
+      "ugrep": 21208
+     },
+     "ms": {
+      "rg": {
+       "median": 168.92,
+       "mean": 168.51,
+       "stddev": 5.72,
+       "min": 159.08,
+       "max": 174.29,
+       "peak_rss_mib": 15.0
+      },
+      "lancet rg": {
+       "median": 66.82,
+       "mean": 67.37,
+       "stddev": 1.88,
+       "min": 65.21,
+       "max": 70.25,
+       "peak_rss_mib": 30.3
+      },
+      "lancet rg --trust-index": {
+       "median": 36.29,
+       "mean": 37.63,
+       "stddev": 2.5,
+       "min": 35.91,
+       "max": 41.83,
+       "peak_rss_mib": 28.2
+      },
+      "lancet rg --no-index": {
+       "median": 134.63,
+       "mean": 131.88,
+       "stddev": 6.13,
+       "min": 121.01,
+       "max": 135.45,
+       "peak_rss_mib": 32.6
+      },
+      "ugrep": {
+       "median": 96.6,
+       "mean": 103.02,
+       "stddev": 14.69,
+       "min": 95.49,
+       "max": 129.25,
+       "peak_rss_mib": 15.9
+      }
+     }
+    },
+    {
+     "query": "word",
+     "args": [
+      "-n",
+      "-w",
+      "this._register"
+     ],
+     "lines": 7425,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 7425,
+      "ugrep": 7425
+     },
+     "ms": {
+      "rg": {
+       "median": 148.19,
+       "mean": 147.95,
+       "stddev": 7.58,
+       "min": 136.8,
+       "max": 157.17,
+       "peak_rss_mib": 14.1
+      },
+      "lancet rg": {
+       "median": 70.74,
+       "mean": 71.43,
+       "stddev": 4.31,
+       "min": 65.87,
+       "max": 77.66,
+       "peak_rss_mib": 28.9
+      },
+      "lancet rg --trust-index": {
+       "median": 37.26,
+       "mean": 37.96,
+       "stddev": 3.17,
+       "min": 34.41,
+       "max": 42.45,
+       "peak_rss_mib": 27.9
+      },
+      "lancet rg --no-index": {
+       "median": 131.97,
+       "mean": 131.56,
+       "stddev": 4.9,
+       "min": 125.55,
+       "max": 138.91,
+       "peak_rss_mib": 33.2
+      },
+      "ugrep": {
+       "median": 92.28,
+       "mean": 91.89,
+       "stddev": 1.07,
+       "min": 90.33,
+       "max": 93.0,
+       "peak_rss_mib": 16.8
+      }
+     }
+    },
+    {
+     "query": "regex with literal",
+     "args": [
+      "-n",
+      "private readonly _\\w+Emitter"
+     ],
+     "lines": 39,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 39,
+      "ugrep": 39
+     },
+     "ms": {
+      "rg": {
+       "median": 146.62,
+       "mean": 146.27,
+       "stddev": 3.73,
+       "min": 141.32,
+       "max": 151.37,
+       "peak_rss_mib": 14.4
+      },
+      "lancet rg": {
+       "median": 48.7,
+       "mean": 48.55,
+       "stddev": 0.49,
+       "min": 47.69,
+       "max": 48.89,
+       "peak_rss_mib": 13.0
+      },
+      "lancet rg --trust-index": {
+       "median": 13.86,
+       "mean": 13.81,
+       "stddev": 0.84,
+       "min": 12.72,
+       "max": 14.96,
+       "peak_rss_mib": 9.9
+      },
+      "lancet rg --no-index": {
+       "median": 142.86,
+       "mean": 143.85,
+       "stddev": 3.91,
+       "min": 140.02,
+       "max": 148.01,
+       "peak_rss_mib": 26.9
+      },
+      "ugrep": {
+       "median": 115.44,
+       "mean": 117.21,
+       "stddev": 2.81,
+       "min": 115.08,
+       "max": 121.35,
+       "peak_rss_mib": 41.3
+      }
+     }
+    },
+    {
+     "query": "regex, no literal",
+     "args": [
+      "-n",
+      "\\w+\\s*=\\s*\\d{6,}"
+     ],
+     "lines": 106,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 106,
+      "ugrep": 106
+     },
+     "ms": {
+      "rg": {
+       "median": 140.17,
+       "mean": 137.4,
+       "stddev": 6.8,
+       "min": 126.39,
+       "max": 143.5,
+       "peak_rss_mib": 14.4
+      },
+      "lancet rg": {
+       "median": 128.64,
+       "mean": 131.22,
+       "stddev": 13.35,
+       "min": 118.85,
+       "max": 153.89,
+       "peak_rss_mib": 27.1
+      },
+      "lancet rg --trust-index": {
+       "median": 90.43,
+       "mean": 90.46,
+       "stddev": 2.19,
+       "min": 87.16,
+       "max": 92.94,
+       "peak_rss_mib": 23.6
+      },
+      "lancet rg --no-index": {
+       "median": 123.8,
+       "mean": 124.71,
+       "stddev": 3.05,
+       "min": 121.57,
+       "max": 128.78,
+       "peak_rss_mib": 27.3
+      },
+      "ugrep": {
+       "median": 277.12,
+       "mean": 285.84,
+       "stddev": 37.31,
+       "min": 256.28,
+       "max": 350.74,
+       "peak_rss_mib": 56.7
+      }
+     }
+    },
+    {
+     "query": "no hit",
+     "args": [
+      "-n",
+      "-F",
+      "zqxjkvbnm_no_such_token"
+     ],
+     "lines": 0,
+     "rg_exit": 1,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 0,
+      "ugrep": 0,
+      "git grep": 0,
+      "zoekt": 0
+     },
+     "ms": {
+      "rg": {
+       "median": 143.91,
+       "mean": 141.58,
+       "stddev": 5.36,
+       "min": 133.41,
+       "max": 146.34,
+       "peak_rss_mib": 14.1
+      },
+      "lancet rg": {
+       "median": 37.24,
+       "mean": 37.24,
+       "stddev": 0.33,
+       "min": 36.91,
+       "max": 37.75,
+       "peak_rss_mib": 11.4
+      },
+      "lancet rg --trust-index": {
+       "median": 2.3,
+       "mean": 2.31,
+       "stddev": 0.08,
+       "min": 2.24,
+       "max": 2.41,
+       "peak_rss_mib": 5.1
+      },
+      "lancet rg --no-index": {
+       "median": 141.86,
+       "mean": 142.42,
+       "stddev": 3.84,
+       "min": 139.4,
+       "max": 148.88,
+       "peak_rss_mib": 22.0
+      },
+      "ugrep": {
+       "median": 92.75,
+       "mean": 93.37,
+       "stddev": 1.51,
+       "min": 91.73,
+       "max": 95.07,
+       "peak_rss_mib": 15.8
+      },
+      "git grep": {
+       "median": 113.52,
+       "mean": 117.11,
+       "stddev": 9.84,
+       "min": 109.95,
+       "max": 134.4,
+       "peak_rss_mib": 31.9
+      },
+      "zoekt": {
+       "median": 36.97,
+       "mean": 37.06,
+       "stddev": 0.81,
+       "min": 36.16,
+       "max": 38.35,
+       "peak_rss_mib": 52.6
+      }
+     }
+    },
+    {
+     "query": "count -c",
+     "args": [
+      "-c",
+      "-F",
+      "this._register"
+     ],
+     "lines": 1195,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 1195
+     },
+     "ms": {
+      "rg": {
+       "median": 136.48,
+       "mean": 136.29,
+       "stddev": 6.36,
+       "min": 129.13,
+       "max": 144.12,
+       "peak_rss_mib": 12.9
+      },
+      "lancet rg": {
+       "median": 54.19,
+       "mean": 53.8,
+       "stddev": 0.97,
+       "min": 52.1,
+       "max": 54.42,
+       "peak_rss_mib": 11.9
+      },
+      "lancet rg --trust-index": {
+       "median": 21.78,
+       "mean": 21.71,
+       "stddev": 0.35,
+       "min": 21.13,
+       "max": 22.07,
+       "peak_rss_mib": 8.3
+      },
+      "lancet rg --no-index": {
+       "median": 132.28,
+       "mean": 134.96,
+       "stddev": 12.69,
+       "min": 125.39,
+       "max": 157.01,
+       "peak_rss_mib": 23.5
+      }
+     }
+    }
+   ],
+   "ast": [
+    {
+     "query": "ast, literal",
+     "pattern": "this._register($X)",
+     "lancet_matches": 7366,
+     "lancet_status": "complete",
+     "ast_grep_matches": 7366,
+     "ms": {
+      "lancet ast": {
+       "median": 239.2,
+       "mean": 230.42,
+       "stddev": 20.78,
+       "min": 206.69,
+       "max": 245.36,
+       "peak_rss_mib": 40.0
+      },
+      "lancet ast --trust-index": {
+       "median": 182.58,
+       "mean": 189.99,
+       "stddev": 23.77,
+       "min": 170.82,
+       "max": 216.59,
+       "peak_rss_mib": 35.5
+      },
+      "lancet ast --no-index": {
+       "median": 715.9,
+       "mean": 650.04,
+       "stddev": 189.06,
+       "min": 436.86,
+       "max": 797.36,
+       "peak_rss_mib": 70.5
+      },
+      "ast-grep": {
+       "median": 642.63,
+       "mean": 669.35,
+       "stddev": 67.82,
+       "min": 618.95,
+       "max": 746.45,
+       "peak_rss_mib": 198.6
+      }
+     }
+    },
+    {
+     "query": "ast, no literal",
+     "pattern": "if ($C) { $$$B }",
+     "lancet_matches": 51456,
+     "lancet_status": "complete",
+     "ast_grep_matches": 63042,
+     "ms": {
+      "lancet ast": {
+       "median": 1140.01,
+       "mean": 1007.7,
+       "stddev": 248.53,
+       "min": 721.01,
+       "max": 1162.1,
+       "peak_rss_mib": 139.0
+      },
+      "lancet ast --trust-index": {
+       "median": 707.86,
+       "mean": 827.27,
+       "stddev": 307.48,
+       "min": 597.41,
+       "max": 1176.54,
+       "peak_rss_mib": 262.7
+      },
+      "lancet ast --no-index": {
+       "median": 724.32,
+       "mean": 850.43,
+       "stddev": 233.59,
+       "min": 707.0,
+       "max": 1119.97,
+       "peak_rss_mib": 268.7
+      },
+      "ast-grep": {
+       "median": 716.79,
+       "mean": 703.61,
+       "stddev": 67.14,
+       "min": 630.86,
+       "max": 763.18,
+       "peak_rss_mib": 254.3
+      }
+     }
+    }
+   ],
+   "fd": {
+    "query": "-e ts",
+    "ms": {
+     "lancet fd": {
+      "median": 32.07,
+      "mean": 32.82,
+      "stddev": 1.26,
+      "min": 31.86,
+      "max": 34.63,
+      "peak_rss_mib": 8.6
+     },
+     "lancet fd --trust-index": {
+      "median": 3.73,
+      "mean": 3.74,
+      "stddev": 0.17,
+      "min": 3.59,
+      "max": 4.01,
+      "peak_rss_mib": 4.6
+     },
+     "fd": {
+      "median": 34.32,
+      "mean": 34.07,
+      "stddev": 1.3,
+      "min": 32.08,
+      "max": 35.6,
+      "peak_rss_mib": 9.1
+     }
+    }
+   }
+  },
+  "django": {
+   "tag": "5.1",
+   "lang": "py",
+   "files": 6815,
+   "mib": 41.9,
+   "lancet_index": {
+    "build_s": 0.21,
+    "peak_rss_mib": 76,
+    "size_mib": 6.9,
+    "segments": 1,
+    "noop_sync_ms": 44.44
+   },
+   "zoekt_index": {
+    "build_s": 1.19,
+    "peak_rss_mib": 302,
+    "size_mib": 94.6,
+    "ok": true
+   },
+   "text": [
+    {
+     "query": "rare literal",
+     "args": [
+      "-n",
+      "-F",
+      "get_prefetch_querysets"
+     ],
+     "lines": 63,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 63,
+      "ugrep": 63,
+      "git grep": 63,
+      "zoekt": 63
+     },
+     "ms": {
+      "rg": {
+       "median": 126.87,
+       "mean": 126.58,
+       "stddev": 1.19,
+       "min": 125.19,
+       "max": 128.04,
+       "peak_rss_mib": 8.3
+      },
+      "lancet rg": {
+       "median": 45.64,
+       "mean": 45.39,
+       "stddev": 1.53,
+       "min": 43.7,
+       "max": 47.26,
+       "peak_rss_mib": 10.3
+      },
+      "lancet rg --trust-index": {
+       "median": 2.87,
+       "mean": 2.88,
+       "stddev": 0.16,
+       "min": 2.68,
+       "max": 3.11,
+       "peak_rss_mib": 6.0
+      },
+      "lancet rg --no-index": {
+       "median": 125.42,
+       "mean": 125.28,
+       "stddev": 3.34,
+       "min": 121.65,
+       "max": 129.23,
+       "peak_rss_mib": 13.9
+      },
+      "ugrep": {
+       "median": 105.26,
+       "mean": 103.22,
+       "stddev": 5.57,
+       "min": 97.31,
+       "max": 109.84,
+       "peak_rss_mib": 5.0
+      },
+      "git grep": {
+       "median": 98.72,
+       "mean": 100.23,
+       "stddev": 2.82,
+       "min": 97.57,
+       "max": 103.33,
+       "peak_rss_mib": 11.7
+      },
+      "zoekt": {
+       "median": 34.92,
+       "mean": 35.21,
+       "stddev": 0.8,
+       "min": 34.53,
+       "max": 36.58,
+       "peak_rss_mib": 51.5
+      }
+     }
+    },
+    {
+     "query": "common identifier",
+     "args": [
+      "-n",
+      "-F",
+      "self.assertEqual"
+     ],
+     "lines": 16981,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 16981,
+      "ugrep": 16981,
+      "git grep": 16981,
+      "zoekt": 16981
+     },
+     "ms": {
+      "rg": {
+       "median": 129.89,
+       "mean": 130.95,
+       "stddev": 5.21,
+       "min": 125.98,
+       "max": 139.23,
+       "peak_rss_mib": 8.8
+      },
+      "lancet rg": {
+       "median": 51.5,
+       "mean": 51.76,
+       "stddev": 0.74,
+       "min": 51.0,
+       "max": 52.74,
+       "peak_rss_mib": 12.9
+      },
+      "lancet rg --trust-index": {
+       "median": 10.99,
+       "mean": 10.91,
+       "stddev": 0.22,
+       "min": 10.6,
+       "max": 11.18,
+       "peak_rss_mib": 10.7
+      },
+      "lancet rg --no-index": {
+       "median": 125.16,
+       "mean": 125.31,
+       "stddev": 4.84,
+       "min": 118.22,
+       "max": 130.65,
+       "peak_rss_mib": 16.1
+      },
+      "ugrep": {
+       "median": 112.58,
+       "mean": 112.11,
+       "stddev": 2.64,
+       "min": 108.58,
+       "max": 115.76,
+       "peak_rss_mib": 5.0
+      },
+      "git grep": {
+       "median": 93.85,
+       "mean": 94.25,
+       "stddev": 1.96,
+       "min": 92.74,
+       "max": 97.61,
+       "peak_rss_mib": 13.2
+      },
+      "zoekt": {
+       "median": 80.87,
+       "mean": 80.46,
+       "stddev": 0.82,
+       "min": 79.35,
+       "max": 81.13,
+       "peak_rss_mib": 76.8
+      }
+     }
+    },
+    {
+     "query": "ignore case",
+     "args": [
+      "-n",
+      "-i",
+      "queryset"
+     ],
+     "lines": 4365,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 4365,
+      "ugrep": 4365
+     },
+     "ms": {
+      "rg": {
+       "median": 129.96,
+       "mean": 128.76,
+       "stddev": 2.6,
+       "min": 124.62,
+       "max": 131.03,
+       "peak_rss_mib": 8.8
+      },
+      "lancet rg": {
+       "median": 48.96,
+       "mean": 49.06,
+       "stddev": 1.3,
+       "min": 47.14,
+       "max": 50.59,
+       "peak_rss_mib": 12.1
+      },
+      "lancet rg --trust-index": {
+       "median": 8.03,
+       "mean": 10.07,
+       "stddev": 4.76,
+       "min": 7.81,
+       "max": 18.59,
+       "peak_rss_mib": 9.4
+      },
+      "lancet rg --no-index": {
+       "median": 130.51,
+       "mean": 130.36,
+       "stddev": 3.14,
+       "min": 125.63,
+       "max": 133.24,
+       "peak_rss_mib": 15.2
+      },
+      "ugrep": {
+       "median": 107.75,
+       "mean": 105.13,
+       "stddev": 5.83,
+       "min": 95.05,
+       "max": 109.48,
+       "peak_rss_mib": 5.0
+      }
+     }
+    },
+    {
+     "query": "word",
+     "args": [
+      "-n",
+      "-w",
+      "self.assertEqual"
+     ],
+     "lines": 16981,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 16981,
+      "ugrep": 16981
+     },
+     "ms": {
+      "rg": {
+       "median": 133.08,
+       "mean": 134.71,
+       "stddev": 4.29,
+       "min": 130.7,
+       "max": 141.65,
+       "peak_rss_mib": 8.9
+      },
+      "lancet rg": {
+       "median": 55.18,
+       "mean": 55.11,
+       "stddev": 0.57,
+       "min": 54.51,
+       "max": 55.94,
+       "peak_rss_mib": 18.5
+      },
+      "lancet rg --trust-index": {
+       "median": 12.68,
+       "mean": 12.74,
+       "stddev": 0.22,
+       "min": 12.52,
+       "max": 13.03,
+       "peak_rss_mib": 16.5
+      },
+      "lancet rg --no-index": {
+       "median": 122.76,
+       "mean": 125.89,
+       "stddev": 5.68,
+       "min": 120.91,
+       "max": 134.11,
+       "peak_rss_mib": 20.7
+      },
+      "ugrep": {
+       "median": 107.46,
+       "mean": 105.77,
+       "stddev": 5.46,
+       "min": 96.24,
+       "max": 109.61,
+       "peak_rss_mib": 4.9
+      }
+     }
+    },
+    {
+     "query": "regex with literal",
+     "args": [
+      "-n",
+      "def test_\\w+_\\w+\\(self\\)"
+     ],
+     "lines": 13336,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 13336,
+      "ugrep": 13336
+     },
+     "ms": {
+      "rg": {
+       "median": 135.84,
+       "mean": 135.57,
+       "stddev": 6.24,
+       "min": 126.59,
+       "max": 143.69,
+       "peak_rss_mib": 9.9
+      },
+      "lancet rg": {
+       "median": 55.51,
+       "mean": 55.63,
+       "stddev": 2.53,
+       "min": 52.15,
+       "max": 58.13,
+       "peak_rss_mib": 16.3
+      },
+      "lancet rg --trust-index": {
+       "median": 13.62,
+       "mean": 13.67,
+       "stddev": 0.14,
+       "min": 13.52,
+       "max": 13.89,
+       "peak_rss_mib": 14.0
+      },
+      "lancet rg --no-index": {
+       "median": 126.34,
+       "mean": 126.0,
+       "stddev": 1.42,
+       "min": 124.46,
+       "max": 127.78,
+       "peak_rss_mib": 18.8
+      },
+      "ugrep": {
+       "median": 150.25,
+       "mean": 149.08,
+       "stddev": 3.11,
+       "min": 143.64,
+       "max": 151.51,
+       "peak_rss_mib": 44.9
+      }
+     }
+    },
+    {
+     "query": "regex, no literal",
+     "args": [
+      "-n",
+      "\\w+\\s*=\\s*\\d{6,}"
+     ],
+     "lines": 54,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 54,
+      "ugrep": 54
+     },
+     "ms": {
+      "rg": {
+       "median": 126.91,
+       "mean": 124.7,
+       "stddev": 6.43,
+       "min": 115.09,
+       "max": 130.48,
+       "peak_rss_mib": 10.8
+      },
+      "lancet rg": {
+       "median": 109.47,
+       "mean": 109.01,
+       "stddev": 1.38,
+       "min": 106.56,
+       "max": 109.8,
+       "peak_rss_mib": 18.1
+      },
+      "lancet rg --trust-index": {
+       "median": 63.96,
+       "mean": 64.07,
+       "stddev": 3.02,
+       "min": 59.76,
+       "max": 68.03,
+       "peak_rss_mib": 16.2
+      },
+      "lancet rg --no-index": {
+       "median": 119.4,
+       "mean": 120.43,
+       "stddev": 4.22,
+       "min": 114.5,
+       "max": 125.36,
+       "peak_rss_mib": 18.1
+      },
+      "ugrep": {
+       "median": 253.3,
+       "mean": 252.68,
+       "stddev": 7.13,
+       "min": 243.91,
+       "max": 262.86,
+       "peak_rss_mib": 47.1
+      }
+     }
+    },
+    {
+     "query": "no hit",
+     "args": [
+      "-n",
+      "-F",
+      "zqxjkvbnm_no_such_token"
+     ],
+     "lines": 0,
+     "rg_exit": 1,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 0,
+      "ugrep": 0,
+      "git grep": 0,
+      "zoekt": 0
+     },
+     "ms": {
+      "rg": {
+       "median": 134.8,
+       "mean": 134.18,
+       "stddev": 2.08,
+       "min": 130.61,
+       "max": 135.67,
+       "peak_rss_mib": 8.3
+      },
+      "lancet rg": {
+       "median": 46.06,
+       "mean": 45.85,
+       "stddev": 1.7,
+       "min": 43.53,
+       "max": 48.15,
+       "peak_rss_mib": 10.1
+      },
+      "lancet rg --trust-index": {
+       "median": 2.24,
+       "mean": 2.27,
+       "stddev": 0.09,
+       "min": 2.17,
+       "max": 2.39,
+       "peak_rss_mib": 4.4
+      },
+      "lancet rg --no-index": {
+       "median": 126.21,
+       "mean": 125.11,
+       "stddev": 9.44,
+       "min": 111.59,
+       "max": 136.8,
+       "peak_rss_mib": 14.1
+      },
+      "ugrep": {
+       "median": 98.51,
+       "mean": 104.84,
+       "stddev": 11.94,
+       "min": 95.52,
+       "max": 124.69,
+       "peak_rss_mib": 4.9
+      },
+      "git grep": {
+       "median": 112.11,
+       "mean": 111.97,
+       "stddev": 5.43,
+       "min": 103.4,
+       "max": 117.11,
+       "peak_rss_mib": 11.6
+      },
+      "zoekt": {
+       "median": 34.42,
+       "mean": 34.42,
+       "stddev": 0.88,
+       "min": 33.55,
+       "max": 35.75,
+       "peak_rss_mib": 51.1
+      }
+     }
+    },
+    {
+     "query": "count -c",
+     "args": [
+      "-c",
+      "-F",
+      "self.assertEqual"
+     ],
+     "lines": 685,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 685
+     },
+     "ms": {
+      "rg": {
+       "median": 145.0,
+       "mean": 145.22,
+       "stddev": 6.97,
+       "min": 135.18,
+       "max": 152.61,
+       "peak_rss_mib": 8.4
+      },
+      "lancet rg": {
+       "median": 56.7,
+       "mean": 57.46,
+       "stddev": 1.46,
+       "min": 56.06,
+       "max": 59.08,
+       "peak_rss_mib": 11.5
+      },
+      "lancet rg --trust-index": {
+       "median": 10.72,
+       "mean": 10.63,
+       "stddev": 0.18,
+       "min": 10.39,
+       "max": 10.78,
+       "peak_rss_mib": 8.4
+      },
+      "lancet rg --no-index": {
+       "median": 140.98,
+       "mean": 137.91,
+       "stddev": 5.43,
+       "min": 129.7,
+       "max": 142.41,
+       "peak_rss_mib": 14.6
+      }
+     }
+    }
+   ],
+   "ast": [
+    {
+     "query": "ast, literal",
+     "pattern": "self.assertEqual($A, $B)",
+     "lancet_matches": 16797,
+     "lancet_status": "complete",
+     "ast_grep_matches": 16797,
+     "ms": {
+      "lancet ast": {
+       "median": 171.87,
+       "mean": 171.33,
+       "stddev": 6.56,
+       "min": 164.52,
+       "max": 177.6,
+       "peak_rss_mib": 55.6
+      },
+      "lancet ast --trust-index": {
+       "median": 145.54,
+       "mean": 136.74,
+       "stddev": 21.38,
+       "min": 112.36,
+       "max": 152.32,
+       "peak_rss_mib": 56.0
+      },
+      "lancet ast --no-index": {
+       "median": 175.58,
+       "mean": 174.14,
+       "stddev": 8.9,
+       "min": 164.61,
+       "max": 182.24,
+       "peak_rss_mib": 55.9
+      },
+      "ast-grep": {
+       "median": 244.48,
+       "mean": 230.75,
+       "stddev": 30.52,
+       "min": 195.78,
+       "max": 251.99,
+       "peak_rss_mib": 38.8
+      }
+     }
+    },
+    {
+     "query": "ast, no literal",
+     "pattern": "if $C:\n    $$$B",
+     "lancet_matches": 10012,
+     "lancet_status": "complete",
+     "ast_grep_matches": 10012,
+     "ms": {
+      "lancet ast": {
+       "median": 256.27,
+       "mean": 258.7,
+       "stddev": 11.32,
+       "min": 248.8,
+       "max": 271.04,
+       "peak_rss_mib": 48.0
+      },
+      "lancet ast --trust-index": {
+       "median": 202.66,
+       "mean": 199.36,
+       "stddev": 5.77,
+       "min": 192.7,
+       "max": 202.71,
+       "peak_rss_mib": 49.2
+      },
+      "lancet ast --no-index": {
+       "median": 249.57,
+       "mean": 256.19,
+       "stddev": 11.66,
+       "min": 249.33,
+       "max": 269.65,
+       "peak_rss_mib": 50.4
+      },
+      "ast-grep": {
+       "median": 206.44,
+       "mean": 222.32,
+       "stddev": 27.93,
+       "min": 205.95,
+       "max": 254.57,
+       "peak_rss_mib": 38.8
+      }
+     }
+    }
+   ],
+   "fd": {
+    "query": "-e py",
+    "ms": {
+     "lancet fd": {
+      "median": 45.78,
+      "mean": 45.34,
+      "stddev": 1.77,
+      "min": 42.85,
+      "max": 47.38,
+      "peak_rss_mib": 7.7
+     },
+     "lancet fd --trust-index": {
+      "median": 2.98,
+      "mean": 2.99,
+      "stddev": 0.06,
+      "min": 2.9,
+      "max": 3.06,
+      "peak_rss_mib": 4.1
+     },
+     "fd": {
+      "median": 48.26,
+      "mean": 48.39,
+      "stddev": 1.31,
+      "min": 46.4,
+      "max": 49.77,
+      "peak_rss_mib": 8.5
+     }
+    }
+   }
+  },
+  "cpython": {
+   "tag": "v3.13.0",
+   "lang": "c",
+   "files": 4882,
+   "mib": 101.2,
+   "lancet_index": {
+    "build_s": 0.26,
+    "peak_rss_mib": 116,
+    "size_mib": 10.3,
+    "segments": 2,
+    "noop_sync_ms": 12.64
+   },
+   "zoekt_index": {
+    "build_s": 3.65,
+    "peak_rss_mib": 509,
+    "size_mib": 226.8,
+    "ok": true
+   },
+   "text": [
+    {
+     "query": "rare literal",
+     "args": [
+      "-n",
+      "-F",
+      "PyUnstable_Object_ClearWeakRefsNoCallbacks"
+     ],
+     "lines": 9,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 9,
+      "ugrep": 9,
+      "git grep": 9,
+      "zoekt": 7
+     },
+     "ms": {
+      "rg": {
+       "median": 66.2,
+       "mean": 67.28,
+       "stddev": 2.33,
+       "min": 64.86,
+       "max": 70.55,
+       "peak_rss_mib": 9.8
+      },
+      "lancet rg": {
+       "median": 12.24,
+       "mean": 12.6,
+       "stddev": 0.64,
+       "min": 12.04,
+       "max": 13.56,
+       "peak_rss_mib": 12.4
+      },
+      "lancet rg --trust-index": {
+       "median": 3.95,
+       "mean": 4.1,
+       "stddev": 0.46,
+       "min": 3.63,
+       "max": 4.78,
+       "peak_rss_mib": 7.8
+      },
+      "lancet rg --no-index": {
+       "median": 66.02,
+       "mean": 65.44,
+       "stddev": 3.21,
+       "min": 60.18,
+       "max": 68.63,
+       "peak_rss_mib": 19.9
+      },
+      "ugrep": {
+       "median": 46.99,
+       "mean": 46.61,
+       "stddev": 2.57,
+       "min": 42.31,
+       "max": 49.15,
+       "peak_rss_mib": 5.1
+      },
+      "git grep": {
+       "median": 65.95,
+       "mean": 64.51,
+       "stddev": 4.39,
+       "min": 59.07,
+       "max": 70.18,
+       "peak_rss_mib": 19.9
+      },
+      "zoekt": {
+       "median": 38.87,
+       "mean": 39.81,
+       "stddev": 1.51,
+       "min": 38.73,
+       "max": 42.15,
+       "peak_rss_mib": 52.9
+      }
+     }
+    },
+    {
+     "query": "common identifier",
+     "args": [
+      "-n",
+      "-F",
+      "Py_DECREF"
+     ],
+     "lines": 7675,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 7675,
+      "ugrep": 7675,
+      "git grep": 7675,
+      "zoekt": 7670
+     },
+     "ms": {
+      "rg": {
+       "median": 62.12,
+       "mean": 61.88,
+       "stddev": 4.53,
+       "min": 56.56,
+       "max": 68.82,
+       "peak_rss_mib": 9.8
+      },
+      "lancet rg": {
+       "median": 19.36,
+       "mean": 19.46,
+       "stddev": 0.57,
+       "min": 18.83,
+       "max": 20.13,
+       "peak_rss_mib": 17.9
+      },
+      "lancet rg --trust-index": {
+       "median": 8.37,
+       "mean": 8.62,
+       "stddev": 1.13,
+       "min": 7.23,
+       "max": 10.21,
+       "peak_rss_mib": 15.8
+      },
+      "lancet rg --no-index": {
+       "median": 59.15,
+       "mean": 59.43,
+       "stddev": 1.62,
+       "min": 58.08,
+       "max": 62.16,
+       "peak_rss_mib": 19.8
+      },
+      "ugrep": {
+       "median": 47.16,
+       "mean": 47.48,
+       "stddev": 2.3,
+       "min": 44.28,
+       "max": 50.46,
+       "peak_rss_mib": 5.1
+      },
+      "git grep": {
+       "median": 61.73,
+       "mean": 62.21,
+       "stddev": 2.73,
+       "min": 58.7,
+       "max": 66.27,
+       "peak_rss_mib": 20.6
+      },
+      "zoekt": {
+       "median": 44.84,
+       "mean": 44.95,
+       "stddev": 0.6,
+       "min": 44.35,
+       "max": 45.92,
+       "peak_rss_mib": 73.7
+      }
+     }
+    },
+    {
+     "query": "ignore case",
+     "args": [
+      "-n",
+      "-i",
+      "pyobject"
+     ],
+     "lines": 51824,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 51824,
+      "ugrep": 51824
+     },
+     "ms": {
+      "rg": {
+       "median": 71.58,
+       "mean": 71.88,
+       "stddev": 1.45,
+       "min": 70.07,
+       "max": 73.52,
+       "peak_rss_mib": 11.1
+      },
+      "lancet rg": {
+       "median": 23.88,
+       "mean": 23.93,
+       "stddev": 0.4,
+       "min": 23.46,
+       "max": 24.57,
+       "peak_rss_mib": 23.5
+      },
+      "lancet rg --trust-index": {
+       "median": 13.62,
+       "mean": 13.67,
+       "stddev": 0.15,
+       "min": 13.55,
+       "max": 13.93,
+       "peak_rss_mib": 21.4
+      },
+      "lancet rg --no-index": {
+       "median": 65.59,
+       "mean": 64.8,
+       "stddev": 2.79,
+       "min": 60.27,
+       "max": 67.34,
+       "peak_rss_mib": 25.6
+      },
+      "ugrep": {
+       "median": 51.36,
+       "mean": 50.84,
+       "stddev": 0.94,
+       "min": 49.59,
+       "max": 51.68,
+       "peak_rss_mib": 5.2
+      }
+     }
+    },
+    {
+     "query": "word",
+     "args": [
+      "-n",
+      "-w",
+      "Py_DECREF"
+     ],
+     "lines": 7572,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 7572,
+      "ugrep": 7572
+     },
+     "ms": {
+      "rg": {
+       "median": 64.65,
+       "mean": 64.72,
+       "stddev": 2.66,
+       "min": 61.5,
+       "max": 68.58,
+       "peak_rss_mib": 10.1
+      },
+      "lancet rg": {
+       "median": 19.74,
+       "mean": 19.4,
+       "stddev": 1.03,
+       "min": 17.85,
+       "max": 20.48,
+       "peak_rss_mib": 22.2
+      },
+      "lancet rg --trust-index": {
+       "median": 8.61,
+       "mean": 8.59,
+       "stddev": 0.07,
+       "min": 8.49,
+       "max": 8.66,
+       "peak_rss_mib": 20.7
+      },
+      "lancet rg --no-index": {
+       "median": 64.55,
+       "mean": 63.73,
+       "stddev": 1.84,
+       "min": 60.83,
+       "max": 65.57,
+       "peak_rss_mib": 25.2
+      },
+      "ugrep": {
+       "median": 46.73,
+       "mean": 46.54,
+       "stddev": 1.76,
+       "min": 44.14,
+       "max": 48.2,
+       "peak_rss_mib": 5.1
+      }
+     }
+    },
+    {
+     "query": "regex with literal",
+     "args": [
+      "-n",
+      "Py\\w+_Check\\("
+     ],
+     "lines": 2933,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 2933,
+      "ugrep": 2933
+     },
+     "ms": {
+      "rg": {
+       "median": 67.35,
+       "mean": 67.22,
+       "stddev": 2.15,
+       "min": 64.05,
+       "max": 69.37,
+       "peak_rss_mib": 10.9
+      },
+      "lancet rg": {
+       "median": 21.8,
+       "mean": 21.61,
+       "stddev": 0.61,
+       "min": 20.54,
+       "max": 22.03,
+       "peak_rss_mib": 16.8
+      },
+      "lancet rg --trust-index": {
+       "median": 10.81,
+       "mean": 10.73,
+       "stddev": 0.27,
+       "min": 10.36,
+       "max": 11.07,
+       "peak_rss_mib": 14.5
+      },
+      "lancet rg --no-index": {
+       "median": 65.35,
+       "mean": 65.4,
+       "stddev": 1.5,
+       "min": 63.69,
+       "max": 67.48,
+       "peak_rss_mib": 23.0
+      },
+      "ugrep": {
+       "median": 79.67,
+       "mean": 88.42,
+       "stddev": 20.95,
+       "min": 76.57,
+       "max": 125.72,
+       "peak_rss_mib": 30.9
+      }
+     }
+    },
+    {
+     "query": "regex, no literal",
+     "args": [
+      "-n",
+      "\\w+\\s*=\\s*\\d{6,}"
+     ],
+     "lines": 561,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 561,
+      "ugrep": 561
+     },
+     "ms": {
+      "rg": {
+       "median": 65.78,
+       "mean": 65.45,
+       "stddev": 1.12,
+       "min": 63.57,
+       "max": 66.53,
+       "peak_rss_mib": 11.9
+      },
+      "lancet rg": {
+       "median": 91.91,
+       "mean": 99.15,
+       "stddev": 22.21,
+       "min": 83.63,
+       "max": 138.15,
+       "peak_rss_mib": 27.3
+      },
+      "lancet rg --trust-index": {
+       "median": 87.51,
+       "mean": 85.35,
+       "stddev": 5.14,
+       "min": 78.13,
+       "max": 90.7,
+       "peak_rss_mib": 22.4
+      },
+      "lancet rg --no-index": {
+       "median": 90.81,
+       "mean": 90.73,
+       "stddev": 6.62,
+       "min": 83.03,
+       "max": 97.83,
+       "peak_rss_mib": 27.0
+      },
+      "ugrep": {
+       "median": 576.93,
+       "mean": 575.39,
+       "stddev": 5.73,
+       "min": 565.83,
+       "max": 581.14,
+       "peak_rss_mib": 47.3
+      }
+     }
+    },
+    {
+     "query": "no hit",
+     "args": [
+      "-n",
+      "-F",
+      "zqxjkvbnm_no_such_token"
+     ],
+     "lines": 0,
+     "rg_exit": 1,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 0,
+      "ugrep": 0,
+      "git grep": 0,
+      "zoekt": 0
+     },
+     "ms": {
+      "rg": {
+       "median": 64.17,
+       "mean": 65.66,
+       "stddev": 3.14,
+       "min": 62.49,
+       "max": 69.41,
+       "peak_rss_mib": 9.6
+      },
+      "lancet rg": {
+       "median": 13.07,
+       "mean": 13.08,
+       "stddev": 0.82,
+       "min": 12.26,
+       "max": 14.09,
+       "peak_rss_mib": 10.4
+      },
+      "lancet rg --trust-index": {
+       "median": 2.17,
+       "mean": 2.18,
+       "stddev": 0.06,
+       "min": 2.13,
+       "max": 2.27,
+       "peak_rss_mib": 4.5
+      },
+      "lancet rg --no-index": {
+       "median": 66.94,
+       "mean": 67.06,
+       "stddev": 1.86,
+       "min": 64.47,
+       "max": 69.02,
+       "peak_rss_mib": 20.9
+      },
+      "ugrep": {
+       "median": 42.27,
+       "mean": 42.53,
+       "stddev": 1.29,
+       "min": 41.12,
+       "max": 44.52,
+       "peak_rss_mib": 5.0
+      },
+      "git grep": {
+       "median": 72.89,
+       "mean": 73.15,
+       "stddev": 2.64,
+       "min": 69.16,
+       "max": 76.2,
+       "peak_rss_mib": 19.7
+      },
+      "zoekt": {
+       "median": 33.92,
+       "mean": 33.86,
+       "stddev": 0.13,
+       "min": 33.72,
+       "max": 34.0,
+       "peak_rss_mib": 52.8
+      }
+     }
+    },
+    {
+     "query": "count -c",
+     "args": [
+      "-c",
+      "-F",
+      "Py_DECREF"
+     ],
+     "lines": 332,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 332
+     },
+     "ms": {
+      "rg": {
+       "median": 70.15,
+       "mean": 69.45,
+       "stddev": 3.15,
+       "min": 65.74,
+       "max": 73.32,
+       "peak_rss_mib": 9.6
+      },
+      "lancet rg": {
+       "median": 17.21,
+       "mean": 17.28,
+       "stddev": 0.73,
+       "min": 16.6,
+       "max": 18.5,
+       "peak_rss_mib": 17.0
+      },
+      "lancet rg --trust-index": {
+       "median": 6.51,
+       "mean": 6.52,
+       "stddev": 0.15,
+       "min": 6.37,
+       "max": 6.7,
+       "peak_rss_mib": 14.5
+      },
+      "lancet rg --no-index": {
+       "median": 67.44,
+       "mean": 66.11,
+       "stddev": 4.01,
+       "min": 59.12,
+       "max": 68.75,
+       "peak_rss_mib": 21.2
+      }
+     }
+    }
+   ],
+   "ast": [
+    {
+     "query": "ast, literal",
+     "pattern": "Py_DECREF($X);",
+     "lancet_matches": 7220,
+     "lancet_status": "complete",
+     "ast_grep_matches": 7220,
+     "ms": {
+      "lancet ast": {
+       "median": 147.59,
+       "mean": 147.9,
+       "stddev": 13.73,
+       "min": 134.33,
+       "max": 161.79,
+       "peak_rss_mib": 58.9
+      },
+      "lancet ast --trust-index": {
+       "median": 142.33,
+       "mean": 142.26,
+       "stddev": 1.45,
+       "min": 140.78,
+       "max": 143.68,
+       "peak_rss_mib": 55.5
+      },
+      "lancet ast --no-index": {
+       "median": 145.57,
+       "mean": 143.97,
+       "stddev": 3.47,
+       "min": 139.99,
+       "max": 146.36,
+       "peak_rss_mib": 57.5
+      },
+      "ast-grep": {
+       "median": 378.09,
+       "mean": 379.77,
+       "stddev": 20.48,
+       "min": 360.19,
+       "max": 401.04,
+       "peak_rss_mib": 175.7
+      }
+     }
+    },
+    {
+     "query": "ast, no literal",
+     "pattern": "if ($C) { $$$B }",
+     "lancet_matches": 37344,
+     "lancet_status": "complete",
+     "ast_grep_matches": 43124,
+     "ms": {
+      "lancet ast": {
+       "median": 497.38,
+       "mean": 493.41,
+       "stddev": 8.35,
+       "min": 483.82,
+       "max": 499.05,
+       "peak_rss_mib": 199.1
+      },
+      "lancet ast --trust-index": {
+       "median": 486.12,
+       "mean": 502.55,
+       "stddev": 41.15,
+       "min": 472.16,
+       "max": 549.37,
+       "peak_rss_mib": 192.6
+      },
+      "lancet ast --no-index": {
+       "median": 497.11,
+       "mean": 509.4,
+       "stddev": 38.97,
+       "min": 478.06,
+       "max": 553.04,
+       "peak_rss_mib": 212.8
+      },
+      "ast-grep": {
+       "median": 388.29,
+       "mean": 378.87,
+       "stddev": 25.58,
+       "min": 349.91,
+       "max": 398.39,
+       "peak_rss_mib": 200.8
+      }
+     }
+    }
+   ],
+   "fd": {
+    "query": "-e c",
+    "ms": {
+     "lancet fd": {
+      "median": 10.28,
+      "mean": 10.41,
+      "stddev": 0.35,
+      "min": 10.04,
+      "max": 10.82,
+      "peak_rss_mib": 8.7
+     },
+     "lancet fd --trust-index": {
+      "median": 2.53,
+      "mean": 2.64,
+      "stddev": 0.25,
+      "min": 2.48,
+      "max": 3.08,
+      "peak_rss_mib": 3.6
+     },
+     "fd": {
+      "median": 12.27,
+      "mean": 12.19,
+      "stddev": 1.55,
+      "min": 9.93,
+      "max": 14.04,
+      "peak_rss_mib": 9.2
+     }
+    }
+   }
+  },
+  "spring-framework": {
+   "tag": "v6.1.14",
+   "lang": "java",
+   "files": 10163,
+   "mib": 52.9,
+   "lancet_index": {
+    "build_s": 0.32,
+    "peak_rss_mib": 122,
+    "size_mib": 12.2,
+    "segments": 1,
+    "noop_sync_ms": 40.67
+   },
+   "zoekt_index": {
+    "build_s": 1.85,
+    "peak_rss_mib": 395,
+    "size_mib": 146.3,
+    "ok": true
+   },
+   "text": [
+    {
+     "query": "rare literal",
+     "args": [
+      "-n",
+      "-F",
+      "BeanDefinitionRegistryPostProcessor"
+     ],
+     "lines": 54,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 54,
+      "ugrep": 54,
+      "git grep": 54,
+      "zoekt": 54
+     },
+     "ms": {
+      "rg": {
+       "median": 210.83,
+       "mean": 210.56,
+       "stddev": 1.79,
+       "min": 208.61,
+       "max": 212.75,
+       "peak_rss_mib": 7.9
+      },
+      "lancet rg": {
+       "median": 40.98,
+       "mean": 40.65,
+       "stddev": 2.22,
+       "min": 37.08,
+       "max": 42.98,
+       "peak_rss_mib": 13.1
+      },
+      "lancet rg --trust-index": {
+       "median": 2.96,
+       "mean": 2.95,
+       "stddev": 0.08,
+       "min": 2.83,
+       "max": 3.04,
+       "peak_rss_mib": 5.5
+      },
+      "lancet rg --no-index": {
+       "median": 221.17,
+       "mean": 220.6,
+       "stddev": 3.59,
+       "min": 214.84,
+       "max": 224.32,
+       "peak_rss_mib": 16.1
+      },
+      "ugrep": {
+       "median": 125.56,
+       "mean": 126.21,
+       "stddev": 2.42,
+       "min": 124.31,
+       "max": 130.35,
+       "peak_rss_mib": 5.0
+      },
+      "git grep": {
+       "median": 218.12,
+       "mean": 217.29,
+       "stddev": 3.28,
+       "min": 213.21,
+       "max": 221.47,
+       "peak_rss_mib": 12.3
+      },
+      "zoekt": {
+       "median": 35.22,
+       "mean": 35.45,
+       "stddev": 0.93,
+       "min": 34.73,
+       "max": 37.03,
+       "peak_rss_mib": 48.5
+      }
+     }
+    },
+    {
+     "query": "common identifier",
+     "args": [
+      "-n",
+      "-F",
+      "Assert.notNull"
+     ],
+     "lines": 2600,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 2600,
+      "ugrep": 2600,
+      "git grep": 2600,
+      "zoekt": 2600
+     },
+     "ms": {
+      "rg": {
+       "median": 233.65,
+       "mean": 233.21,
+       "stddev": 1.87,
+       "min": 230.03,
+       "max": 234.93,
+       "peak_rss_mib": 8.0
+      },
+      "lancet rg": {
+       "median": 60.85,
+       "mean": 60.03,
+       "stddev": 2.41,
+       "min": 56.12,
+       "max": 62.0,
+       "peak_rss_mib": 13.2
+      },
+      "lancet rg --trust-index": {
+       "median": 21.92,
+       "mean": 22.03,
+       "stddev": 0.55,
+       "min": 21.53,
+       "max": 22.83,
+       "peak_rss_mib": 8.4
+      },
+      "lancet rg --no-index": {
+       "median": 222.81,
+       "mean": 222.4,
+       "stddev": 3.48,
+       "min": 218.82,
+       "max": 225.82,
+       "peak_rss_mib": 16.3
+      },
+      "ugrep": {
+       "median": 131.3,
+       "mean": 131.52,
+       "stddev": 0.93,
+       "min": 130.36,
+       "max": 132.66,
+       "peak_rss_mib": 4.9
+      },
+      "git grep": {
+       "median": 206.01,
+       "mean": 208.46,
+       "stddev": 6.49,
+       "min": 203.72,
+       "max": 219.27,
+       "peak_rss_mib": 12.7
+      },
+      "zoekt": {
+       "median": 44.33,
+       "mean": 44.63,
+       "stddev": 0.91,
+       "min": 43.59,
+       "max": 45.61,
+       "peak_rss_mib": 72.4
+      }
+     }
+    },
+    {
+     "query": "ignore case",
+     "args": [
+      "-n",
+      "-i",
+      "beanfactory"
+     ],
+     "lines": 7436,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 7436,
+      "ugrep": 7436
+     },
+     "ms": {
+      "rg": {
+       "median": 218.85,
+       "mean": 218.0,
+       "stddev": 3.01,
+       "min": 213.84,
+       "max": 221.8,
+       "peak_rss_mib": 8.4
+      },
+      "lancet rg": {
+       "median": 52.62,
+       "mean": 52.59,
+       "stddev": 0.34,
+       "min": 52.09,
+       "max": 53.02,
+       "peak_rss_mib": 14.9
+      },
+      "lancet rg --trust-index": {
+       "median": 15.37,
+       "mean": 15.48,
+       "stddev": 0.44,
+       "min": 15.15,
+       "max": 16.22,
+       "peak_rss_mib": 10.4
+      },
+      "lancet rg --no-index": {
+       "median": 219.8,
+       "mean": 220.21,
+       "stddev": 9.23,
+       "min": 211.0,
+       "max": 233.53,
+       "peak_rss_mib": 18.1
+      },
+      "ugrep": {
+       "median": 126.2,
+       "mean": 126.47,
+       "stddev": 1.56,
+       "min": 124.2,
+       "max": 128.22,
+       "peak_rss_mib": 5.0
+      }
+     }
+    },
+    {
+     "query": "word",
+     "args": [
+      "-n",
+      "-w",
+      "Assert.notNull"
+     ],
+     "lines": 2600,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 2600,
+      "ugrep": 2600
+     },
+     "ms": {
+      "rg": {
+       "median": 205.9,
+       "mean": 209.11,
+       "stddev": 6.74,
+       "min": 202.92,
+       "max": 219.73,
+       "peak_rss_mib": 8.2
+      },
+      "lancet rg": {
+       "median": 72.2,
+       "mean": 72.17,
+       "stddev": 1.11,
+       "min": 70.59,
+       "max": 73.37,
+       "peak_rss_mib": 18.1
+      },
+      "lancet rg --trust-index": {
+       "median": 34.45,
+       "mean": 34.41,
+       "stddev": 2.14,
+       "min": 32.4,
+       "max": 37.65,
+       "peak_rss_mib": 13.8
+      },
+      "lancet rg --no-index": {
+       "median": 206.39,
+       "mean": 208.06,
+       "stddev": 3.47,
+       "min": 204.83,
+       "max": 212.4,
+       "peak_rss_mib": 19.9
+      },
+      "ugrep": {
+       "median": 135.22,
+       "mean": 134.79,
+       "stddev": 3.24,
+       "min": 130.06,
+       "max": 138.57,
+       "peak_rss_mib": 5.2
+      }
+     }
+    },
+    {
+     "query": "regex with literal",
+     "args": [
+      "-n",
+      "public \\w+ get\\w+Bean\\("
+     ],
+     "lines": 62,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 62,
+      "ugrep": 62
+     },
+     "ms": {
+      "rg": {
+       "median": 208.56,
+       "mean": 208.06,
+       "stddev": 2.29,
+       "min": 205.53,
+       "max": 210.29,
+       "peak_rss_mib": 9.6
+      },
+      "lancet rg": {
+       "median": 51.22,
+       "mean": 50.79,
+       "stddev": 2.36,
+       "min": 47.82,
+       "max": 53.96,
+       "peak_rss_mib": 15.7
+      },
+      "lancet rg --trust-index": {
+       "median": 15.31,
+       "mean": 15.14,
+       "stddev": 0.55,
+       "min": 14.22,
+       "max": 15.56,
+       "peak_rss_mib": 10.8
+      },
+      "lancet rg --no-index": {
+       "median": 214.99,
+       "mean": 218.96,
+       "stddev": 7.98,
+       "min": 213.12,
+       "max": 232.67,
+       "peak_rss_mib": 18.5
+      },
+      "ugrep": {
+       "median": 134.87,
+       "mean": 136.27,
+       "stddev": 4.34,
+       "min": 133.06,
+       "max": 143.91,
+       "peak_rss_mib": 34.2
+      }
+     }
+    },
+    {
+     "query": "regex, no literal",
+     "args": [
+      "-n",
+      "\\w+\\s*=\\s*\\d{6,}"
+     ],
+     "lines": 54,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 54,
+      "ugrep": 54
+     },
+     "ms": {
+      "rg": {
+       "median": 207.95,
+       "mean": 208.68,
+       "stddev": 2.41,
+       "min": 205.78,
+       "max": 212.25,
+       "peak_rss_mib": 9.8
+      },
+      "lancet rg": {
+       "median": 206.96,
+       "mean": 208.83,
+       "stddev": 7.6,
+       "min": 201.84,
+       "max": 221.64,
+       "peak_rss_mib": 20.0
+      },
+      "lancet rg --trust-index": {
+       "median": 178.33,
+       "mean": 175.75,
+       "stddev": 4.75,
+       "min": 167.63,
+       "max": 178.72,
+       "peak_rss_mib": 16.8
+      },
+      "lancet rg --no-index": {
+       "median": 212.18,
+       "mean": 212.88,
+       "stddev": 9.87,
+       "min": 198.26,
+       "max": 223.9,
+       "peak_rss_mib": 18.7
+      },
+      "ugrep": {
+       "median": 293.02,
+       "mean": 292.64,
+       "stddev": 6.94,
+       "min": 281.61,
+       "max": 299.99,
+       "peak_rss_mib": 47.3
+      }
+     }
+    },
+    {
+     "query": "no hit",
+     "args": [
+      "-n",
+      "-F",
+      "zqxjkvbnm_no_such_token"
+     ],
+     "lines": 0,
+     "rg_exit": 1,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 0,
+      "ugrep": 0,
+      "git grep": 0,
+      "zoekt": 0
+     },
+     "ms": {
+      "rg": {
+       "median": 220.84,
+       "mean": 223.11,
+       "stddev": 6.74,
+       "min": 217.92,
+       "max": 234.41,
+       "peak_rss_mib": 7.7
+      },
+      "lancet rg": {
+       "median": 41.8,
+       "mean": 41.83,
+       "stddev": 1.18,
+       "min": 40.26,
+       "max": 43.55,
+       "peak_rss_mib": 12.3
+      },
+      "lancet rg --trust-index": {
+       "median": 2.33,
+       "mean": 2.3,
+       "stddev": 0.1,
+       "min": 2.16,
+       "max": 2.41,
+       "peak_rss_mib": 4.4
+      },
+      "lancet rg --no-index": {
+       "median": 227.74,
+       "mean": 227.44,
+       "stddev": 2.54,
+       "min": 224.0,
+       "max": 230.2,
+       "peak_rss_mib": 16.0
+      },
+      "ugrep": {
+       "median": 129.8,
+       "mean": 129.12,
+       "stddev": 1.3,
+       "min": 127.46,
+       "max": 130.48,
+       "peak_rss_mib": 4.9
+      },
+      "git grep": {
+       "median": 211.87,
+       "mean": 210.48,
+       "stddev": 4.35,
+       "min": 203.18,
+       "max": 214.64,
+       "peak_rss_mib": 12.3
+      },
+      "zoekt": {
+       "median": 34.84,
+       "mean": 34.76,
+       "stddev": 0.64,
+       "min": 33.78,
+       "max": 35.41,
+       "peak_rss_mib": 47.8
+      }
+     }
+    },
+    {
+     "query": "count -c",
+     "args": [
+      "-c",
+      "-F",
+      "Assert.notNull"
+     ],
+     "lines": 1024,
+     "rg_exit": 0,
+     "identical": {
+      "auto": true,
+      "trust": true,
+      "no-index": true
+     },
+     "lines_by_tool": {
+      "rg": 1024
+     },
+     "ms": {
+      "rg": {
+       "median": 223.41,
+       "mean": 222.55,
+       "stddev": 17.14,
+       "min": 197.49,
+       "max": 240.46,
+       "peak_rss_mib": 7.8
+      },
+      "lancet rg": {
+       "median": 57.49,
+       "mean": 56.7,
+       "stddev": 2.57,
+       "min": 53.42,
+       "max": 59.85,
+       "peak_rss_mib": 13.3
+      },
+      "lancet rg --trust-index": {
+       "median": 22.18,
+       "mean": 22.29,
+       "stddev": 1.02,
+       "min": 20.97,
+       "max": 23.84,
+       "peak_rss_mib": 7.8
+      },
+      "lancet rg --no-index": {
+       "median": 215.09,
+       "mean": 219.72,
+       "stddev": 13.48,
+       "min": 205.41,
+       "max": 241.38,
+       "peak_rss_mib": 15.8
+      }
+     }
+    }
+   ],
+   "ast": [
+    {
+     "query": "ast, literal",
+     "pattern": "Assert.notNull($A, $B)",
+     "lancet_matches": 2596,
+     "lancet_status": "complete",
+     "ast_grep_matches": 2596,
+     "ms": {
+      "lancet ast": {
+       "median": 103.57,
+       "mean": 101.97,
+       "stddev": 8.83,
+       "min": 92.45,
+       "max": 109.89,
+       "peak_rss_mib": 21.8
+      },
+      "lancet ast --trust-index": {
+       "median": 61.18,
+       "mean": 61.16,
+       "stddev": 0.39,
+       "min": 60.76,
+       "max": 61.53,
+       "peak_rss_mib": 17.6
+      },
+      "lancet ast --no-index": {
+       "median": 149.05,
+       "mean": 149.9,
+       "stddev": 2.34,
+       "min": 148.1,
+       "max": 152.55,
+       "peak_rss_mib": 22.2
+      },
+      "ast-grep": {
+       "median": 320.43,
+       "mean": 332.19,
+       "stddev": 36.24,
+       "min": 303.3,
+       "max": 372.85,
+       "peak_rss_mib": 22.1
+      }
+     }
+    },
+    {
+     "query": "ast, no literal",
+     "pattern": "if ($C) { $$$B }",
+     "lancet_matches": 18670,
+     "lancet_status": "complete",
+     "ast_grep_matches": 24480,
+     "ms": {
+      "lancet ast": {
+       "median": 408.24,
+       "mean": 414.88,
+       "stddev": 45.62,
+       "min": 372.95,
+       "max": 463.46,
+       "peak_rss_mib": 55.5
+      },
+      "lancet ast --trust-index": {
+       "median": 336.27,
+       "mean": 353.6,
+       "stddev": 37.12,
+       "min": 328.33,
+       "max": 396.21,
+       "peak_rss_mib": 50.7
+      },
+      "lancet ast --no-index": {
+       "median": 396.23,
+       "mean": 391.55,
+       "stddev": 10.36,
+       "min": 379.68,
+       "max": 398.74,
+       "peak_rss_mib": 53.4
+      },
+      "ast-grep": {
+       "median": 358.03,
+       "mean": 362.22,
+       "stddev": 45.32,
+       "min": 319.15,
+       "max": 409.49,
+       "peak_rss_mib": 24.9
+      }
+     }
+    }
+   ],
+   "fd": {
+    "query": "-e java",
+    "ms": {
+     "lancet fd": {
+      "median": 40.82,
+      "mean": 41.36,
+      "stddev": 1.17,
+      "min": 40.24,
+      "max": 43.17,
+      "peak_rss_mib": 9.7
+     },
+     "lancet fd --trust-index": {
+      "median": 4.83,
+      "mean": 4.82,
+      "stddev": 0.09,
+      "min": 4.7,
+      "max": 4.93,
+      "peak_rss_mib": 6.0
+     },
+     "fd": {
+      "median": 40.68,
+      "mean": 40.97,
+      "stddev": 1.95,
+      "min": 38.75,
+      "max": 44.1,
+      "peak_rss_mib": 8.7
+     }
+    }
+   }
+  }
+ }
+}

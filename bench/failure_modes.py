@@ -190,34 +190,24 @@ def scenario_c() -> dict:
 
 # --------------------------------------------------------------------------- D
 def scenario_d() -> list[dict]:
-    """How many lines a text-level rename would touch vs how many are real calls.
-    rg/sed see `name(` in comments, strings and docs; the AST sees calls."""
-    cases = [
-        ("django", "py", "assertEqual(", "$X.assertEqual($$$A)"),
-        ("django", "py", "get_queryset(", "$X.get_queryset($$$A)"),
-        ("rust", "rs", "unwrap()", "$X.unwrap()"),
-        ("kubernetes", "go", "Errorf(", "$X.Errorf($$$A)"),
-        ("vscode", "ts", "dispose()", "$X.dispose()"),
-        ("spring-framework", "java", "getBean(", "$X.getBean($$$A)"),
-    ]
+    """Renaming an identifier with a text tool (`rg -l | xargs sed -i 's/\\bname\\b/…/'`)
+    rewrites every occurrence; `lancet refs` sees only code (definitions + references,
+    comments and string literals excluded). The difference is what a text rename
+    would also change inside comments and strings — the latter changes behaviour."""
+    cases = [("django", "py", "py", "get_queryset"), ("rust", "rs", "rust", "unwrap"),
+             ("kubernetes", "go", "go", "Errorf"), ("vscode", "ts", "ts", "dispose"),
+             ("spring-framework", "java", "java", "getBean"), ("cpython", "c", "c", "PyErr_SetString")]
     out = []
-    for corpus, lang, text, pat in cases:
+    for corpus, lang, rgtype, name in cases:
         d = CORPORA / corpus
         if not d.exists():
             continue
-        # code-language files only, so the comparison is about comments/strings
-        rg = sh(["rg", "-c", "-F", "-t", {"py": "py", "rs": "rust", "go": "go", "ts": "ts",
-                                           "java": "java"}[lang], text, "."], cwd=d)
-        rg_occ = sum(int(l.rsplit(b":", 1)[1]) for l in rg.stdout.splitlines() if l)
-        rg_o = sh(["rg", "-o", "-F", "-t", {"py": "py", "rs": "rust", "go": "go", "ts": "ts",
-                                             "java": "java"}[lang], text, "."], cwd=d)
-        occurrences = len(rg_o.stdout.splitlines())
-        ast = lancet_json(["ast", pat, ".", "--lang", lang, "--no-index"], cwd=d)
-        calls = ast.get("matched", 0)
-        out.append({"corpus": corpus, "text": text, "pattern": pat, "text_occurrences": occurrences,
-                    "lines_with_text": rg_occ, "ast_calls": calls,
-                    "non_code_occurrences": occurrences - calls,
-                    "non_code_pct": round(100 * (occurrences - calls) / max(occurrences, 1), 1)})
+        text = len(sh(["rg", "-o", "-w", "-t", rgtype, name, "."], cwd=d).stdout.splitlines())
+        refs = lancet_json(["refs", name, ".", "--lang", lang, "--no-index"], cwd=d)
+        code = len(refs.get("definitions", [])) + refs.get("total_references", 0)
+        out.append({"corpus": corpus, "identifier": name, "text_occurrences": text,
+                    "code_occurrences": code, "in_comments_or_strings": text - code,
+                    "pct": round(100 * (text - code) / max(text, 1), 1)})
     return out
 
 
@@ -292,30 +282,29 @@ def scenario_e(n_terms: int = 40) -> dict:
 
 # --------------------------------------------------------------------------- G
 def scenario_g() -> dict:
-    """Index a copy of django with zoekt and lancet, edit files, query immediately."""
+    """Index a copy of django with zoekt and lancet, then edit 20 files (remove an
+    OLD token, add a FRESH one) and query immediately, as an agent would."""
     src = CORPORA / "django"
     if not src.exists():
         return {}
     d = Path(tempfile.mkdtemp()) / "django"
     shutil.copytree(src, d, ignore=shutil.ignore_patterns(".git"))
+    files = sorted(d.rglob("*.py"))[:400:20]  # 20 files
+    for i, f in enumerate(files):
+        f.write_text(f.read_text() + f"\nOLD_TOKEN_{i:02d} = {i}\n")
     zidx = d.parent / "zoekt"
     zidx.mkdir()
     sh([tool("zoekt-index"), "-index", str(zidx), "-disable_ctags", str(d)])
     sh([LANCET, "index", str(d)])
-    files = sorted(d.rglob("*.py"))[:200:10]  # 20 files
     for i, f in enumerate(files):
-        f.write_text(f.read_text() + f"\nFRESH_TOKEN_{i:02d} = {i}\n")
-    removed = "class Field(RegisterLookupMixin)"
-    target = d / "django" / "db" / "models" / "fields" / "__init__.py"
-    target.write_text(target.read_text().replace(removed, "class Field(RegisterLookupMixin, object)"))
-    z_new = sh([tool("zoekt"), "-index_dir", str(zidx), "-l", "FRESH_TOKEN_"]).stdout.splitlines()
-    z_old = sh([tool("zoekt"), "-index_dir", str(zidx), "-l", f'case:yes "{removed}"']).stdout.splitlines()
-    l_new = lancet_json(["FRESH_TOKEN_", str(d), "| files"]).get("matched", 0)
-    l_old = lancet_json([f'"{removed})"', str(d), "| files"]).get("matched", 0)
+        f.write_text(f.read_text().replace(f"OLD_TOKEN_{i:02d}", f"FRESH_TOKEN_{i:02d}"))
+    zl = lambda q: len(sh([tool("zoekt"), "-index_dir", str(zidx), "-l", q]).stdout.splitlines())  # noqa: E731
+    ll = lambda q: len(lancet_json([f'"{q}" | files', str(d)]).get("results", []))  # noqa: E731
+    res = {"edited_files": len(files),
+           "zoekt": {"finds_new_token_in": zl("FRESH_TOKEN_"), "still_finds_removed_token_in": zl("OLD_TOKEN_")},
+           "lancet_auto": {"finds_new_token_in": ll("FRESH_TOKEN_"), "still_finds_removed_token_in": ll("OLD_TOKEN_")}}
     shutil.rmtree(d.parent)
-    return {"edited_files": len(files),
-            "zoekt": {"finds_new_token_in": len(z_new), "still_finds_removed_text_in": len(z_old)},
-            "lancet_auto": {"finds_new_token_in": l_new, "still_finds_removed_text_in": l_old}}
+    return res
 
 
 # --------------------------------------------------------------------------- H

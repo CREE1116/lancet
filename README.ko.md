@@ -83,7 +83,40 @@ git diff | lancet patch --apply                             # unified diff를 �
 
 ---
 
+## 왜 하나의 도구인가?
+
+도구를 이어 붙이면 사고는 **단계 사이**에서 납니다. 도구마다 좌표, 파일 범위, 바이너리 판정, 시점에 대한 생각이 다르고, 어느 도구도 다른 에이전트가 같은 파일을 고치고 있다는 걸 모릅니다. 실제 도구로 재현한 결과입니다([`bench/failure_modes.py`](./bench/failure_modes.py)).
+
+| 도구 체인 | 실제로 일어난 일 | lancet |
+|---|---|---|
+| `rg -n` → `sed -i` 두 번 | 두 번째 수정이 **엉뚱한 줄**을 덮어씀. 둘 다 종료 코드 0 | `edit --edits`(원본 좌표) 또는 `conflict` |
+| 에이전트 4개: 읽기 → 고치기 → 통째로 쓰기 | 수정 800개 중 **600개**가 조용히 유실 | `edit --rev`: 80개 중 **0개** 유실 |
+| 오래된 hunk가 섞인 `patch -p1` | 한 파일만 바뀌고 하나는 거부 — **반쯤 적용** | `patch`: 아무것도 안 씀, `conflict` |
+| `sed`로 이름 바꾸기 | 주석·문자열까지 바꿈: 출현의 **0.3~11.7%** | `refs`·`ast`는 코드만 봄 |
+| `.docx`에 `rga` → `pandoc` | 읽은 줄 40개 중 **0개**에 검색어가 있음 | **40개 중 40개**(검색과 읽기가 같은 추출) |
+| 파일 20개 수정 직후 zoekt | 새 텍스트 **0개**, 지운 텍스트 **20개** 파일에서 찾음 | auto: **20개**와 **0개** |
+| `sed -i`·`perl -pi`·에디터 쓰기 | **하드 링크·심볼릭 링크**를 깨고 `0640` 권한을 잃음 | 같은 파일 유지: 링크·권한·소유자 보존 |
+
+여러 에이전트 규약(`rev`, compare-and-swap, `conflict`), 소유권과 파일 정체성, 문서까지 범위를 넓힌 이유, 각 설계 선택과 대안, lancet이 아직 지는 곳까지 정리한 전체 문서는 **[docs/why-one-tool.ko.md](./docs/why-one-tool.ko.md)**에 있습니다.
+
+---
+
 ## 벤치마크
+
+**코드베이스 8개, 언어 7개**([`bench/suite.py`](./bench/suite.py), 전체 표는 [`bench/results/SUITE.md`](./bench/results/SUITE.md)). lancet의 모든 출력을 ripgrep과 바이트 단위로, AST 매치 집합을 ast-grep과 대조했습니다.
+
+| 코퍼스 | 파일 | 인덱스 빌드 · 크기 (lancet / zoekt) | 텍스트: auto / trust vs rg | 리터럴 AST vs ast-grep |
+|---|---:|---|---|---|
+| Linux v6.12 (C) | 86,680 | 3.3 s · 134 MB / 82 s · 2.9 GB | 5.8~7.5배 / 13~403배 | 4.0배 |
+| LLVM 19.1 (C++) | 146,319 | 4.7 s · 122 MB / 53 s · 3.7 GB | 6.1~8.0배 / 34~786배 | 2.3배 |
+| rust 1.83 (Rust) | 49,964 | 1.2 s · 29 MB / 4.9 s · 327 MB | 1.5~9.6배 / 2~273배 | 1.8배 |
+| kubernetes 1.31 (Go) | 26,232 | 1.0 s · 30 MB / 4.1 s · 537 MB | 3.5~5.8배 / 9~210배 | 1.9배 |
+| VS Code 1.95 (TS) | 7,708 | 0.4 s · 12 MB / 2.4 s · 245 MB | 2.1~3.9배 / 4~63배 | 2.7배 |
+| Django 5.1 (Python) | 6,815 | 0.2 s · 7 MB / 1.2 s · 95 MB | 2.4~2.9배 / 10~60배 | 1.4배 |
+| CPython 3.13 (C/Python) | 4,882 | 0.3 s · 10 MB / 3.7 s · 227 MB | 3.0~5.4배 / 5~30배 | 2.6배 |
+| Spring 6.1 (Java) | 10,163 | 0.3 s · 12 MB / 1.9 s · 146 MB | 2.9~5.3배 / 6~95배 | 3.1배 |
+
+lancet이 **이기지 못하는** 곳: 리터럴 없는 정규식(인덱스가 걸러 줄 게 없어 ripgrep과 같거나 최대 1.4배 느림)과 리터럴 없는 구조 AST 패턴(ast-grep 속도의 0.6~1.0배). 자세한 내용은 [docs/why-one-tool.ko.md 7절](./docs/why-one-tool.ko.md#7-lancet이-이기지-못하는-곳).
 
 맨 위 차트는 Apple M4 Pro에서 잰 Linux 커널 v6.12(파일 86,218개, 1.4 GB) 결과입니다. [`bench/scale_bench.py`](./bench/scale_bench.py)로 재현하고 [`bench/readme_figures.py`](./bench/readme_figures.py)로 다시 그릴 수 있습니다. 인덱스 없는 `scan` 모드에서는 텍스트 검색이 ripgrep과 같은 속도이고, 배수는 인덱스에서 나옵니다.
 

@@ -1,0 +1,192 @@
+{
+ "A_stale_coordinates": {
+  "chain": {
+   "sed_exit_codes": [
+    0,
+    0
+   ],
+   "second_edit_correct": false,
+   "line_overwritten_instead": "    return new_call(6)"
+  },
+  "lancet_multi_hunk_correct": true,
+  "lancet_stale_rev_status": "conflict"
+ },
+ "B_lost_updates": {
+  "agents": 4,
+  "chain": {
+   "trials": 200,
+   "updates": 800,
+   "lost": 600
+  },
+  "lancet": {
+   "trials": 20,
+   "updates": 80,
+   "lost": 0,
+   "conflicts_retried": 120
+  }
+ },
+ "C_partial_patch": {
+  "chain_patch1": {
+   "exit": 1,
+   "a_changed": true,
+   "b_changed": false,
+   "rej_files": [
+    "b.py.rej"
+   ]
+  },
+  "lancet": {
+   "status": "conflict",
+   "a_changed": false,
+   "b_changed": false
+  }
+ },
+ "D_text_refactor_false_hits": [
+  {
+   "corpus": "django",
+   "identifier": "get_queryset",
+   "text_occurrences": 240,
+   "code_occurrences": 212,
+   "in_comments_or_strings": 28,
+   "pct": 11.7
+  },
+  {
+   "corpus": "rust",
+   "identifier": "unwrap",
+   "text_occurrences": 12519,
+   "code_occurrences": 11339,
+   "in_comments_or_strings": 1180,
+   "pct": 9.4
+  },
+  {
+   "corpus": "kubernetes",
+   "identifier": "Errorf",
+   "text_occurrences": 42893,
+   "code_occurrences": 42747,
+   "in_comments_or_strings": 146,
+   "pct": 0.3
+  },
+  {
+   "corpus": "vscode",
+   "identifier": "dispose",
+   "text_occurrences": 7462,
+   "code_occurrences": 7069,
+   "in_comments_or_strings": 393,
+   "pct": 5.3
+  },
+  {
+   "corpus": "spring-framework",
+   "identifier": "getBean",
+   "text_occurrences": 4238,
+   "code_occurrences": 4131,
+   "in_comments_or_strings": 107,
+   "pct": 2.5
+  },
+  {
+   "corpus": "cpython",
+   "identifier": "PyErr_SetString",
+   "text_occurrences": 3028,
+   "code_occurrences": 2981,
+   "in_comments_or_strings": 47,
+   "pct": 1.6
+  }
+ ],
+ "E_document_coordinates": {
+  "terms": 40,
+  "rga_found": 40,
+  "chain_line_contains_term": 0,
+  "lancet_line_contains_term": 40,
+  "unsupported_by_rga": {
+   "budget.xlsx": {
+    "rga_hits": 0,
+    "lancet_hits": 1
+   },
+   "memo.hwpx": {
+    "rga_hits": 0,
+    "lancet_hits": 1
+   }
+  }
+ },
+ "G_stale_index": {
+  "edited_files": 20,
+  "zoekt": {
+   "finds_new_token_in": 0,
+   "still_finds_removed_token_in": 20
+  },
+  "lancet_auto": {
+   "finds_new_token_in": 20,
+   "still_finds_removed_token_in": 0
+  }
+ },
+ "H_context_cost": [
+  {
+   "corpus": "django",
+   "functions": 60,
+   "window_truncated": 1,
+   "median_cat_bytes": 2759,
+   "median_symbol_bytes": 308,
+   "window_truncated_pct": 1.7
+  },
+  {
+   "corpus": "rust",
+   "functions": 60,
+   "window_truncated": 3,
+   "median_cat_bytes": 617,
+   "median_symbol_bytes": 129,
+   "window_truncated_pct": 5.0
+  },
+  {
+   "corpus": "kubernetes",
+   "functions": 60,
+   "window_truncated": 5,
+   "median_cat_bytes": 4075,
+   "median_symbol_bytes": 208,
+   "window_truncated_pct": 8.3
+  },
+  {
+   "corpus": "vscode",
+   "functions": 60,
+   "window_truncated": 1,
+   "median_cat_bytes": 8015,
+   "median_symbol_bytes": 343,
+   "window_truncated_pct": 1.7
+  },
+  {
+   "corpus": "spring-framework",
+   "functions": 60,
+   "window_truncated": 1,
+   "median_cat_bytes": 4597,
+   "median_symbol_bytes": 156,
+   "window_truncated_pct": 1.7
+  },
+  {
+   "corpus": "linux",
+   "functions": 60,
+   "window_truncated": 4,
+   "median_cat_bytes": 18654,
+   "median_symbol_bytes": 629,
+   "window_truncated_pct": 6.7
+  }
+ ],
+ "I_file_identity": {
+  "perl -pi": {
+   "symlink_kept_and_target_edited": false,
+   "hard_link_still_shared": false,
+   "mode_kept": true
+  },
+  "sed -i": {
+   "symlink_kept_and_target_edited": false,
+   "hard_link_still_shared": false,
+   "mode_kept": true
+  },
+  "tmp + rename (editor tools)": {
+   "symlink_kept_and_target_edited": false,
+   "hard_link_still_shared": false,
+   "mode_kept": false
+  },
+  "lancet edit": {
+   "symlink_kept_and_target_edited": true,
+   "hard_link_still_shared": true,
+   "mode_kept": true
+  }
+ }
+}
