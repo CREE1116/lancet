@@ -67,7 +67,7 @@ lancet edit src/search.rs --symbol execute_one --with-file new.rs --rev <REV> --
 | `lancet fd` | `.gitignore`-aware file & folder finder, `--tree`, size / recency filters, `--trust-index` lookups |
 | `lancet ast` | Tree-sitter structural search & `--rewrite` (`$X`, `$_`, `$$$ARGS`) across **24 languages** |
 | `lancet read` | Exact line ranges, `--symbol`, PDF/PPTX `--page`, spreadsheet `--sheet --rows --cols`, `archive.zip!entry`, `--budget-tokens` with resume cursors |
-| `lancet edit` | Replace / delete / insert lines addressed like `read` (`--lines`, `--symbol`); refuses on a stale `--rev` or new syntax errors; dry-run unless `--apply` |
+| `lancet edit` | Replace / delete / insert lines addressed like `read` (`--lines`, `--symbol`, or many hunks at once with `--edits`); a locked compare-and-swap on `--rev`, so concurrent agents never overwrite each other; refuses a net increase in syntax errors; dry-run unless `--apply` |
 | `lancet outline` | Declaration skeletons, Markdown headings, workbook schemas, archive manifests |
 | `lancet refs` | Index-accelerated `[def]` / `[ref]` lookup that skips comments and string literals |
 | `lancet batch` | Many queries over one shared index open and directory walk |

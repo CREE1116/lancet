@@ -67,7 +67,7 @@ lancet edit src/search.rs --symbol execute_one --with-file new.rs --rev <REV> --
 | `lancet fd` | `.gitignore` 인식 파일·폴더 탐색, `--tree`, 크기·수정 시각 필터, `--trust-index` 조회 |
 | `lancet ast` | **24개 언어** Tree-sitter 구조 검색과 `--rewrite` (`$X`, `$_`, `$$$ARGS`) |
 | `lancet read` | 정확한 줄 범위, `--symbol`, PDF/PPTX `--page`, 엑셀 `--sheet --rows --cols`, `archive.zip!항목`, 이어읽기 커서가 있는 `--budget-tokens` |
-| `lancet edit` | `read`와 같은 좌표(`--lines`, `--symbol`)로 줄 교체·삭제·삽입. `--rev`가 오래됐거나 구문 오류가 생기면 거부, `--apply` 전에는 dry-run |
+| `lancet edit` | `read`와 같은 좌표(`--lines`, `--symbol`, 여러 구간은 `--edits`)로 줄 교체·삭제·삽입. `--rev` 기준 잠금 compare-and-swap이라 여러 에이전트가 동시에 고쳐도 서로 덮어쓰지 않음. 구문 오류가 늘어나면 거부, `--apply` 전에는 dry-run |
 | `lancet outline` | 코드 선언 골격, Markdown 목차, 워크북 스키마, 압축 파일 목록 |
 | `lancet refs` | 주석·문자열 리터럴을 건너뛰는 인덱스 가속 `[def]` / `[ref]` 추적 |
 | `lancet batch` | 여러 쿼리를 인덱스 한 번 열고 디렉터리 한 번 훑어 처리 |

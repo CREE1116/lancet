@@ -59,5 +59,10 @@ Supported languages (24): `rs`, `py`, `js`, `ts`, `tsx`, `go`, `c`, `cpp`, `zig`
   - `lancet edit src/search.rs --lines 42 --insert-after '    log::debug!("x");'`
   - `lancet edit src/search.rs --lines 42:44 --delete`
 - `--symbol` covers the doc comments and attributes above the declaration, exactly as `read --symbol` shows them; include them in the replacement or they are removed.
+- **Several changes to one file → one call.** Put them in `--edits` (JSON file or `-` for stdin), all using the line numbers you *read*; lancet resolves every hunk against the original file, so earlier hunks never shift later ones. Overlapping hunks are refused; either all hunks land or none do.
+  - `lancet edit src/x.rs --rev <REV> --apply --edits - <<'JSON'`
+    `[{"lines": "10:12", "with": "..."}, {"symbol": "old_fn", "delete": true}, {"lines": "40", "insert_after": "..."}]`
+    `JSON`
 - **Always pass the `rev` you read** (`lancet read --json` → `"rev"`): `--rev <REV>` makes the edit fail with `conflict` if the file changed since. Chain edits with the returned `rev_after`.
-- Default is a dry-run diff; add `--apply` to write atomically. Edits that add Tree-sitter syntax errors are refused (`--allow-syntax-errors` overrides). PDFs, Office files, HWP, and archive entries are read-only.
+- **Several agents on one repository:** the read → `--rev` → `--apply` cycle is a compare-and-swap. lancet locks the file while it re-checks the rev and writes, so when two agents edit the same revision exactly one wins and the other gets `conflict` (exit 2) instead of overwriting it. On `conflict`: `lancet read` again, re-apply your change to the new content, retry with the new `rev`. Never retry blindly with `--allow-syntax-errors` or without `--rev`.
+- Default is a dry-run diff; add `--apply` to write atomically. Edits that **increase** the number of Tree-sitter syntax errors are refused (a file that is already broken can still be repaired step by step); `--allow-syntax-errors` overrides. PDFs, Office files, HWP, and archive entries are read-only.

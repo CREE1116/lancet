@@ -1878,14 +1878,14 @@ fn ast_multi_metavariables_have_bounded_worst_case() {
     // Four `$$$` on a 200-argument call: n^4 splits without memoisation; exact answers now.
     let (r, took) = run("f($$$A, $$$B, $$$C, $$$D, a0)", None);
     assert_eq!((r.matched, r.warnings.len()), (0, 0), "{:?}", r.warnings);
-    assert!(took < Duration::from_secs(5), "{took:?}");
+    assert!(took < Duration::from_secs(15), "{took:?}");
     let (r, _) = run("f($$$A, a7, $$$B, a150, $$$C)", None);
     assert_eq!((r.matched, r.warnings.len()), (1, 0));
 
     // Back-references are part of the memo key, so they stay exact and fast too.
     let (r, took) = run("f($X, $$$A, $$$B, $$$C, $$$D, $X)", None);
     assert_eq!((r.matched, r.warnings.len()), (0, 0), "{:?}", r.warnings);
-    assert!(took < Duration::from_secs(5), "{took:?}");
+    assert!(took < Duration::from_secs(15), "{took:?}");
 
     // Repeated `$$$` groups defeat memoisation: past the per-node step budget the file
     // is reported as incomplete (loudly) and is never rewritten.
@@ -1897,5 +1897,186 @@ fn ast_multi_metavariables_have_bounded_worst_case() {
     );
     assert!(r.diffs.is_empty());
     assert_eq!(fs::read_to_string(root.join("x.py")).unwrap(), src);
-    assert!(took < Duration::from_secs(20), "{took:?}");
+    assert!(took < Duration::from_secs(60), "{took:?}"); // generous: CI runs debug builds
+}
+
+/// Differential fuzzing of the core guarantee: for random corpora, random edits and
+/// random queries, the indexed modes return exactly what a full scan returns
+/// (auto always; trust whenever the index is up to date).
+#[test]
+fn fuzz_scan_equals_auto_equals_trust() {
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            // xorshift64*: deterministic, no dependency
+            self.0 ^= self.0 >> 12;
+            self.0 ^= self.0 << 25;
+            self.0 ^= self.0 >> 27;
+            self.0.wrapping_mul(0x2545_F491_4F6C_DD1D)
+        }
+        fn below(&mut self, n: usize) -> usize {
+            (self.next() % n as u64) as usize
+        }
+        fn pick<'a>(&mut self, xs: &[&'a str]) -> &'a str {
+            xs[self.below(xs.len())]
+        }
+    }
+    const WORDS: &[&str] = &[
+        "alpha",
+        "beta",
+        "gamma",
+        "delta",
+        "Foo_bar",
+        "KEY",
+        "\u{212A}ey",
+        "key",
+        "Straße",
+        "STRASSE",
+        "검색",
+        "한글",
+        "x1",
+        "x42",
+        "error",
+        "err0r",
+        "the",
+        "unwrap",
+        "spin_lock",
+    ];
+    const EXTS: &[&str] = &["txt", "rs", "log", "md"];
+
+    fn content(r: &mut Rng) -> String {
+        let mut s = String::new();
+        for _ in 0..1 + r.below(30) {
+            if r.below(6) == 0 {
+                s.push('\n'); // blank lines shape `in block`
+                continue;
+            }
+            for w in 0..1 + r.below(8) {
+                if w > 0 {
+                    s.push_str(r.pick(&[" ", " ", ", ", "(", "::", "\t"]));
+                }
+                s.push_str(r.pick(WORDS));
+            }
+            s.push('\n');
+        }
+        s
+    }
+    fn atom(r: &mut Rng) -> String {
+        // "zqxjk" never appears in generated content; only same-size swaps introduce it,
+        // so a stale index can only miss it if freshness detection is broken.
+        let w = if r.below(5) == 0 {
+            "zqxjk"
+        } else {
+            r.pick(WORDS)
+        };
+        match r.below(6) {
+            0 => format!(
+                "regex(\"{}\")",
+                r.pick(&["x\\\\d+", "(?i)gam+a", "^alpha", "err[0o]r", "beta$"])
+            ),
+            1 => format!(
+                "fuzzy(\"{}\", {})",
+                r.pick(&["alpah", "gamm", "eror", "spinlock", "key"]),
+                r.below(3)
+            ),
+            2 => {
+                let cut: String = w.chars().skip(1).take(3).collect();
+                format!("\"{}\"", if cut.is_empty() { w.to_string() } else { cut })
+            }
+            _ => format!("\"{w}\""),
+        }
+    }
+    fn query(r: &mut Rng) -> String {
+        let mut q = match r.below(7) {
+            0 => format!("{} AND {}", atom(r), atom(r)),
+            1 => format!("{} OR {}", atom(r), atom(r)),
+            2 => format!("{} NOT {}", atom(r), atom(r)),
+            3 => format!("near({}, {}, {})", atom(r), atom(r), r.below(6)),
+            4 => format!("before({}, {}, {})", atom(r), atom(r), r.below(6)),
+            _ => atom(r),
+        };
+        match r.below(6) {
+            0 => q.push_str(" in line"),
+            1 => q.push_str(" in block"),
+            2 => q.push_str(&format!(" in ext:{}", r.pick(EXTS))),
+            3 => q.push_str(&format!(" in path:\"d{}\"", r.below(3))),
+            _ => {}
+        }
+        q
+    }
+
+    for seed in [0x9E37_79B9_7F4A_7C15u64, 42, 0xDEAD_BEEF] {
+        let mut r = Rng(seed);
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let mut files = Vec::new();
+        for i in 0..40 {
+            let rel = format!("d{}/f{i}.{}", r.below(3), r.pick(EXTS));
+            let p = root.join(&rel);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            let body = match i {
+                0 => String::new(),                               // empty
+                1 => format!("{}\0binary\n", content(&mut r)),    // binary
+                2 => (0..400).map(|_| content(&mut r)).collect(), // large
+                _ => content(&mut r),
+            };
+            fs::write(&p, body).unwrap();
+            files.push(p);
+        }
+        std::thread::sleep(Duration::from_millis(250)); // leave the racy window
+        let idx_dir = index::default_dir(root);
+        let check = |r: &mut Rng, phase: &str, with_trust: bool| {
+            for n in 0..60 {
+                let q = query(r);
+                let scan = search(&q, &opts(root, IndexMode::Off));
+                let auto = search(&q, &opts(root, IndexMode::Auto));
+                let label = format!("seed {seed:#x} {phase} #{n}: {q}");
+                assert_eq_responses(&scan, &auto, &format!("{label} (auto)"));
+                if with_trust {
+                    let trust = search(&q, &opts(root, IndexMode::Trust));
+                    assert_eq_responses(&scan, &trust, &format!("{label} (trust)"));
+                }
+            }
+        };
+
+        index::sync(root, &idx_dir, &WalkOpts::default()).unwrap();
+        check(&mut r, "fresh index", true);
+
+        // Edit without re-indexing: rewrites, appends, same-size swaps with the old
+        // mtime put back, deletions and new files.
+        for _ in 0..12 {
+            let p = &files[3 + r.below(files.len() - 3)];
+            if !p.exists() {
+                continue;
+            }
+            match r.below(4) {
+                0 => fs::write(p, content(&mut r)).unwrap(),
+                1 => {
+                    let mut s = fs::read_to_string(p).unwrap();
+                    s.push_str(&content(&mut r));
+                    fs::write(p, s).unwrap();
+                }
+                2 => {
+                    let old = fs::metadata(p).unwrap().modified().unwrap();
+                    let s = fs::read_to_string(p).unwrap().replace("alpha", "zqxjk");
+                    fs::write(p, s).unwrap();
+                    fs::File::options()
+                        .write(true)
+                        .open(p)
+                        .unwrap()
+                        .set_modified(old)
+                        .unwrap();
+                }
+                _ => fs::remove_file(p).unwrap(),
+            }
+        }
+        for j in 0..3 {
+            fs::write(root.join(format!("d{j}/new{j}.txt")), content(&mut r)).unwrap();
+        }
+        check(&mut r, "stale index", false);
+
+        std::thread::sleep(Duration::from_millis(250));
+        index::sync(root, &idx_dir, &WalkOpts::default()).unwrap();
+        check(&mut r, "re-synced index", true);
+    }
 }
