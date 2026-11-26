@@ -89,6 +89,29 @@ pub fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
 
 /// Compute a standard unified diff (`--- a/...`, `+++ b/...`) with 3 context lines.
 pub fn unified_diff(rel: &str, old: &str, new: &str) -> String {
+    let d = line_diff(rel, old, new);
+    if d.contains("\n@@ ") || old == new {
+        return d;
+    }
+    // Same lines, different text: only the final newline changed. Show it the way
+    // `diff -u` does, or the change would be invisible in a dry run.
+    let last = old.lines().last().unwrap_or("");
+    let n = old.lines().count().max(1);
+    let marker = |text: &str| {
+        if text.ends_with('\n') {
+            ""
+        } else {
+            "\\ No newline at end of file\n"
+        }
+    };
+    format!(
+        "--- a/{rel}\n+++ b/{rel}\n@@ -{n},1 +{n},1 @@\n-{last}\n{}+{last}\n{}",
+        marker(old),
+        marker(new)
+    )
+}
+
+fn line_diff(rel: &str, old: &str, new: &str) -> String {
     let old_lines: Vec<&str> = old.lines().collect();
     let new_lines: Vec<&str> = new.lines().collect();
     let n = old_lines.len();

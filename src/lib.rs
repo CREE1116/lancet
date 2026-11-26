@@ -21,6 +21,7 @@ pub mod index;
 pub mod matcher;
 pub mod outline;
 pub mod output;
+pub mod patch;
 pub mod query;
 pub mod read_cmd;
 pub mod refs;

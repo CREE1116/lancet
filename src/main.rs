@@ -39,6 +39,7 @@ Subcommands:
   lancet rg [FLAGS] PATTERN [PATH...]   ripgrep-compatible search (same flags and output)
   lancet read <TARGET>          surgical line / symbol / page / sheet / archive reader
   lancet edit <PATH>            replace / delete / insert lines addressed like `read`
+  lancet patch [DIFF|-]         apply a unified diff (git diff) atomically, verified hunk by hunk
   lancet outline [PATH]         document table-of-contents & code declaration skeleton
   lancet refs <SYMBOL> [PATH]   lexical AST symbol definitions & references
   lancet index [PATH]           build or incrementally update the index (PATH/.lancet)
@@ -475,6 +476,7 @@ fn main() -> ExitCode {
         Some("explain") => run_explain(ExplainCli::parse_from(&args[1..])),
         Some("batch") => run_batch(BatchCli::parse_from(&args[1..])),
         Some("rg") => run_rg(RgCli::parse_from(&args[1..])),
+        Some("patch") => run_patch(PatchCli::parse_from(&args[1..])),
         _ => run_search(SearchCli::parse_from(&args)),
     }
 }
@@ -1212,6 +1214,87 @@ fn run_rg(cli: RgCli) -> ExitCode {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::from(1),
         Err(msg) => fail(&msg),
+    }
+}
+
+#[derive(Parser)]
+#[command(
+    name = "lancet patch",
+    about = "Apply a unified diff (`git diff`, `diff -u`) with lancet edit's guarantees (dry-run unless --apply)"
+)]
+struct PatchCli {
+    /// Patch file (`-` or omitted: stdin)
+    patch: Option<PathBuf>,
+    /// Directory the patch's paths are relative to
+    #[arg(long, default_value = ".")]
+    root: PathBuf,
+    /// Strip N leading path components, like `patch -pN` (1 removes `a/` and `b/`)
+    #[arg(short = 'p', long = "strip", default_value_t = 1)]
+    strip: usize,
+    /// Write the changes (default: verify and print the resulting diff)
+    #[arg(long)]
+    apply: bool,
+    /// Write even if a file gains Tree-sitter syntax errors
+    #[arg(long)]
+    allow_syntax_errors: bool,
+    /// Print machine-readable JSON
+    #[arg(long)]
+    json: bool,
+}
+
+fn run_patch(cli: PatchCli) -> ExitCode {
+    let src = cli.patch.as_deref().unwrap_or(Path::new("-"));
+    let text = match read_text_arg(src) {
+        Ok(t) => t,
+        Err(e) => return cli_invalid(cli.json, &format!("cannot read {}: {e}", src.display())),
+    };
+    let mut o = lancet::patch::PatchOptions::new(text, &cli.root);
+    o.strip = cli.strip;
+    o.apply = cli.apply;
+    o.allow_syntax_errors = cli.allow_syntax_errors;
+    let resp = lancet::patch::apply_patch(&o);
+    let stdout = io::stdout();
+    let mut out = io::BufWriter::new(stdout.lock());
+    if cli.json {
+        let _ = serde_json::to_writer(&mut out, &resp)
+            .map_err(io::Error::other)
+            .and_then(|_| writeln!(out));
+    } else {
+        for f in &resp.files {
+            let _ = write!(out, "{}", f.diff);
+        }
+        let _ = out.flush();
+        if let Some(err) = &resp.error {
+            eprintln!("error: {}", err.message);
+        } else {
+            let moved = resp
+                .files
+                .iter()
+                .flat_map(|f| &f.offsets)
+                .filter(|o| **o != 0)
+                .count();
+            let note = if moved > 0 {
+                format!(", {moved} hunk(s) found at an offset")
+            } else {
+                String::new()
+            };
+            let hint = if resp.applied {
+                ""
+            } else {
+                " (re-run with --apply to write)"
+            };
+            eprintln!(
+                "[lancet patch] {}: {} file(s){note}{hint}",
+                resp.mode,
+                resp.files.len()
+            );
+        }
+    }
+    let _ = out.flush();
+    match resp.status {
+        Status::Complete => ExitCode::SUCCESS,
+        Status::Empty => ExitCode::from(1),
+        _ => ExitCode::from(2),
     }
 }
 

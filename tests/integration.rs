@@ -2187,3 +2187,108 @@ fn rg_mode_matches_ripgrep_semantics_and_is_index_independent() {
         assert_eq!(off, auto, "{pat}");
     }
 }
+
+#[test]
+fn patch_applies_unified_diffs_all_or_nothing() {
+    use lancet::patch::{apply_patch, PatchOptions};
+
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    let a_src: String = (0..20).map(|i| format!("fn f{i}() {{}}\n")).collect();
+    fs::write(root.join("a.rs"), &a_src).unwrap();
+    fs::write(root.join("b.txt"), "one\ntwo\nthree\n").unwrap();
+    fs::write(root.join("old.txt"), "bye\n").unwrap();
+    let apply = |diff: &str, write: bool| {
+        let mut o = PatchOptions::new(diff, root);
+        o.apply = write;
+        apply_patch(&o)
+    };
+
+    // Two files, a hunk at a shifted position, a creation and a deletion.
+    let diff = "\
+--- a/a.rs
++++ b/a.rs
+@@ -5,3 +5,3 @@
+ fn f4() {}
+-fn f5() {}
++fn f5() -> i32 { 5 }
+ fn f6() {}
+--- a/b.txt
++++ b/b.txt
+@@ -2,1 +2,1 @@
+-two
++TWO
+--- /dev/null
++++ b/new.txt
+@@ -0,0 +1,1 @@
++hello
+--- a/old.txt
++++ /dev/null
+@@ -1,1 +0,0 @@
+-bye
+";
+    fs::write(root.join("a.rs"), format!("// shifted\n{a_src}")).unwrap();
+    let dry = apply(diff, false);
+    assert_eq!(dry.status, Status::Complete, "{:?}", dry.error);
+    assert!(!dry.applied && root.join("old.txt").exists());
+    assert_eq!(dry.files[0].offsets, vec![1]); // found one line below its header
+    let r = apply(diff, true);
+    assert!(r.applied, "{:?}", r.error);
+    assert!(fs::read_to_string(root.join("a.rs"))
+        .unwrap()
+        .contains("fn f5() -> i32 { 5 }\nfn f6"));
+    assert_eq!(
+        fs::read_to_string(root.join("b.txt")).unwrap(),
+        "one\nTWO\nthree\n"
+    );
+    assert_eq!(fs::read_to_string(root.join("new.txt")).unwrap(), "hello\n");
+    assert!(!root.join("old.txt").exists());
+
+    // The second file's context no longer matches: the first file is not touched.
+    let before = fs::read_to_string(root.join("a.rs")).unwrap();
+    let diff = "\
+--- a/a.rs
++++ b/a.rs
+@@ -2,1 +2,1 @@
+-fn f0() {}
++fn zero() {}
+--- a/b.txt
++++ b/b.txt
+@@ -2,1 +2,1 @@
+-two
++deux
+";
+    let r = apply(diff, true);
+    assert_eq!(r.status, Status::Conflict);
+    assert!(!r.applied);
+    assert_eq!(fs::read_to_string(root.join("a.rs")).unwrap(), before);
+
+    // Creating an existing file, deleting a changed one, escaping the root, or adding
+    // syntax errors is refused.
+    for (diff, status) in [
+        (
+            "--- /dev/null\n+++ b/b.txt\n@@ -0,0 +1,1 @@\n+x\n",
+            Status::Conflict,
+        ),
+        (
+            "--- a/new.txt\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-not hello\n",
+            Status::Conflict,
+        ),
+        (
+            "--- a/../x\n+++ b/../x\n@@ -1,1 +1,1 @@\n-a\n+b\n",
+            Status::InvalidQuery,
+        ),
+        ("not a diff\n", Status::InvalidQuery),
+    ] {
+        assert_eq!(apply(diff, true).status, status, "{diff}");
+    }
+    #[cfg(feature = "ast")]
+    {
+        let r = apply(
+            "--- a/a.rs\n+++ b/a.rs\n@@ -2,1 +2,1 @@\n-fn f0() {}\n+fn f0() {\n",
+            true,
+        );
+        assert_eq!(r.status, Status::InvalidQuery);
+        assert_eq!(fs::read_to_string(root.join("a.rs")).unwrap(), before);
+    }
+}
