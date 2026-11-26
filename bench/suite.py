@@ -63,7 +63,7 @@ CORPORA: dict[str, dict] = {
         "tag": "v1.31.0", "lang": "go", "ext": "go",
         "rare": "ShouldPodContainersBeTerminating", "common": "fmt.Errorf", "icase": "podspec",
         "regex": r"func \(\w+ \*\w+\) Get\w+\(",
-        "ast_lit": "fmt.Errorf($$$A)", "ast_nolit": "if $C { $$$B }",
+        "ast_lit": "fmt.Errorf($A, $B)", "ast_nolit": "if $C { $$$B }",
     },
     "vscode": {
         "tag": "1.95.0", "lang": "ts", "ext": "ts",
@@ -81,7 +81,7 @@ CORPORA: dict[str, dict] = {
         "tag": "v3.13.0", "lang": "c", "ext": "c",
         "rare": "PyUnstable_Object_ClearWeakRefsNoCallbacks", "common": "Py_DECREF", "icase": "pyobject",
         "regex": r"Py\w+_Check\(",
-        "ast_lit": "Py_DECREF($X)", "ast_nolit": "if ($C) { $$$B }",
+        "ast_lit": "Py_DECREF($X);", "ast_nolit": "if ($C) { $$$B }",
     },
     "spring-framework": {
         "tag": "v6.1.14", "lang": "java", "ext": "java",
