@@ -118,7 +118,7 @@ The full write-up — the multi-agent protocol (`rev`, compare-and-swap, `confli
 
 ## Benchmarks
 
-**8 codebases, 7 languages** ([`bench/suite.py`](./bench/suite.py), full tables in [`bench/results/SUITE.md`](./bench/results/SUITE.md)): every lancet output was checked byte-for-byte against ripgrep and AST match sets against ast-grep.
+**8 codebases, 7 languages** ([`bench/suite.py`](./bench/suite.py), full tables in [`bench/results/SUITE.md`](./bench/results/SUITE.md)): every lancet text output was checked byte-for-byte against ripgrep; AST match sets were cross-checked against ast-grep with documented scope differences (for example, `lancet --lang cpp` includes `.h` headers while `ast-grep -l cpp` excludes `.h`, and `if` vs `if-else` statement matching).
 
 | Corpus | Files | Index build · size (lancet / zoekt) | Text: auto / trust vs rg | AST w/ literal vs ast-grep |
 |---|---:|---|---|---|
@@ -132,6 +132,9 @@ The full write-up — the multi-agent protocol (`rev`, compare-and-swap, `confli
 | Spring 6.1 (Java) | 10,163 | 0.3 s · 12 MB / 1.9 s · 146 MB | 2.9–5.3× / 6–95× | 3.1× |
 
 Where lancet does **not** win: literal-free regex (the index can't narrow it — ripgrep's speed or up to 1.4× slower) and literal-free structural AST patterns (0.6–1.0× ast-grep's speed). Details in [docs/why-one-tool.md §7](./docs/why-one-tool.md#7-where-lancet-does-not-win).
+
+> **vs. agent & indexed-search tools (`tgrep`, `grix`, `aft`, `tensor-grep`, `probe`) — [`bench/results/COMPETITORS.md`](./bench/results/COMPETITORS.md):**
+> Without a resident daemon, `lancet` achieves **20/20 immediate (0 ms) post-edit freshness** (vs `0/20` at 0 ms for `aft` watcher lag and `tgrep` serverless), keeps a **1/3–1/7× smaller on-disk index** than `aft` / `tgrep` (`141.8 MB` vs `368.5 MB` / `955.2 MB` on Linux) and **~1/3× the peak build RAM** of `grix` (`353.5 MB` vs `1,001.6 MB` on Linux; `272.0 MB` vs `893.6 MB` on LLVM), preserves **20/20 `rg` match-count parity**, and leads literal AST search across all 4 tested corpora (`1.7 s` vs `10.7 s` `ast-grep` / `43.0 s` `aft` on Linux). `lancet` is **not fastest in every cell**: resident `tgrep serve` leads `regex with literal` on Rust/LLVM (`119.2 ms` / `19.9 ms` vs `508.7 ms` / `295.8 ms` `lancet auto`), `grix --no-auto-index` leads Linux rare literal (`11.5 ms` vs `43.6 ms` `--trust-index`), and resident `aft` leads Rust rare literal (`8.5 ms` vs `73.5 ms` `lancet auto`). Measured on a single `Apple Silicon macOS arm64` machine; Linux x86_64 validation is open for reproduction.
 
 <p align="center">
   <img src="docs/assets/bench-index-footprint.svg" width="100%" alt="Index build time, disk footprint, and peak build RAM across 8 codebases: lancet builds 4–25× faster, uses 9–30× less disk space, and takes 3.2–5.0× less peak RAM than zoekt.">

@@ -118,7 +118,7 @@ git diff | lancet patch --apply                             # unified diff를 �
 
 ## 벤치마크
 
-**코드베이스 8개, 언어 7개**([`bench/suite.py`](./bench/suite.py), 전체 표는 [`bench/results/SUITE.md`](./bench/results/SUITE.md)). lancet의 모든 출력을 ripgrep과 바이트 단위로, AST 매치 집합을 ast-grep과 대조했습니다.
+**코드베이스 8개, 언어 7개**([`bench/suite.py`](./bench/suite.py), 전체 표는 [`bench/results/SUITE.md`](./bench/results/SUITE.md)). lancet의 모든 텍스트 출력을 ripgrep과 바이트 단위로 대조했고, AST 매치 집합은 ast-grep과 교차 검증하되 스캔 범위 차이(`.h` 헤더 포함 여부 등)와 문장 매칭 차이(`if` vs `if-else`)는 문서에 명시했습니다.
 
 | 코퍼스 | 파일 | 인덱스 빌드 · 크기 (lancet / zoekt) | 텍스트: auto / trust vs rg | 리터럴 AST vs ast-grep |
 |---|---:|---|---|---|
@@ -132,6 +132,9 @@ git diff | lancet patch --apply                             # unified diff를 �
 | Spring 6.1 (Java) | 10,163 | 0.3 s · 12 MB / 1.9 s · 146 MB | 2.9~5.3배 / 6~95배 | 3.1배 |
 
 lancet이 **이기지 못하는** 곳: 리터럴 없는 정규식(인덱스가 걸러 줄 게 없어 ripgrep과 같거나 최대 1.4배 느림)과 리터럴 없는 구조 AST 패턴(ast-grep 속도의 0.6~1.0배). 자세한 내용은 [docs/why-one-tool.ko.md 7절](./docs/why-one-tool.ko.md#7-lancet이-이기지-못하는-곳).
+
+> **에이전트·인덱스 경쟁 도구(`tgrep`, `grix`, `aft`, `tensor-grep`, `probe`) 비교 — [`bench/results/COMPETITORS.md`](./bench/results/COMPETITORS.md):**
+> 상주 프로세스 없이도 **편집 직후(0 ms) 20/20 신선도**를 지키고(`aft` 워처 지연·`tgrep` 서버리스는 `0/20`), 인덱스는 `aft`/`tgrep` 대비 **1/3~1/7 크기**(Linux 기준 `141.8 MB` vs `368.5 MB`/`955.2 MB`), 빌드 피크 메모리는 `grix`의 **약 1/3**(`353.5 MB` vs `1,001.6 MB`; LLVM `272.0 MB` vs `893.6 MB`)이며, `rg` 매치 수 일치 **20/20**과 4개 코퍼스 전부에서 가장 빠른 리터럴 AST 검색(Linux `1.7 s` vs `ast-grep` `10.7 s` / `aft` `43.0 s`)을 단일 바이너리에서 제공합니다. 다만 **모든 항목에서 1등은 아닙니다**: 상주 `tgrep serve`는 Rust/LLVM `regex with literal`(`119.2 ms`/`19.9 ms` vs `lancet auto` `508.7 ms`/`295.8 ms`)에서, `grix --no-auto-index`는 Linux 희귀 리터럴(`11.5 ms` vs `--trust-index` `43.6 ms`)에서, 상주 `aft`는 Rust 희귀 리터럴(`8.5 ms` vs `lancet auto` `73.5 ms`)에서 더 빠릅니다. (`Apple Silicon macOS arm64` 단일 머신 측정치이며 Linux x86_64 재현 검증은 열려 있습니다.)
 
 <p align="center">
   <img src="docs/assets/bench-index-footprint.ko.svg" width="100%" alt="8개 코드베이스에서 lancet과 zoekt의 인덱스 빌드 시간, 디스크 크기, 피크 메모리 비교: lancet은 4~25배 빠르게 빌드되고 9~30배 작으며 메모리를 3.2~5.0배 적게 씁니다.">
