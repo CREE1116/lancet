@@ -31,10 +31,22 @@ case "$OS" in
     ;;
   Linux)
     case "$ARCH" in
-      x86_64|amd64)  TARGET="x86_64-unknown-linux-gnu" ;;
-      aarch64|arm64) TARGET="aarch64-unknown-linux-gnu" ;;
+      x86_64|amd64)  CPU="x86_64" ;;
+      aarch64|arm64) CPU="aarch64" ;;
       *) echo "error: unsupported Linux architecture: $ARCH" >&2; exit 1 ;;
     esac
+    # The gnu build links glibc 2.35 (Ubuntu 22.04). Older glibc, musl (Alpine) or
+    # unknown libc gets the static musl build. Override with LANCET_LIBC=gnu|musl.
+    LIBC="${LANCET_LIBC:-}"
+    if [ -z "$LIBC" ]; then
+      GLIBC="$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $2}')"
+      LIBC=musl
+      if [ -n "$GLIBC" ]; then
+        MAJ="${GLIBC%%.*}"; MIN="${GLIBC#*.}"; MIN="${MIN%%.*}"
+        if [ "$MAJ" -gt 2 ] || { [ "$MAJ" -eq 2 ] && [ "$MIN" -ge 35 ]; }; then LIBC=gnu; fi
+      fi
+    fi
+    TARGET="${CPU}-unknown-linux-${LIBC}"
     ;;
   *)
     echo "error: unsupported OS '$OS' (use install.ps1 on Windows)" >&2

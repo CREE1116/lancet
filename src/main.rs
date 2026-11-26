@@ -18,6 +18,10 @@ use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+#[cfg(all(target_env = "musl", target_pointer_width = "64"))]
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 const ABOUT: &str =
     "Lancet: surgical code, AST, and multi-format document search, inspection, and refactoring CLI.
 

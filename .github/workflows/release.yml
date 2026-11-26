@@ -40,6 +40,15 @@ jobs:
             os: ubuntu-24.04-arm
             ext: ""
             archive: tgz
+          # Static builds: run on Alpine and on distros whose glibc is older than the build host's.
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            ext: ""
+            archive: tgz
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            ext: ""
+            archive: tgz
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             ext: .exe
@@ -54,8 +63,18 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
+      - name: Install musl toolchain
+        if: endsWith(matrix.target, '-musl')
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq musl-tools
+
       - name: Build release binary
         run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Check the musl binary is static
+        if: endsWith(matrix.target, '-musl')
+        run: |
+          file "target/${{ matrix.target }}/release/lancet"
+          file "target/${{ matrix.target }}/release/lancet" | grep -Eq 'static(-pie)? linked'
 
       - name: Package archive (Unix)
         if: runner.os != 'Windows'
