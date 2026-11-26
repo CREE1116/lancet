@@ -1393,3 +1393,211 @@ pub fn invoke_engine() -> f64 {
         assert_eq!(refs_trust.references, refs_scan.references);
     }
 }
+
+#[test]
+fn lsm_segment_compaction_and_zero_alloc_cursor_equivalence() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    let idx_dir = index::default_dir(root);
+
+    // Seed 50 files
+    fs::create_dir_all(root.join("pkg")).unwrap();
+    for i in 0..50 {
+        fs::write(
+            root.join(format!("pkg/mod_{i:02}.rs")),
+            format!("pub fn worker_{i:02}() {{ let token_common = {i}; }}\n"),
+        )
+        .unwrap();
+    }
+    let r0 = index::sync(root, &idx_dir, &WalkOpts::default()).unwrap();
+    assert_eq!(r0.segments, 1);
+
+    // Perform 8 incremental mutations (exceeds COMPACT_MAX_SEGMENTS = 6 -> triggers automatic LSM merge)
+    for round in 1..=8 {
+        let target = round * 3;
+        fs::write(
+            root.join(format!("pkg/mod_{target:02}.rs")),
+            format!("pub fn worker_{target:02}() {{ let mutated_round_{round} = 999; }}\n"),
+        )
+        .unwrap();
+        fs::write(
+            root.join(format!("pkg/extra_{round}.rs")),
+            format!("pub fn extra_fn_{round}() {{ let token_common = {round}; }}\n"),
+        )
+        .unwrap();
+        let _ = index::sync(root, &idx_dir, &WalkOpts::default()).unwrap();
+    }
+
+    let ix_auto = Index::open(&idx_dir).unwrap().unwrap();
+    assert!(
+        ix_auto.segs.len() <= 6,
+        "expected tiered LSM compaction to bound segments <= 6, got {}",
+        ix_auto.segs.len()
+    );
+
+    // Explicit `index::compact` collapses everything into 1 tombstoneless segment
+    let _ = index::compact(&idx_dir).unwrap();
+    let ix_clean = Index::open(&idx_dir).unwrap().unwrap();
+    assert_eq!(ix_clean.segs.len(), 1);
+    assert_eq!(ix_clean.dead_count(), 0);
+
+    // Verify exact Scan == Auto == Trust parity across original, mutated, and added tokens
+    for q in [
+        "\"token_common\"",
+        "\"mutated_round_1\"",
+        "\"mutated_round_8\"",
+        "\"extra_fn_5\"",
+        "\"worker_49\"",
+    ] {
+        let s_scan = search(q, &opts(root, IndexMode::Off));
+        let s_auto = search(q, &opts(root, IndexMode::Auto));
+        let s_trust = search(q, &opts(root, IndexMode::Trust));
+        assert_eq_responses(&s_scan, &s_auto, &format!("compacted auto vs scan ({q})"));
+        assert_eq_responses(&s_scan, &s_trust, &format!("compacted trust vs scan ({q})"));
+    }
+}
+
+#[cfg(feature = "ast")]
+#[test]
+fn polyglot_24_languages_ast_and_symbols() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+
+    let samples: &[(&str, &str, &str, &str, Option<&str>)] = &[
+        (
+            "kern.c",
+            "c",
+            "static int alloc_buf(size_t n) {\n    // kmalloc(n, 0)\n    void *p = kmalloc(n, GFP_KERNEL);\n    return p != 0;\n}\n",
+            "kmalloc($SZ, $FLAGS)",
+            Some("alloc_buf"),
+        ),
+        (
+            "engine.cpp",
+            "cpp",
+            "class TensorOp {\npublic:\n    int compute(int x) { return std::max(x, 0); }\n};\n",
+            "std::max($A, $B)",
+            Some("TensorOp"),
+        ),
+        (
+            "main.zig",
+            "zig",
+            "const std = @import(\"std\");\npub fn addValues(a: i32, b: i32) i32 {\n    return @max(a, b);\n}\n",
+            "@max($A, $B)",
+            Some("addValues"),
+        ),
+        (
+            "Service.java",
+            "java",
+            "public class Service {\n    public String greet(String s) {\n        return String.valueOf(s);\n    }\n}\n",
+            "String.valueOf($X)",
+            Some("Service"),
+        ),
+        (
+            "Handler.cs",
+            "cs",
+            "public class Handler {\n    public int ParseId(string s) {\n        return int.Parse(s);\n    }\n}\n",
+            "int.Parse($X)",
+            Some("Handler"),
+        ),
+        (
+            "Repo.kt",
+            "kt",
+            "class Repo {\n    fun loadItem(id: String): Int {\n        return listOf(1, 2, 3).size\n    }\n}\n",
+            "listOf($$$ITEMS)",
+            Some("loadItem"),
+        ),
+        (
+            "Pipe.scala",
+            "scala",
+            "object Pipe {\n  def runJob(x: Int): Option[Int] = Some(x)\n}\n",
+            "Some($X)",
+            Some("Pipe"),
+        ),
+        (
+            "View.swift",
+            "swift",
+            "struct CardView {\n    func renderTitle(s: String) -> Int {\n        return max(1, 2)\n    }\n}\n",
+            "max($A, $B)",
+            Some("renderTitle"),
+        ),
+        (
+            "worker.rb",
+            "rb",
+            "class JobWorker\n  def perform(id)\n    Rails.logger.info(id)\n  end\nend\n",
+            "Rails.logger.info($MSG)",
+            Some("JobWorker"),
+        ),
+        (
+            "Controller.php",
+            "php",
+            "<?php\nclass UserController {\n    public function store($req) {\n        return array_merge($req, []);\n    }\n}\n",
+            "array_merge($A, $B)",
+            Some("UserController"),
+        ),
+        (
+            "deploy.sh",
+            "bash",
+            "deploy_app() {\n  kubectl apply -f app.yaml\n}\n",
+            "kubectl apply -f $FILE",
+            Some("deploy_app"),
+        ),
+        (
+            "plugin.lua",
+            "lua",
+            "function setup_plugin(opts)\n  return string.format(\"%s\", opts)\nend\n",
+            "string.format($FMT, $ARG)",
+            Some("setup_plugin"),
+        ),
+        (
+            "main.tf",
+            "hcl",
+            "resource \"aws_s3_bucket\" \"logs\" {\n  bucket = \"my-logs\"\n}\n",
+            "bucket = $VAL",
+            Some("resource.aws_s3_bucket.logs"),
+        ),
+        (
+            "styles.css",
+            "css",
+            ".btn-primary {\n  color: #ff0000;\n}\n",
+            "color: $HEX;",
+            Some(".btn-primary"),
+        ),
+        (
+            "cfg.json",
+            "json",
+            "{\n  \"timeout\": 30,\n  \"retries\": 3\n}\n",
+            "\"timeout\": $VAL",
+            Some("timeout"),
+        ),
+    ];
+
+    for &(fname, _lang, content, _pat, _sym) in samples {
+        fs::write(root.join(fname), content).unwrap();
+    }
+
+    index::rebuild(root, &index::default_dir(root), &WalkOpts::default()).unwrap();
+
+    for &(fname, lang, _content, pat, expected_sym) in samples {
+        let mut ao = AstOptions::new(pat, root.join(fname));
+        ao.lang = Some(lang.into());
+        ao.index = IndexMode::Auto;
+        let res = search_ast(&ao);
+        assert_eq!(
+            res.status,
+            Status::Complete,
+            "AST pattern `{pat}` failed for lang `{lang}` ({fname}): {:?}",
+            res.error
+        );
+        assert_eq!(res.matched, 1, "expected 1 match in {fname} ({lang})");
+
+        if let Some(sym_name) = expected_sym {
+            let out = build_outline(&OutlineOptions::new(root.join(fname)));
+            assert_eq!(out.status, Status::Complete, "outline failed for {fname}");
+            assert!(
+                out.files[0].items.iter().any(|it| it.name == sym_name),
+                "expected symbol `{sym_name}` in {fname}, got {:?}",
+                out.files[0].items
+            );
+        }
+    }
+}

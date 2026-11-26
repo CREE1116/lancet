@@ -158,18 +158,17 @@ impl FileType {
 
     pub fn from_ext(ext: &str) -> Self {
         match ext {
-            "rs" | "py" | "pyi" | "js" | "mjs" | "cjs" | "ts" | "tsx" | "jsx" | "go" | "java"
-            | "kt" | "kts" | "scala" | "c" | "h" | "cc" | "cpp" | "cxx" | "hpp" | "hh" | "hxx"
-            | "cs" | "swift" | "m" | "mm" | "rb" | "php" | "pl" | "pm" | "lua" | "sh" | "bash"
-            | "zsh" | "fish" | "ps1" | "r" | "jl" | "dart" | "ex" | "exs" | "erl" | "hs" | "ml"
-            | "mli" | "clj" | "sql" | "vue" | "svelte" | "zig" | "nim" | "cu" | "proto" => {
-                FileType::Code
-            }
+            "rs" | "py" | "pyi" | "js" | "mjs" | "cjs" | "ts" | "mts" | "cts" | "tsx" | "jsx"
+            | "go" | "java" | "kt" | "kts" | "scala" | "sc" | "c" | "h" | "cc" | "cpp" | "cxx"
+            | "hpp" | "hh" | "hxx" | "cs" | "swift" | "m" | "mm" | "rb" | "php" | "pl" | "pm"
+            | "lua" | "sh" | "bash" | "zsh" | "fish" | "ps1" | "r" | "jl" | "dart" | "ex"
+            | "exs" | "erl" | "hs" | "ml" | "mli" | "clj" | "sql" | "vue" | "svelte" | "css"
+            | "scss" | "zig" | "nim" | "cu" | "proto" => FileType::Code,
             "md" | "markdown" | "txt" | "rst" | "adoc" | "org" | "tex" | "html" | "htm" | "pdf"
             | "docx" | "pptx" | "odt" | "hwp" | "hwpx" | "epub" => FileType::Document,
             "csv" | "tsv" | "xlsx" | "xls" | "xlsm" | "xlsb" | "ods" => FileType::Spreadsheet,
             "json" | "jsonc" | "yaml" | "yml" | "toml" | "xml" | "ini" | "cfg" | "conf" | "env"
-            | "properties" => FileType::Config,
+            | "properties" | "tf" | "tfvars" | "hcl" => FileType::Config,
             "log" => FileType::Log,
             "jsonl" | "ndjson" => FileType::Data,
             "zip" | "tar" | "gz" | "tgz" => FileType::Archive,

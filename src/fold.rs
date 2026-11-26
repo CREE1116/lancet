@@ -84,13 +84,95 @@ pub fn fold_str(s: &str) -> String {
 
 /// Sorted, deduplicated trigram keys (3 bytes packed into a `u32`).
 pub fn trigrams(folded: &[u8]) -> Vec<u32> {
-    let mut v: Vec<u32> = folded
-        .windows(3)
-        .map(|w| ((w[0] as u32) << 16) | ((w[1] as u32) << 8) | w[2] as u32)
-        .collect();
-    v.sort_unstable();
-    v.dedup();
-    v
+    if folded.len() < 3 {
+        return Vec::new();
+    }
+    if folded.len() <= 65_536 {
+        let mut v: Vec<u32> = folded
+            .windows(3)
+            .map(|w| ((w[0] as u32) << 16) | ((w[1] as u32) << 8) | w[2] as u32)
+            .collect();
+        v.sort_unstable();
+        v.dedup();
+        return v;
+    }
+    let mut acc: Vec<u32> = Vec::new();
+    let step = 65_534usize;
+    let mut start = 0usize;
+    while start + 3 <= folded.len() {
+        let end = (start + 65_536).min(folded.len());
+        acc.extend(
+            folded[start..end]
+                .windows(3)
+                .map(|w| ((w[0] as u32) << 16) | ((w[1] as u32) << 8) | w[2] as u32),
+        );
+        if acc.len() >= 262_144 {
+            acc.sort_unstable();
+            acc.dedup();
+        }
+        if end == folded.len() {
+            break;
+        }
+        start += step;
+    }
+    acc.sort_unstable();
+    acc.dedup();
+    acc
+}
+
+/// Extract exact sorted, deduplicated folded trigrams from `input` using a
+/// bounded ~64 KiB scratch buffer (prevents multi-hundred-MiB allocations on large files).
+pub fn file_grams_bounded(input: &[u8]) -> Vec<u32> {
+    if input.len() <= 65_536 {
+        let mut folded = Vec::with_capacity(input.len());
+        fold_bytes(input, &mut folded);
+        return trigrams(&folded);
+    }
+    const CHUNK: usize = 65_536;
+    let mut folded_buf: Vec<u8> = Vec::with_capacity(CHUNK + 16);
+    let mut acc: Vec<u32> = Vec::new();
+
+    let flush_buf = |buf: &mut Vec<u8>, acc: &mut Vec<u32>| {
+        if buf.len() >= 3 {
+            acc.extend(
+                buf.windows(3)
+                    .map(|w| ((w[0] as u32) << 16) | ((w[1] as u32) << 8) | w[2] as u32),
+            );
+            if acc.len() >= 262_144 {
+                acc.sort_unstable();
+                acc.dedup();
+            }
+            let keep = 2usize;
+            let from = buf.len() - keep;
+            buf.copy_within(from.., 0);
+            buf.truncate(keep);
+        }
+    };
+
+    for uchunk in input.utf8_chunks() {
+        let mut s = uchunk.valid();
+        while !s.is_empty() {
+            let mut take = CHUNK.min(s.len());
+            while take < s.len() && !s.is_char_boundary(take) {
+                take += 1;
+            }
+            fold_bytes(&s.as_bytes()[..take], &mut folded_buf);
+            if folded_buf.len() >= CHUNK {
+                flush_buf(&mut folded_buf, &mut acc);
+            }
+            s = &s[take..];
+        }
+        if !uchunk.invalid().is_empty() {
+            folded_buf.extend_from_slice(uchunk.invalid());
+            if folded_buf.len() >= CHUNK {
+                flush_buf(&mut folded_buf, &mut acc);
+            }
+        }
+    }
+    flush_buf(&mut folded_buf, &mut acc);
+    acc.sort_unstable();
+    acc.dedup();
+    acc
 }
 
 #[cfg(test)]
@@ -109,5 +191,27 @@ mod tests {
         assert!(!is_ascii_only_orbit(b's'));
         assert!(is_ascii_only_orbit(b'a'));
         assert!(is_ascii_only_orbit(b'_'));
+    }
+
+    #[test]
+    fn bounded_grams_match_eager_across_chunk_boundaries() {
+        let mut sample = String::new();
+        for i in 0..4000 {
+            sample.push_str(&format!(
+                "Line {i:04}: \u{212A}elvin 한글_토큰_{i} Σigma_test!\n"
+            ));
+        }
+        assert!(sample.len() > 150_000);
+        let mut eager_folded = Vec::new();
+        fold_bytes(sample.as_bytes(), &mut eager_folded);
+        let mut expected: Vec<u32> = eager_folded
+            .windows(3)
+            .map(|w| ((w[0] as u32) << 16) | ((w[1] as u32) << 8) | w[2] as u32)
+            .collect();
+        expected.sort_unstable();
+        expected.dedup();
+
+        assert_eq!(file_grams_bounded(sample.as_bytes()), expected);
+        assert_eq!(trigrams(&eager_folded), expected);
     }
 }

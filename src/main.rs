@@ -60,7 +60,7 @@ struct SearchCli {
     /// Use the index without checking for changed files (fastest, may be stale)
     #[arg(long, conflicts_with = "no_index")]
     trust_index: bool,
-    /// Index directory (default: PATH/.weft)
+    /// Index directory (default: PATH/.lancet)
     #[arg(long)]
     index_dir: Option<PathBuf>,
     /// Search hidden files and directories
@@ -105,6 +105,9 @@ struct IndexCli {
     /// Discard existing segments and rebuild the index from scratch
     #[arg(long)]
     rebuild: bool,
+    /// Force LSM segment merge & tombstone compaction
+    #[arg(long, conflicts_with = "rebuild")]
+    compact: bool,
     /// Enable external OCR (tesseract/pdftoppm) for images and scanned PDFs
     #[arg(long)]
     ocr: bool,
@@ -240,7 +243,7 @@ struct FdCli {
     /// Read file entries directly from the mmap'd Lancet index without walking disk
     #[arg(long, conflicts_with = "no_index")]
     trust_index: bool,
-    /// Custom index directory (default: PATH/.weft)
+    /// Custom index directory (default: PATH/.lancet)
     #[arg(long)]
     index_dir: Option<PathBuf>,
     /// Include hidden files and directories
@@ -252,6 +255,9 @@ struct FdCli {
     /// Worker threads (default: number of CPUs)
     #[arg(short = 'j', long)]
     threads: Option<usize>,
+    /// Include size and mtime_ns in JSON entries (costs one stat per entry)
+    #[arg(long)]
+    meta: bool,
     /// Print machine-readable JSON
     #[arg(long)]
     json: bool,
@@ -292,7 +298,7 @@ struct AstCli {
     /// Use the index without checking mtime/size on disk (fastest)
     #[arg(long, conflicts_with = "no_index")]
     trust_index: bool,
-    /// Custom index directory (default: PATH/.weft or ancestor)
+    /// Custom index directory (default: PATH/.lancet or ancestor)
     #[arg(long)]
     index_dir: Option<PathBuf>,
     /// Search hidden files and directories
@@ -551,6 +557,20 @@ fn run_index(cli: IndexCli) -> ExitCode {
     };
     let res = if cli.rebuild {
         index::rebuild_with_ocr(&cli.path, &dir, &wopts, cli.ocr)
+    } else if cli.compact {
+        match index::sync_with_ocr(&cli.path, &dir, &wopts, cli.ocr) {
+            Ok(mut rep) => match index::compact(&dir) {
+                Ok(n) => {
+                    rep.compacted += n;
+                    if let Ok(Some(ix)) = Index::open(&dir) {
+                        rep.segments = ix.segs.len();
+                    }
+                    Ok(rep)
+                }
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        }
     } else {
         index::sync_with_ocr(&cli.path, &dir, &wopts, cli.ocr)
     };
@@ -844,7 +864,7 @@ fn run_fd(cli: FdCli) -> ExitCode {
     };
     opts.index = index_mode(cli.no_index, cli.trust_index);
     opts.index_dir = cli.index_dir;
-    opts.need_meta = cli.json;
+    opts.need_meta = cli.json && cli.meta;
 
     let resp = find_files(&opts);
     let stdout = io::stdout();

@@ -1,13 +1,9 @@
-//! Optional on-disk trigram index.
+//! Optional on-disk trigram index (`LANCET03`) with zero-allocation mmap
+//! lookups and tiered LSM segment compaction.
 //!
-//! Layout (`<root>/.weft/` by default):
+//! Layout (`<root>/.lancet/` by default):
 //! - `manifest.json`: format version, segment list, sorted tombstones.
 //! - `seg-NNNNNN.wseg`: immutable zero-copy segment (`LANCET03`, mmap'd at query time).
-//!
-//! Sync is incremental: unchanged files (same mtime + size) are kept, changed
-//! and new files go into new segments, old versions are tombstoned.
-//! At query time files whose mtime/size differ from the index are scanned
-//! directly, so results are never stale.
 
 pub mod req;
 pub mod segment;
@@ -16,28 +12,32 @@ use crate::walk::{walk, FileEntry, FileFilter, WalkOpts};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 pub use req::{EvalTrace, Req};
-pub use segment::{Segment, FLAG_BINARY, FLAG_ERROR};
+pub use segment::{Segment, FLAG_BINARY, FLAG_ERROR, FLAG_OVERSIZE, MAX_INDEX_FILE_BYTES};
 
 pub const DIR_NAME: &str = ".lancet";
 const FORMAT_VERSION: u32 = 3;
 const MANIFEST: &str = "manifest.json";
 /// Max input bytes per new segment (bounds memory during build).
-const SEGMENT_INPUT_BYTES: u64 = 192 << 20;
+const SEGMENT_INPUT_BYTES: u64 = 96 << 20;
+/// Max documents per segment so individual segment posting offsets stay compact.
+const MAX_DOCS_PER_SEGMENT: usize = 65_536;
+/// Trigger tiered LSM compaction when segment count exceeds this bound.
+const COMPACT_MAX_SEGMENTS: usize = 6;
+/// Trigger tombstone compaction when >= 25% of docs are dead and dead >= 32.
+const COMPACT_MIN_DEAD: usize = 32;
 
 pub fn default_dir(root: &Path) -> PathBuf {
     root.join(DIR_NAME)
 }
 
 /// Discover an index for `target`: checks `explicit_dir` (if provided),
-/// `<target>/.weft`, and ancestor directories of `target`.
-/// Returns `(Index, rel_prefix)` where `rel_prefix` is the `/`-separated
-/// path from the index root to `target` (empty if `target` is the index root).
+/// `<target>/.lancet`, and ancestor directories of `target`.
 pub fn discover(target: &Path, explicit_dir: Option<&Path>) -> Result<Option<(Index, String)>> {
     if let Some(d) = explicit_dir {
         return Ok(Index::open(d)?.map(|ix| (ix, String::new())));
@@ -120,7 +120,32 @@ impl Index {
         !d.is_empty() && d.binary_search(&id).is_ok()
     }
 
-    /// Live documents: rel path -> (segment, local id).
+    /// Zero-allocation binary search across segments (newest first).
+    pub fn lookup_live(&self, rel: &[u8]) -> Option<(usize, u32)> {
+        for si in (0..self.segs.len()).rev() {
+            if let Some(id) = self.segs[si].find_doc(rel) {
+                if !self.is_dead(si, id) {
+                    return Some((si, id));
+                }
+            }
+        }
+        None
+    }
+
+    /// Zero-allocation monotonic cursor lookup across segments for sorted `rel` streams.
+    pub fn advance_cursors(&self, cursors: &mut [u32], rel: &[u8]) -> Option<(usize, u32)> {
+        let mut found: Option<(usize, u32)> = None;
+        for (si, cur) in cursors.iter_mut().enumerate().take(self.segs.len()) {
+            if let Some(id) = self.segs[si].advance_cursor(cur, rel) {
+                if !self.is_dead(si, id) {
+                    found = Some((si, id)); // Newer segment overrides older
+                }
+            }
+        }
+        found
+    }
+
+    /// Live documents: rel path -> (segment, local id). Retained for compatibility.
     pub fn live_map(&self) -> HashMap<Cow<'_, str>, (usize, u32)> {
         let mut m = HashMap::with_capacity(self.live_count());
         for (si, seg) in self.segs.iter().enumerate() {
@@ -149,6 +174,10 @@ impl Index {
     }
 }
 
+fn is_zero(n: &usize) -> bool {
+    *n == 0
+}
+
 #[derive(Debug, Default, Serialize)]
 pub struct SyncReport {
     pub files: usize,
@@ -156,6 +185,8 @@ pub struct SyncReport {
     pub added: usize,
     pub removed: usize,
     pub segments: usize,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub compacted: usize,
     pub bytes_indexed: u64,
     pub elapsed_ms: f64,
 }
@@ -204,105 +235,245 @@ pub fn sync(root: &Path, dir: &Path, wopts: &WalkOpts) -> Result<SyncReport> {
 pub fn sync_with_ocr(root: &Path, dir: &Path, wopts: &WalkOpts, ocr: bool) -> Result<SyncReport> {
     let t0 = Instant::now();
     fs::create_dir_all(dir)?;
-    let mut manifest = Manifest {
-        version: FORMAT_VERSION,
-        next_seg: 1,
-        segments: vec![],
+    let existing = Index::open(dir)?;
+    let had_existing = existing.is_some();
+
+    let entries = walk(root, wopts, &FileFilter::all(), true);
+    let mut rep = SyncReport {
+        files: entries.len(),
+        ..SyncReport::default()
     };
-    let mut seg_docs = Vec::new();
-    let mut live: HashMap<String, (usize, u32, u64, u64)> = HashMap::new();
-    if let Some(ix) = Index::open(dir)? {
-        seg_docs = ix.segs.iter().map(|s| s.ndocs()).collect();
-        for (si, seg) in ix.segs.iter().enumerate() {
+
+    let (mut manifest, mut seg_docs, entry_matched) = if let Some(ix) = existing {
+        let mut manifest = ix.manifest;
+        let seg_docs: Vec<usize> = ix.segs.iter().map(|s| s.ndocs()).collect();
+        let mut matched = vec![false; entries.len()];
+
+        // Sweep segments newest-first using binary search over `entries` (zero HashMap/String allocs).
+        for si in (0..ix.segs.len()).rev() {
+            let seg = &ix.segs[si];
+            let mut hint = 0usize;
             for id in 0..seg.ndocs() as u32 {
-                if !ix.is_dead(si, id) {
-                    let (mt, sz, _) = seg.doc_meta(id);
-                    live.insert(seg.doc_rel(id).into_owned(), (si, id, mt, sz));
+                if !manifest.segments[si].dead.is_empty()
+                    && manifest.segments[si].dead.binary_search(&id).is_ok()
+                {
+                    continue;
+                }
+                let rel_b = seg.doc_rel_bytes(id);
+                // Advance from `hint` using binary search on remaining slice since `id` is also sorted!
+                match entries[hint..].binary_search_by(|e| e.rel.as_bytes().cmp(rel_b)) {
+                    Ok(off) => {
+                        let e_idx = hint + off;
+                        hint = e_idx;
+                        let e = &entries[e_idx];
+                        let (mt, sz, _) = seg.doc_meta(id);
+                        if !matched[e_idx] && mt == e.mtime_ns && sz == e.size {
+                            matched[e_idx] = true;
+                            rep.unchanged += 1;
+                        } else {
+                            manifest.segments[si].dead.push(id);
+                        }
+                    }
+                    Err(ins) => {
+                        hint += ins;
+                        manifest.segments[si].dead.push(id);
+                        rep.removed += 1;
+                    }
                 }
             }
         }
-        manifest = ix.manifest;
-    }
-    finish_sync(
-        root,
-        dir,
-        wopts,
-        ocr,
-        manifest,
-        seg_docs,
-        live,
-        t0,
-        SyncReport::default(),
-    )
-}
+        (manifest, seg_docs, matched)
+    } else {
+        (
+            Manifest {
+                version: FORMAT_VERSION,
+                next_seg: 1,
+                segments: vec![],
+            },
+            Vec::new(),
+            vec![false; entries.len()],
+        )
+    };
 
-#[allow(clippy::too_many_arguments)]
-fn finish_sync(
-    root: &Path,
-    dir: &Path,
-    wopts: &WalkOpts,
-    ocr: bool,
-    mut manifest: Manifest,
-    mut seg_docs: Vec<usize>,
-    live: HashMap<String, (usize, u32, u64, u64)>,
-    t0: Instant,
-    mut rep: SyncReport,
-) -> Result<SyncReport> {
-    let entries = walk(root, wopts, &FileFilter::all(), true);
-    rep.files = entries.len();
-    let mut seen: HashSet<&str> = HashSet::with_capacity(entries.len());
-    let mut to_add: Vec<&FileEntry> = Vec::new();
-    for e in &entries {
-        seen.insert(e.rel.as_str());
-        match live.get(&e.rel) {
-            Some(&(_, _, mt, sz)) if mt == e.mtime_ns && sz == e.size => rep.unchanged += 1,
-            Some(&(si, id, _, _)) => {
-                manifest.segments[si].dead.push(id);
-                to_add.push(e);
-            }
-            None => to_add.push(e),
-        }
-    }
-    for (rel, &(si, id, _, _)) in &live {
-        if !seen.contains(rel.as_str()) {
-            manifest.segments[si].dead.push(id);
-            rep.removed += 1;
-        }
-    }
+    let to_add: Vec<&FileEntry> = entries
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, e)| (!entry_matched[idx]).then_some(e))
+        .collect();
     rep.added = to_add.len();
 
+    let mut scratch = segment::BuildScratch::default();
     let mut i = 0;
     while i < to_add.len() {
         let mut bytes = 0u64;
         let mut j = i;
-        while j < to_add.len() && (j == i || bytes + to_add[j].size <= SEGMENT_INPUT_BYTES) {
+        while j < to_add.len()
+            && (j - i) < MAX_DOCS_PER_SEGMENT
+            && (j == i || bytes + to_add[j].size <= SEGMENT_INPUT_BYTES)
+        {
             bytes += to_add[j].size;
             j += 1;
         }
         let name = format!("seg-{:06}.wseg", manifest.next_seg);
         manifest.next_seg += 1;
-        segment::build(&dir.join(&name), &to_add[i..j], ocr)?;
+        segment::build(&dir.join(&name), &to_add[i..j], ocr, &mut scratch)?;
         manifest.segments.push(SegEntry { name, dead: vec![] });
         seg_docs.push(j - i);
         rep.bytes_indexed += bytes;
         i = j;
     }
 
-    // Drop segments whose documents are all dead.
+    // Drop 100%-dead segments first.
     let mut keep = Vec::new();
-    for (s, n) in manifest.segments.drain(..).zip(seg_docs) {
-        let mut s = s;
+    let mut keep_docs = Vec::new();
+    for (mut s, n) in manifest.segments.drain(..).zip(seg_docs) {
         s.dead.sort_unstable();
         s.dead.dedup();
         if s.dead.len() >= n {
             let _ = fs::remove_file(dir.join(&s.name));
         } else {
             keep.push(s);
+            keep_docs.push(n);
         }
     }
     manifest.segments = keep;
+
+    // Tiered LSM compaction: prevent segment proliferation and reclaim tombstones.
+    let total_docs: usize = keep_docs.iter().sum();
+    let total_dead: usize = manifest.segments.iter().map(|s| s.dead.len()).sum();
+    // A fresh build already produced size-bounded segments, so only compact on incremental syncs.
+    let should_compact = had_existing
+        && (manifest.segments.len() > COMPACT_MAX_SEGMENTS
+            || (manifest.segments.len() >= 2
+                && total_dead >= COMPACT_MIN_DEAD
+                && total_dead * 4 >= total_docs)
+            || (manifest.segments.len() == 1
+                && total_dead >= COMPACT_MIN_DEAD
+                && total_dead * 2 >= total_docs));
+
+    if should_compact {
+        rep.compacted = compact_manifest(dir, &mut manifest, false)?;
+    }
+
     rep.segments = manifest.segments.len();
     write_manifest(dir, &manifest)?;
     rep.elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
     Ok(rep)
+}
+
+/// Explicitly compact all fragmented/tombstoned segments in `dir` into minimal clean segment(s).
+pub fn compact(dir: &Path) -> Result<usize> {
+    let Some(ix) = Index::open(dir)? else {
+        return Ok(0);
+    };
+    let Index {
+        manifest: mut manifest_owned,
+        segs,
+        ..
+    } = ix;
+    drop(segs);
+    let manifest = &mut manifest_owned;
+    if manifest.segments.len() <= 1 && manifest.segments.iter().all(|s| s.dead.is_empty()) {
+        return Ok(0);
+    }
+    let merged = compact_manifest(dir, manifest, true)?;
+    write_manifest(dir, manifest)?;
+    Ok(merged)
+}
+
+fn compact_manifest(dir: &Path, manifest: &mut Manifest, force_all: bool) -> Result<usize> {
+    let opened: Vec<Segment> = manifest
+        .segments
+        .iter()
+        .map(|s| Segment::open(&dir.join(&s.name)))
+        .collect::<Result<_>>()?;
+
+    // Choose eligible segments: in automatic tiered mode, preserve untouched giant segments (>64 MiB & <20% dead).
+    let mut merge_mask = vec![false; opened.len()];
+    for (idx, seg) in opened.iter().enumerate() {
+        let dead_n = manifest.segments[idx].dead.len();
+        let high_dead = dead_n * 5 >= seg.ndocs().max(1);
+        let small = seg.disk_bytes() < (64 << 20) && seg.ndocs() < MAX_DOCS_PER_SEGMENT;
+        if force_all || small || high_dead {
+            merge_mask[idx] = true;
+        }
+    }
+    let selected_count = merge_mask.iter().filter(|&&b| b).count();
+    if selected_count == 0
+        || (selected_count == 1
+            && !force_all
+            && manifest
+                .segments
+                .iter()
+                .zip(&merge_mask)
+                .find(|(_, &m)| m)
+                .is_some_and(|(s, _)| s.dead.is_empty()))
+    {
+        // If > COMPACT_MAX_SEGMENTS of large segments, merge the last two at minimum.
+        if manifest.segments.len() > COMPACT_MAX_SEGMENTS && manifest.segments.len() >= 2 {
+            let n = merge_mask.len();
+            merge_mask[n - 2] = true;
+            merge_mask[n - 1] = true;
+        } else {
+            return Ok(0);
+        }
+    }
+
+    let mut new_entries: Vec<SegEntry> = Vec::new();
+    let mut old_files_to_remove: Vec<PathBuf> = Vec::new();
+    let mut compacted_count = 0usize;
+
+    // Merge contiguous runs of selected segments in order to preserve oldest-to-newest semantics!
+    let mut i = 0;
+    while i < opened.len() {
+        if !merge_mask[i] {
+            new_entries.push(manifest.segments[i].clone());
+            i += 1;
+            continue;
+        }
+        let mut j = i;
+        let mut live_acc = 0usize;
+        while j < opened.len() && merge_mask[j] {
+            let seg_live = opened[j]
+                .ndocs()
+                .saturating_sub(manifest.segments[j].dead.len());
+            if j > i && live_acc + seg_live > MAX_DOCS_PER_SEGMENT * 2 {
+                break;
+            }
+            live_acc += seg_live;
+            j += 1;
+        }
+        if j - i == 1 && manifest.segments[i].dead.is_empty() {
+            new_entries.push(manifest.segments[i].clone());
+            i = j;
+            continue;
+        }
+        let inputs: Vec<(&Segment, &[u32])> = (i..j)
+            .map(|k| (&opened[k], manifest.segments[k].dead.as_slice()))
+            .collect();
+        let out_name = format!("seg-{:06}.wseg", manifest.next_seg);
+        manifest.next_seg += 1;
+        let ndocs = segment::merge(&dir.join(&out_name), &inputs)?;
+        for k in i..j {
+            old_files_to_remove.push(dir.join(&manifest.segments[k].name));
+        }
+        compacted_count += j - i;
+        if ndocs > 0 {
+            new_entries.push(SegEntry {
+                name: out_name,
+                dead: Vec::new(),
+            });
+        } else {
+            let _ = fs::remove_file(dir.join(&out_name));
+        }
+        i = j;
+    }
+
+    drop(opened);
+    manifest.segments = new_entries;
+    write_manifest(dir, manifest)?;
+    for p in old_files_to_remove {
+        let _ = fs::remove_file(p);
+    }
+    Ok(compacted_count)
 }

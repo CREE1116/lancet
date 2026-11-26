@@ -5,7 +5,7 @@ use crate::code;
 use crate::content;
 use crate::eval::{eval_file, Compiled, LineMode, UnitHit};
 use crate::fold::fold_str;
-use crate::index::{self, EvalTrace, Index, Req, FLAG_BINARY, FLAG_ERROR};
+use crate::index::{self, EvalTrace, Index, Req, FLAG_BINARY, FLAG_ERROR, FLAG_OVERSIZE};
 use crate::matcher::for_each_token;
 use crate::output::{BudgetInfo, LineOut, Response, ResultItem, Stats, Status, TermStat};
 use crate::query::{parse, Expr, Matcher, Query, SortOrder, Unit};
@@ -637,7 +637,7 @@ pub(crate) fn plan_targets_with_req(
                 .as_ref()
                 .is_none_or(|ids| ids.binary_search(&id).is_ok())
         };
-        let live = ix.live_map();
+        let mut cursors = vec![0u32; ix.segs.len()];
         let mut stale = 0usize;
         let owned;
         let entries: &[FileEntry] = match walk_cache {
@@ -652,18 +652,20 @@ pub(crate) fn plan_targets_with_req(
                 continue;
             }
             stats.files_considered += 1;
-            let lookup_rel: std::borrow::Cow<'_, str> = if rel_prefix.is_empty() {
-                std::borrow::Cow::Borrowed(e.rel.as_str())
+            let hit = if rel_prefix.is_empty() {
+                ix.advance_cursors(&mut cursors, e.rel.as_bytes())
             } else if is_dir {
-                std::borrow::Cow::Owned(format!("{rel_prefix}/{}", e.rel))
+                let full = format!("{rel_prefix}/{}", e.rel);
+                ix.advance_cursors(&mut cursors, full.as_bytes())
             } else {
-                std::borrow::Cow::Borrowed(rel_prefix)
+                ix.lookup_live(rel_prefix.as_bytes())
             };
-            let keep = match live.get(lookup_rel.as_ref()) {
-                Some(&(si, id)) => {
+            let keep = match hit {
+                Some((si, id)) => {
                     let (mt, sz, flags) = ix.segs[si].doc_meta(id);
                     if mt == e.mtime_ns && sz == e.size {
-                        let k = flags & FLAG_BINARY == 0 && (flags & FLAG_ERROR != 0 || ok(si, id));
+                        let k = flags & FLAG_BINARY == 0
+                            && (flags & (FLAG_ERROR | FLAG_OVERSIZE) != 0 || ok(si, id));
                         cands += k as usize;
                         k
                     } else {

@@ -236,7 +236,7 @@ fn find_symbol_lines(
     }
     if !code::supports_path(path) {
         return Err(format!(
-            "`--symbol` is not supported for `{}` (supported: rs, py, js, ts, tsx, go)",
+            "`--symbol` is not supported for `{}` (supported: 24 AST languages including rs, py, js/ts, go, c/cpp, zig, java, cs, kt, scala, swift, rb, php, bash, lua, hcl, css, json, yaml, toml)",
             path.display()
         ));
     }

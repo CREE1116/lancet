@@ -1,5 +1,5 @@
 //! Tree-sitter structural AST pattern search and safe refactoring (`lancet ast`),
-//! automatically accelerated by the `.weft` trigram index when available.
+//! automatically accelerated by the `.lancet` trigram index when available.
 
 use crate::output::{ErrorInfo, Status};
 use crate::search::IndexMode;
@@ -193,7 +193,17 @@ mod imp {
 
     type PreprocessOut = (String, HashMap<String, MetaSpec>, HashSet<String>);
 
-    fn preprocess_pattern(raw: &str) -> Result<PreprocessOut, String> {
+    fn push_sentinel(out: &mut String, sent: &str, quote: bool) {
+        if quote {
+            out.push('"');
+            out.push_str(sent);
+            out.push('"');
+        } else {
+            out.push_str(sent);
+        }
+    }
+
+    fn preprocess_pattern(raw: &str, quote: bool) -> Result<PreprocessOut, String> {
         let bytes = raw.as_bytes();
         let mut out = String::with_capacity(raw.len() + 32);
         let mut sentinels = HashMap::new();
@@ -220,7 +230,7 @@ mod imp {
                                 multi: true,
                             },
                         );
-                        out.push_str(&sent);
+                        push_sentinel(&mut out, &sent, quote);
                         i = end;
                         continue;
                     } else if after >= bytes.len() || !is_word_byte(bytes[after]) {
@@ -233,7 +243,7 @@ mod imp {
                                 multi: true,
                             },
                         );
-                        out.push_str(&sent);
+                        push_sentinel(&mut out, &sent, quote);
                         i = after;
                         continue;
                     }
@@ -252,7 +262,7 @@ mod imp {
                             multi: false,
                         },
                     );
-                    out.push_str(&sent);
+                    push_sentinel(&mut out, &sent, quote);
                     i = after + 1;
                     continue;
                 }
@@ -271,7 +281,7 @@ mod imp {
                             multi: false,
                         },
                     );
-                    out.push_str(&sent);
+                    push_sentinel(&mut out, &sent, quote);
                     i = end;
                     continue;
                 }
@@ -319,45 +329,191 @@ mod imp {
     }
 
     fn is_comment(kind: &str) -> bool {
-        matches!(kind, "comment" | "line_comment" | "block_comment")
+        kind.ends_with("comment")
     }
 
-    fn single_content_child<'a>(node: Node<'a>, skip_delims: &[&str]) -> Option<Node<'a>> {
-        let mut cursor = node.walk();
-        let mut found: Option<Node<'a>> = None;
-        for c in node.children(&mut cursor) {
-            if is_comment(c.kind()) || skip_delims.contains(&c.kind()) {
-                continue;
+    fn is_wrapper_container(kind: &str) -> bool {
+        matches!(
+            kind,
+            "source_file"
+                | "program"
+                | "module"
+                | "translation_unit"
+                | "compilation_unit"
+                | "script"
+                | "document"
+                | "stream"
+                | "config_file"
+                | "body"
+                | "stylesheet"
+                | "expression_statement"
+                | "simple_statement"
+                | "statement"
+                | "statements"
+                | "statement_list"
+                | "block_node"
+        )
+    }
+
+    fn find_exact_span_node<'a>(
+        root: Node<'a>,
+        span_start: usize,
+        span_end: usize,
+        ends_with_semi: bool,
+    ) -> Option<Node<'a>> {
+        // Walk down to the outermost node matching `[span_start..span_end]`, then unwrap transparent containers.
+        let mut cur = root;
+        let mut matched: Option<Node<'a>> = None;
+        loop {
+            if cur.start_byte() == span_start && cur.end_byte() == span_end {
+                matched = Some(cur);
+                break;
             }
-            if found.is_some() {
-                return None;
+            let mut walk = cur.walk();
+            let next = cur.children(&mut walk).find(|c| {
+                !is_comment(c.kind()) && c.start_byte() <= span_start && span_end <= c.end_byte()
+            });
+            match next {
+                Some(child) => cur = child,
+                None => break,
             }
-            found = Some(c);
         }
-        found
-    }
-
-    fn first_named_child<'a>(node: Node<'a>) -> Option<Node<'a>> {
-        let mut cursor = node.walk();
-        let mut children = node.named_children(&mut cursor);
-        children.next()
-    }
-
-    fn find_named_child<'a>(node: Node<'a>, kind: &str) -> Option<Node<'a>> {
-        let mut cursor = node.walk();
-        let mut children = node.named_children(&mut cursor);
-        children.find(|n| n.kind() == kind)
-    }
-
-    fn unwrap_expr_stmt<'a>(node: Node<'a>, ends_with_semi: bool) -> Node<'a> {
-        if !ends_with_semi && node.kind() == "expression_statement" {
-            let mut cursor = node.walk();
-            let named: Vec<Node<'a>> = node.named_children(&mut cursor).collect();
-            if named.len() == 1 {
-                return named[0];
+        let mut node = matched?;
+        loop {
+            let k = node.kind();
+            let should_unwrap = if ends_with_semi {
+                matches!(
+                    k,
+                    "source_file"
+                        | "program"
+                        | "module"
+                        | "translation_unit"
+                        | "compilation_unit"
+                        | "script"
+                        | "document"
+                        | "stream"
+                        | "config_file"
+                        | "body"
+                        | "stylesheet"
+                )
+            } else {
+                is_wrapper_container(k)
+            };
+            if !should_unwrap {
+                break;
+            }
+            let mut walk = node.walk();
+            let children: Vec<Node<'a>> = node
+                .children(&mut walk)
+                .filter(|c| !is_comment(c.kind()) && c.kind() != ";")
+                .collect();
+            if children.len() == 1
+                && children[0].start_byte() == span_start
+                && children[0].end_byte() == span_end
+            {
+                node = children[0];
+            } else {
+                break;
             }
         }
-        node
+        Some(node)
+    }
+
+    fn wrapper_candidates(
+        lang: Lang,
+        ends_with_semi: bool,
+    ) -> &'static [(&'static str, &'static str)] {
+        match lang {
+            Lang::Rust => {
+                if ends_with_semi {
+                    &[
+                        ("fn __lancet_wrap__() { ", " }"),
+                        ("fn __lancet_wrap__() { let _ = ", "; }"),
+                        ("", ""),
+                        ("impl __LancetWrap__ { ", " }"),
+                        ("type __LancetWrap__ = ", ";"),
+                    ]
+                } else {
+                    &[
+                        ("fn __lancet_wrap__() { let _ = ", "; }"),
+                        ("fn __lancet_wrap__() { ", " }"),
+                        ("", ""),
+                        ("impl __LancetWrap__ { ", " }"),
+                        ("type __LancetWrap__ = ", ";"),
+                    ]
+                }
+            }
+            Lang::Python => &[("", "")],
+            Lang::Js | Lang::Ts | Lang::Tsx => &[
+                ("", ""),
+                ("const __lancet_wrap__ = (", ");"),
+                ("class __LancetWrap__ { ", " }"),
+            ],
+            Lang::Go => &[
+                ("package p\nfunc __lancet_wrap__() { _ = ", " }"),
+                ("package p\nfunc __lancet_wrap__() {\n", "\n}"),
+                ("package p\n", ""),
+                ("package p\ntype __LancetWrap__ ", ""),
+            ],
+            Lang::C => &[
+                ("void __lancet_wrap__(void) { int __lv = (", "); }"),
+                ("void __lancet_wrap__(void) {\n", "\n}"),
+                ("", ""),
+            ],
+            Lang::Cpp => &[
+                ("void __lancet_wrap__() { auto __lv = (", "); }"),
+                ("void __lancet_wrap__() {\n", "\n}"),
+                ("class __LancetWrap__ {\n", "\n};"),
+                ("", ""),
+            ],
+            Lang::Zig => &[
+                ("fn __lancet_wrap__() void { _ = ", "; }"),
+                ("fn __lancet_wrap__() void {\n", "\n}"),
+                ("", ""),
+            ],
+            Lang::Java => &[
+                ("class __LW { Object __lf() { return (", "); } }"),
+                ("class __LW { void __lf() {\n", "\n} }"),
+                ("class __LW {\n", "\n}"),
+                ("", ""),
+            ],
+            Lang::CSharp => &[
+                ("class __LW { object __lf() { return (", "); } }"),
+                ("class __LW { void __lf() {\n", "\n} }"),
+                ("class __LW {\n", "\n}"),
+                ("", ""),
+            ],
+            Lang::Kotlin => &[
+                ("fun __lw(): Any? = (", ")"),
+                ("fun __lw() {\n", "\n}"),
+                ("", ""),
+            ],
+            Lang::Scala => &[
+                ("object __LW { def __lf() = (", ") }"),
+                ("object __LW {\n", "\n}"),
+                ("", ""),
+            ],
+            Lang::Swift => &[
+                ("", ""),
+                ("func __lw() -> Any { return (", ") }"),
+                ("struct __LW {\n", "\n}"),
+            ],
+            Lang::Ruby => &[("", "")],
+            Lang::Php => &[
+                ("<?php\n$__lv = (", ");"),
+                ("<?php\n", ";"),
+                ("<?php\n", ""),
+                ("<?php\nclass __LW {\n", "\n}"),
+            ],
+            Lang::Bash => &[("", "")],
+            Lang::Lua => &[("local __lv = (", ")"), ("", "")],
+            Lang::Hcl => &[("", ""), ("__lancet_attr = ", "")],
+            Lang::Html => &[("", "")],
+            Lang::Css => &[("", ""), (".__lw { ", " }")],
+            Lang::Json => &[("", ""), ("{ ", " }")],
+            Lang::Yaml => &[("", "")],
+            Lang::Toml => &[("", "")],
+        }
     }
 
     fn try_extract(
@@ -365,76 +521,11 @@ mod imp {
         prep: &str,
         ends_with_semi: bool,
     ) -> Option<(Tree, String, Vec<usize>)> {
-        #[derive(Clone, Copy)]
-        enum Strategy {
-            RustLetValue,
-            RustBlockSingle,
-            RustTopSingle,
-            RustImplSingle,
-            RustTypeExpr,
-            PyDirect,
-            JsDirect,
-            JsConstParen,
-            JsClassMember,
-            GoAssignRhs,
-            GoBlockSingle,
-            GoTopSingle,
-            GoTypeExpr,
-        }
-
-        let strategies: &[Strategy] = match lang {
-            Lang::Rust => {
-                if ends_with_semi {
-                    &[
-                        Strategy::RustBlockSingle,
-                        Strategy::RustLetValue,
-                        Strategy::RustTopSingle,
-                        Strategy::RustImplSingle,
-                        Strategy::RustTypeExpr,
-                    ]
-                } else {
-                    &[
-                        Strategy::RustLetValue,
-                        Strategy::RustBlockSingle,
-                        Strategy::RustTopSingle,
-                        Strategy::RustImplSingle,
-                        Strategy::RustTypeExpr,
-                    ]
-                }
-            }
-            Lang::Python => &[Strategy::PyDirect],
-            Lang::Js | Lang::Ts | Lang::Tsx => &[
-                Strategy::JsDirect,
-                Strategy::JsConstParen,
-                Strategy::JsClassMember,
-            ],
-            Lang::Go => &[
-                Strategy::GoAssignRhs,
-                Strategy::GoBlockSingle,
-                Strategy::GoTopSingle,
-                Strategy::GoTypeExpr,
-            ],
-        };
-
-        for &strat in strategies {
-            let wrapped = match strat {
-                Strategy::RustLetValue => format!("fn __lancet_wrap__() {{ let _ = {prep}; }}"),
-                Strategy::RustBlockSingle => format!("fn __lancet_wrap__() {{ {prep} }}"),
-                Strategy::RustTopSingle => prep.to_string(),
-                Strategy::RustImplSingle => format!("impl __LancetWrap__ {{ {prep} }}"),
-                Strategy::RustTypeExpr => format!("type __LancetWrap__ = {prep};"),
-                Strategy::PyDirect | Strategy::JsDirect => prep.to_string(),
-                Strategy::JsConstParen => format!("const __lancet_wrap__ = ({prep});"),
-                Strategy::JsClassMember => format!("class __LancetWrap__ {{ {prep} }}"),
-                Strategy::GoAssignRhs => {
-                    format!("package p\nfunc __lancet_wrap__() {{ _ = {prep} }}")
-                }
-                Strategy::GoBlockSingle => {
-                    format!("package p\nfunc __lancet_wrap__() {{\n{prep}\n}}")
-                }
-                Strategy::GoTopSingle => format!("package p\n{prep}"),
-                Strategy::GoTypeExpr => format!("package p\ntype __LancetWrap__ {prep}"),
-            };
+        let trimmed = prep.trim();
+        for &(prefix, suffix) in wrapper_candidates(lang, ends_with_semi) {
+            let wrapped = format!("{prefix}{trimmed}{suffix}");
+            let span_start = prefix.len();
+            let span_end = prefix.len() + trimmed.len();
 
             let Some(tree) = parse_src(lang, &wrapped) else {
                 continue;
@@ -443,72 +534,8 @@ mod imp {
             if root.has_error() {
                 continue;
             }
-
-            let picked: Option<Node<'_>> = match strat {
-                Strategy::RustLetValue => single_content_child(root, &[])
-                    .and_then(|f| f.child_by_field_name("body"))
-                    .and_then(|b| single_content_child(b, &["{", "}"]))
-                    .and_then(|l| l.child_by_field_name("value")),
-                Strategy::RustBlockSingle => single_content_child(root, &[])
-                    .and_then(|f| f.child_by_field_name("body"))
-                    .and_then(|b| single_content_child(b, &["{", "}"])),
-                Strategy::RustTopSingle => single_content_child(root, &[]),
-                Strategy::RustImplSingle => single_content_child(root, &[])
-                    .and_then(|imp_n| imp_n.child_by_field_name("body"))
-                    .and_then(|dl| single_content_child(dl, &["{", "}"])),
-                Strategy::RustTypeExpr => {
-                    single_content_child(root, &[]).and_then(|ti| ti.child_by_field_name("type"))
-                }
-                Strategy::PyDirect | Strategy::JsDirect => {
-                    single_content_child(root, &[]).map(|n| unwrap_expr_stmt(n, ends_with_semi))
-                }
-                Strategy::JsConstParen => single_content_child(root, &[])
-                    .and_then(first_named_child)
-                    .and_then(|decl| decl.child_by_field_name("value"))
-                    .and_then(|paren| single_content_child(paren, &["(", ")"])),
-                Strategy::JsClassMember => single_content_child(root, &[])
-                    .and_then(|cls| cls.child_by_field_name("body"))
-                    .and_then(|body| single_content_child(body, &["{", "}"])),
-                Strategy::GoAssignRhs => find_named_child(root, "function_declaration")
-                    .and_then(|f| f.child_by_field_name("body"))
-                    .and_then(|b| {
-                        let inner = single_content_child(b, &["{", "}"])?;
-                        let stmt = if inner.kind() == "statement_list" {
-                            single_content_child(inner, &[])?
-                        } else {
-                            inner
-                        };
-                        stmt.child_by_field_name("right")
-                            .and_then(|rhs| single_content_child(rhs, &[]))
-                    }),
-                Strategy::GoBlockSingle => find_named_child(root, "function_declaration")
-                    .and_then(|f| f.child_by_field_name("body"))
-                    .and_then(|b| {
-                        let inner = single_content_child(b, &["{", "}"])?;
-                        if inner.kind() == "statement_list" {
-                            single_content_child(inner, &[])
-                        } else {
-                            Some(inner)
-                        }
-                    }),
-                Strategy::GoTopSingle => {
-                    let mut cur = root.walk();
-                    let decls: Vec<Node<'_>> = root
-                        .named_children(&mut cur)
-                        .filter(|n| n.kind() != "package_clause" && !is_comment(n.kind()))
-                        .collect();
-                    if decls.len() == 1 {
-                        Some(decls[0])
-                    } else {
-                        None
-                    }
-                }
-                Strategy::GoTypeExpr => find_named_child(root, "type_declaration")
-                    .and_then(|td| find_named_child(td, "type_spec"))
-                    .and_then(|ts| ts.child_by_field_name("type")),
-            };
-
-            let Some(node) = picked else {
+            let Some(node) = find_exact_span_node(root, span_start, span_end, ends_with_semi)
+            else {
                 continue;
             };
             if node.is_missing() || node.has_error() {
@@ -568,7 +595,7 @@ mod imp {
     }
 
     fn build_pat_node(node: Node<'_>, src: &str, sentinels: &HashMap<String, MetaSpec>) -> PatNode {
-        let trimmed = src[node.byte_range()].trim();
+        let trimmed = src[node.byte_range()].trim().trim_matches('"');
         if let Some(spec) = sentinels.get(trimmed) {
             return PatNode::Meta(spec.clone());
         }
@@ -598,7 +625,8 @@ mod imp {
             if trimmed.is_empty() {
                 return Err("AST pattern cannot be empty".into());
             }
-            let (prep, sentinels, declared_names) = preprocess_pattern(trimmed)?;
+            let (prep, sentinels, declared_names) =
+                preprocess_pattern(trimmed, lang == Lang::Json)?;
             let ends_with_semi = trimmed.ends_with(';');
             let (pat_tree, pat_src, node_path) = try_extract(lang, &prep, ends_with_semi)
                 .ok_or_else(|| {
@@ -850,18 +878,21 @@ mod imp {
         out
     }
 
+    const SUPPORTED_LANGS: &str =
+        "rs, py, js, ts, tsx, go, c, cpp, zig, java, cs, kt, scala, swift, rb, php, bash, lua, hcl, html, css, json, yaml, toml";
+
     fn resolve_lang(opts: &AstOptions) -> Result<Lang, String> {
         if let Some(raw) = &opts.lang {
             return Lang::parse(raw).ok_or_else(|| {
-                format!(
-                    "unsupported language `{raw}` (supported: rust/rs, python/py, javascript/js, typescript/ts, tsx, go)"
-                )
+                format!("unsupported language `{raw}` (supported: {SUPPORTED_LANGS})")
             });
         }
         if let Some(l) = Lang::from_path(&opts.root) {
             return Ok(l);
         }
-        Err("specify `--lang <LANG>` (`rs`, `py`, `js`, `ts`, `tsx`, `go`) when searching a directory".into())
+        Err(format!(
+            "specify `--lang <LANG>` ({SUPPORTED_LANGS}) when searching a directory"
+        ))
     }
 
     fn build_ast_req(lits: &[String]) -> Req {
@@ -928,9 +959,22 @@ mod imp {
         let mut matches = Vec::new();
         let mut cursor = tree.root_node().walk();
         let mut descend = true;
+        // A match contains every pattern literal verbatim (leaves compare by text), so
+        // subtrees holding no occurrence of the longest one are skipped unvisited.
+        let lit_hits: Option<(Vec<usize>, usize)> = pat
+            .prefilters
+            .first()
+            .filter(|_| !may_have_js_unicode_ident)
+            .map(|f| (f.find_iter(src.as_bytes()).collect(), f.needle().len()));
 
         loop {
-            if descend {
+            let may_match = descend
+                && lit_hits.as_ref().is_none_or(|(hits, len)| {
+                    let node = cursor.node();
+                    let i = hits.partition_point(|&h| h < node.start_byte());
+                    i < hits.len() && hits[i] + len <= node.end_byte()
+                });
+            if may_match {
                 let node = cursor.node();
                 let kind_ok = match root_kind_id {
                     Some(kid) => node.kind_id() == kid,

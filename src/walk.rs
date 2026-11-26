@@ -169,6 +169,6 @@ pub fn walk(root: &Path, opts: &WalkOpts, filter: &FileFilter, need_meta: bool) 
         })
     });
     let mut v = out.into_inner().unwrap();
-    v.sort_by(|a, b| a.rel.cmp(&b.rel));
+    v.sort_unstable_by(|a, b| a.rel.cmp(&b.rel));
     v
 }
