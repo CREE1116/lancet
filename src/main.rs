@@ -20,7 +20,7 @@ use std::process::ExitCode;
 
 #[cfg(all(target_env = "musl", target_pointer_width = "64"))]
 #[global_allocator]
-static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 const ABOUT: &str =
     "Lancet: surgical code, AST, and multi-format document search, inspection, and refactoring CLI.
@@ -932,8 +932,8 @@ fn cli_invalid(json: bool, msg: &str) -> ExitCode {
 #[derive(Parser)]
 #[command(
     name = "lancet edit",
-    about = "Replace, delete, or insert lines addressed like `lancet read` (dry-run diff unless --apply)",
-    group(ArgGroup::new("target").required(true).args(["lines", "symbol", "edits"])),
+    about = "Replace, delete, or insert lines addressed like `lancet read`, or exact text with --find (dry-run diff unless --apply)",
+    group(ArgGroup::new("target").required(true).args(["lines", "symbol", "find", "edits"])),
     group(ArgGroup::new("op").args(["with", "with_file", "delete", "insert_before", "insert_after"]).conflicts_with("edits"))
 )]
 struct EditCli {
@@ -946,6 +946,13 @@ struct EditCli {
     /// (doc comments and attributes above it included: replace them too, or they go)
     #[arg(short = 's', long)]
     symbol: Option<String>,
+    /// Exact TEXT to change (not whole lines; may span lines). Refused unless it
+    /// occurs exactly once — or pass --all to change every occurrence
+    #[arg(short = 'f', long, allow_hyphen_values = true)]
+    find: Option<String>,
+    /// With --find: change every occurrence instead of requiring exactly one
+    #[arg(long, requires = "find")]
+    all: bool,
     /// Replace the addressed lines with TEXT
     #[arg(long, allow_hyphen_values = true)]
     with: Option<String>,
@@ -1370,13 +1377,17 @@ fn run_edit(cli: EditCli) -> ExitCode {
         opts.allow_syntax_errors = cli.allow_syntax_errors;
         return report_edit(&edit_file(&opts), cli.json);
     }
-    let target = match (&cli.lines, cli.symbol) {
-        (Some(l), _) => match parse_line_spec(l) {
+    let target = match (&cli.lines, cli.symbol, cli.find) {
+        (Some(l), _, _) => match parse_line_spec(l) {
             Ok((a, b)) => Target::Lines(a, b),
             Err(msg) => return cli_invalid(cli.json, &msg),
         },
-        (None, Some(s)) => Target::Symbol(s),
-        (None, None) => unreachable!("clap requires --lines, --symbol or --edits"),
+        (None, Some(s), _) => Target::Symbol(s),
+        (None, None, Some(text)) => Target::Find {
+            text,
+            all: cli.all,
+        },
+        (None, None, None) => unreachable!("clap requires --lines, --symbol, --find or --edits"),
     };
     let op = if cli.delete {
         Op::Delete

@@ -64,9 +64,9 @@ tree-sitter-yaml = { version = "0.7", optional = true }
 tree-sitter-zig = { version = "1.1", optional = true }
 zip = { version = "4", default-features = false, features = ["deflate"], optional = true }
 
-# musl's allocator is slow under many threads; same choice as ripgrep.
+# musl's malloc is slow under many threads (ripgrep swaps it too); mimalloc builds on x86_64 and aarch64 musl.
 [target.'cfg(all(target_env = "musl", target_pointer_width = "64"))'.dependencies]
-tikv-jemallocator = "0.6"
+mimalloc = { version = "0.1", default-features = false }
 
 [features]
 default = ["ast", "adapters"]
