@@ -714,32 +714,125 @@ mod imp {
         matches!(node.kind(), ")" | "]" | "}" | ">")
     }
 
+    /// Matching steps allowed per candidate node. Memoisation keeps ordinary `$$$`
+    /// patterns far below this; a pathological one is cut off at the node and the
+    /// file is reported as incomplete instead of hanging or silently dropping matches.
+    const MATCH_BUDGET: u32 = 1_000_000;
+
+    thread_local! {
+        static MATCH_STEPS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+        /// Set when any node of the current file ran out of budget.
+        static MATCH_EXHAUSTED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        /// Failed matches for the current file; turns n^k `$$$` backtracking into
+        /// roughly k·n² work.
+        static MATCH_MEMO: RefCell<HashSet<MemoKey>> = RefCell::new(HashSet::new());
+    }
+
+    type MemoKey = (usize, usize, usize, usize, u64);
+
+    /// Whether `p` matches `s` depends only on the slices and on the current values
+    /// of the metavariables that occur in `p` (back-references), so those are the key.
+    fn memo_key(p: &[PatNode], s: &[Node<'_>], env: &BTreeMap<String, String>) -> MemoKey {
+        use std::hash::{Hash, Hasher};
+        fn names<'a>(n: &'a PatNode, out: &mut Vec<&'a str>) {
+            match n {
+                PatNode::Meta(MetaSpec { name: Some(nm), .. }) => out.push(nm),
+                PatNode::Meta(_) | PatNode::Leaf { .. } => {}
+                PatNode::Branch { children, .. } => children.iter().for_each(|c| names(c, out)),
+            }
+        }
+        let mut used = Vec::new();
+        p.iter().for_each(|n| names(n, &mut used));
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        if !used.is_empty() {
+            for (k, v) in env {
+                if used.contains(&k.as_str()) {
+                    (k, v).hash(&mut h);
+                }
+            }
+        }
+        let first = s.first().map_or(0, |n| n.id() + 1);
+        (p.as_ptr() as usize, p.len(), first, s.len(), h.finish())
+    }
+
+    /// Lower bound on how many source siblings `p` must consume: every pattern
+    /// node takes exactly one, except `$$$` (any number) and a comma right before a
+    /// `$$$` (skipped when that `$$$` is empty).
+    fn min_nodes(p: &[PatNode]) -> usize {
+        let multi = |n: Option<&PatNode>| matches!(n, Some(PatNode::Meta(s)) if s.multi);
+        p.iter()
+            .enumerate()
+            .filter(|(i, n)| {
+                !(multi(Some(n))
+                    || matches!(n, PatNode::Leaf { is_comma: true, .. }) && multi(p.get(i + 1)))
+            })
+            .count()
+    }
+
     fn match_seq(
         p_slice: &[PatNode],
         s_slice: &[Node<'_>],
         src: &str,
         env: &mut BTreeMap<String, String>,
     ) -> bool {
+        let steps = MATCH_STEPS.with(|c| {
+            let n = c.get().saturating_add(1);
+            c.set(n);
+            n
+        });
+        if steps > MATCH_BUDGET {
+            return false;
+        }
         if p_slice.is_empty() {
             return s_slice.is_empty();
         }
+        let key = memo_key(p_slice, s_slice, env);
+        let known_fail = MATCH_MEMO.with(|m| m.borrow().contains(&key));
+        if known_fail {
+            return false;
+        }
+        let ok = match_seq_inner(p_slice, s_slice, src, env);
+        if !ok && MATCH_STEPS.with(|c| c.get()) <= MATCH_BUDGET {
+            // Only a genuine failure is remembered, not one cut short by the budget.
+            MATCH_MEMO.with(|m| m.borrow_mut().insert(key));
+        }
+        ok
+    }
+
+    fn match_seq_inner(
+        p_slice: &[PatNode],
+        s_slice: &[Node<'_>],
+        src: &str,
+        env: &mut BTreeMap<String, String>,
+    ) -> bool {
         if let PatNode::Meta(spec) = &p_slice[0] {
             if spec.multi {
-                for take in (0..=s_slice.len()).rev() {
-                    let mut next_env = env.clone();
+                // Never take siblings the rest of the pattern needs.
+                let max_take = s_slice.len().saturating_sub(min_nodes(&p_slice[1..]));
+                // No env clone per split: bind, recurse, undo. A failed `match_seq`
+                // leaves `env` untouched, so undoing our own insert restores it.
+                for take in (0..=max_take).rev() {
                     let captured = if take == 0 {
-                        String::new()
+                        ""
                     } else {
-                        let start = s_slice[0].start_byte();
-                        let end = s_slice[take - 1].end_byte();
-                        src[start..end].to_string()
+                        &src[s_slice[0].start_byte()..s_slice[take - 1].end_byte()]
                     };
-                    if !bind_meta(&mut next_env, spec, &captured) {
-                        continue;
-                    }
-                    if match_seq(&p_slice[1..], &s_slice[take..], src, &mut next_env) {
-                        *env = next_env;
+                    let inserted = match &spec.name {
+                        Some(name) => match env.get(name) {
+                            Some(prev) if prev != captured => continue,
+                            Some(_) => None,
+                            None => {
+                                env.insert(name.clone(), captured.to_string());
+                                Some(name)
+                            }
+                        },
+                        None => None,
+                    };
+                    if match_seq(&p_slice[1..], &s_slice[take..], src, env) {
                         return true;
+                    }
+                    if let Some(name) = inserted {
+                        env.remove(name);
                     }
                 }
                 return false;
@@ -958,6 +1051,8 @@ mod imp {
 
         let tree = parse_src(pat.lang, &src)?;
         let root_kind_id = pat.root_kind_id();
+        MATCH_EXHAUSTED.with(|c| c.set(false));
+        MATCH_MEMO.with(|m| m.borrow_mut().clear());
         let mut matches = Vec::new();
         let mut cursor = tree.root_node().walk();
         let mut descend = true;
@@ -984,7 +1079,12 @@ mod imp {
                 };
                 if kind_ok {
                     let mut env = BTreeMap::new();
-                    if match_node(&pat.root, node, &src, &mut env) {
+                    MATCH_STEPS.with(|c| c.set(0));
+                    let hit = match_node(&pat.root, node, &src, &mut env);
+                    if MATCH_STEPS.with(|c| c.get()) > MATCH_BUDGET {
+                        MATCH_EXHAUSTED.with(|c| c.set(true));
+                    }
+                    if hit {
                         let start = node.start_position();
                         let end = node.end_position();
                         let rep = rewrite.map(|tpl| render_rewrite(tpl, &env));
@@ -1013,6 +1113,19 @@ mod imp {
             } else {
                 break;
             }
+        }
+
+        if MATCH_EXHAUSTED.with(|c| c.get()) {
+            // Partial matches are reported, but flagged, and never rewritten.
+            return Some(FileResult {
+                parsed: true,
+                matches,
+                diff: None,
+                warning: Some(format!(
+                    "{}: pattern too ambiguous (over {MATCH_BUDGET} matching steps at one node); matches in this file are incomplete and it was not rewritten — make the pattern more specific (fewer `$$$`)",
+                    target.rel
+                )),
+            });
         }
 
         if matches.is_empty() {

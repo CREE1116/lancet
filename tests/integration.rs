@@ -1857,3 +1857,45 @@ fn multi_hunk_edits_use_original_coordinates_and_are_all_or_nothing() {
         assert!(parse_hunks(bad).is_err(), "{bad}");
     }
 }
+
+#[cfg(feature = "ast")]
+#[test]
+fn ast_multi_metavariables_have_bounded_worst_case() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    let args: Vec<String> = (0..200).map(|i| format!("a{i}")).collect();
+    let src = format!("f({})\n", args.join(", "));
+    fs::write(root.join("x.py"), &src).unwrap();
+    let run = |pat: &str, rewrite: Option<&str>| {
+        let mut o = AstOptions::new(pat, root);
+        o.lang = Some("py".into());
+        o.rewrite = rewrite.map(Into::into);
+        o.apply = rewrite.is_some();
+        let t = std::time::Instant::now();
+        (search_ast(&o), t.elapsed())
+    };
+
+    // Four `$$$` on a 200-argument call: n^4 splits without memoisation; exact answers now.
+    let (r, took) = run("f($$$A, $$$B, $$$C, $$$D, a0)", None);
+    assert_eq!((r.matched, r.warnings.len()), (0, 0), "{:?}", r.warnings);
+    assert!(took < Duration::from_secs(5), "{took:?}");
+    let (r, _) = run("f($$$A, a7, $$$B, a150, $$$C)", None);
+    assert_eq!((r.matched, r.warnings.len()), (1, 0));
+
+    // Back-references are part of the memo key, so they stay exact and fast too.
+    let (r, took) = run("f($X, $$$A, $$$B, $$$C, $$$D, $X)", None);
+    assert_eq!((r.matched, r.warnings.len()), (0, 0), "{:?}", r.warnings);
+    assert!(took < Duration::from_secs(5), "{took:?}");
+
+    // Repeated `$$$` groups defeat memoisation: past the per-node step budget the file
+    // is reported as incomplete (loudly) and is never rewritten.
+    let (r, took) = run("f($$$A, $$$B, $$$C, $$$A, $$$B, $$$C, a0)", Some("g()"));
+    assert!(
+        r.warnings.iter().any(|w| w.contains("too ambiguous")),
+        "{:?}",
+        r.warnings
+    );
+    assert!(r.diffs.is_empty());
+    assert_eq!(fs::read_to_string(root.join("x.py")).unwrap(), src);
+    assert!(took < Duration::from_secs(20), "{took:?}");
+}
