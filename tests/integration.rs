@@ -1736,25 +1736,30 @@ fn freshness_catches_preserved_mtime_and_racy_files() {
     index::sync(root, &idx_dir, &WalkOpts::default()).unwrap();
 
     // Same size, new content, mtime put back (what `cp -p`, `tar -x`, `touch -r` do):
-    // (mtime, size) look unchanged, but ctime/inode do not.
-    fs::write(&a, "omega_token\n").unwrap();
-    fs::File::options()
-        .write(true)
-        .open(&a)
-        .unwrap()
-        .set_modified(old_mtime)
-        .unwrap();
-    assert_eq!(fs::metadata(&a).unwrap().modified().unwrap(), old_mtime);
-    for q in ["\"omega_token\"", "\"alpha_token\""] {
-        let scan = search(q, &opts(root, IndexMode::Off));
-        let auto = search(q, &opts(root, IndexMode::Auto));
-        assert_eq_responses(&scan, &auto, &format!("preserved mtime ({q})"));
-    }
+    // (mtime, size) look unchanged, but ctime/inode do not. Windows exposes no ctime
+    // through std, so this is a documented Unix-only guarantee.
     #[cfg(unix)]
-    assert_eq!(
-        search("\"omega_token\"", &opts(root, IndexMode::Auto)).matched,
-        1
-    );
+    {
+        fs::write(&a, "omega_token\n").unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&a)
+            .unwrap()
+            .set_modified(old_mtime)
+            .unwrap();
+        assert_eq!(fs::metadata(&a).unwrap().modified().unwrap(), old_mtime);
+        for q in ["\"omega_token\"", "\"alpha_token\""] {
+            let scan = search(q, &opts(root, IndexMode::Off));
+            let auto = search(q, &opts(root, IndexMode::Auto));
+            assert_eq_responses(&scan, &auto, &format!("preserved mtime ({q})"));
+        }
+        assert_eq!(
+            search("\"omega_token\"", &opts(root, IndexMode::Auto)).matched,
+            1
+        );
+    }
+    #[cfg(not(unix))]
+    let _ = old_mtime;
 
     // A file written right before a sync is flagged racy and always rescanned.
     fs::write(root.join("b.txt"), "beta_token\n").unwrap();
@@ -2060,12 +2065,15 @@ fn fuzz_scan_equals_auto_equals_trust() {
                     let old = fs::metadata(p).unwrap().modified().unwrap();
                     let s = fs::read_to_string(p).unwrap().replace("alpha", "zqxjk");
                     fs::write(p, s).unwrap();
-                    fs::File::options()
-                        .write(true)
-                        .open(p)
-                        .unwrap()
-                        .set_modified(old)
-                        .unwrap();
+                    // Restoring mtime is only detectable where ctime exists (Unix).
+                    if cfg!(unix) {
+                        fs::File::options()
+                            .write(true)
+                            .open(p)
+                            .unwrap()
+                            .set_modified(old)
+                            .unwrap();
+                    }
                 }
                 _ => fs::remove_file(p).unwrap(),
             }

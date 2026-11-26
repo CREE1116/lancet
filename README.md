@@ -143,7 +143,7 @@ Reproducible via [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_com
 5. **Zero-copy `LANCET04` segments.** Opening the index reads a 40-byte header of an `mmap`'d file; lookups allocate nothing, and line numbers are computed only for byte spans that actually match.
 6. **LSM upkeep with bounded memory.** Changed files go to new immutable segments and old versions are tombstoned; tiered compaction merges small segments. Build buffers are reused across segments, keeping a Linux-kernel cold build near 350 MB.
 
-**Exactness guarantees.** Malformed queries, unknown flags, and unparseable patterns fail with exact diagnostics instead of a best guess. `--rewrite` and `edit` never touch a file without `--apply`, `--apply` refuses to combine with `--limit` (no partial rewrites), and `edit --rev` refuses to write over a file that changed since it was read.
+**Exactness guarantees.** Malformed queries, unknown flags, and unparseable patterns fail with exact diagnostics instead of a best guess. `--rewrite` and `edit` never touch a file without `--apply`, `--apply` refuses to combine with `--limit` (no partial rewrites), and `edit --rev` refuses to write over a file that changed since it was read. Freshness compares mtime, size, ctime and inode; Windows exposes no ctime or inode through the standard library, so there an edit that keeps the size *and* restores the old mtime is only caught by `lancet index` or `--no-index`.
 
 ---
 

@@ -74,7 +74,10 @@ pub fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("lancet_tmp");
-    let tmp = parent.join(format!(".{name}.lancet-tmp.{}", std::process::id()));
+    // Unique per write: concurrent writers (threads included) never share a temp file.
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = parent.join(format!(".{name}.lancet-tmp.{}.{seq}", std::process::id()));
     fs::write(&tmp, data)?;
     let _ = fs::set_permissions(&tmp, perms);
     if let Err(e) = fs::rename(&tmp, path) {
@@ -259,10 +262,49 @@ fn same_file(f: &File, path: &Path) -> bool {
     }
 }
 
-#[cfg(not(unix))]
+/// Windows also lets a writer rename over a file we hold open (Rust opens files
+/// with FILE_SHARE_DELETE), so compare volume serial + file index like inodes.
+#[cfg(windows)]
+fn same_file(f: &File, path: &Path) -> bool {
+    use std::ffi::c_void;
+    use std::os::windows::io::AsRawHandle;
+
+    #[repr(C)]
+    #[derive(Default)]
+    struct ByHandleFileInformation {
+        attributes: u32,
+        creation_time: [u32; 2],
+        last_access_time: [u32; 2],
+        last_write_time: [u32; 2],
+        volume_serial_number: u32,
+        file_size_high: u32,
+        file_size_low: u32,
+        number_of_links: u32,
+        file_index_high: u32,
+        file_index_low: u32,
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetFileInformationByHandle(h: *mut c_void, info: *mut ByHandleFileInformation) -> i32;
+    }
+    let id = |file: &File| {
+        let mut info = ByHandleFileInformation::default();
+        // SAFETY: valid open handle and a correctly laid out out-parameter.
+        let ok = unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut info) };
+        (ok != 0).then_some((
+            info.volume_serial_number,
+            info.file_index_high,
+            info.file_index_low,
+        ))
+    };
+    match File::open(path) {
+        Ok(current) => matches!((id(f), id(&current)), (Some(a), Some(b)) if a == b),
+        Err(_) => false,
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
 fn same_file(_: &File, _: &Path) -> bool {
-    // Windows refuses to rename over a file another handle has open, so the
-    // file cannot be swapped under our lock.
     true
 }
 
