@@ -47,7 +47,8 @@ Lancet은 `rg` + `fd` + `ast-grep` + `cat` + `pdftotext`로 이어지던 도구 
 
 ```bash
 # macOS / Linux (Homebrew)
-brew install --HEAD CREE1116/lancet/lancet   # (v0.1.0 태그 릴리스 후에는 --HEAD 불필요)
+brew tap CREE1116/lancet https://github.com/CREE1116/lancet
+brew install CREE1116/lancet/lancet   # 사전 빌드 바이너리, tap에는 저장소 URL 필요
 
 # macOS / Linux (빌드 없는 원라인 설치 스크립트)
 curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh
@@ -243,7 +244,7 @@ lancet이 **이기지 못하는** 곳: 리터럴 없는 정규식(인덱스가 �
 
 ```bash
 # 프리빌트 바이너리 (Rust 설치 불필요)
-brew tap CREE1116/lancet https://github.com/CREE1116/lancet && brew install --HEAD CREE1116/lancet/lancet
+brew tap CREE1116/lancet https://github.com/CREE1116/lancet && brew install CREE1116/lancet/lancet
 curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh     # macOS / Linux
 irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex         # Windows x64
 cargo binstall --git https://github.com/CREE1116/lancet lancet                       # cargo-binstall (태그 릴리스 기준)

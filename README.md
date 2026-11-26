@@ -47,7 +47,8 @@ Traditional CLI tools assume a human is stitching them together; Lancet is desig
 
 ```bash
 # macOS / Linux (Homebrew)
-brew install --HEAD CREE1116/lancet/lancet   # (drops --HEAD once v0.1.0 is tagged)
+brew tap CREE1116/lancet https://github.com/CREE1116/lancet
+brew install CREE1116/lancet/lancet   # prebuilt binary; tap needs the repo URL
 
 # macOS / Linux (prebuilt release installer, no Rust required)
 curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh
@@ -243,7 +244,7 @@ Drop [`docs/agent-instructions.md`](./docs/agent-instructions.md) into your `AGE
 
 ```bash
 # Prebuilt binaries (no Rust toolchain required)
-brew tap CREE1116/lancet https://github.com/CREE1116/lancet && brew install --HEAD CREE1116/lancet/lancet
+brew tap CREE1116/lancet https://github.com/CREE1116/lancet && brew install CREE1116/lancet/lancet
 curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh     # macOS / Linux
 irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex         # Windows x64
 cargo binstall --git https://github.com/CREE1116/lancet lancet                       # cargo-binstall (from tagged releases)
