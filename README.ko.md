@@ -1,126 +1,167 @@
+<div align="center">
+
 # Lancet (란셋)
+
+**코드와 문서를 찾고, 읽고, 고치는 일을 — 하나의 좌표계 위에서, 인덱스 속도로.**
 
 [![CI](https://github.com/CREE1116/lancet/actions/workflows/ci.yml/badge.svg)](https://github.com/CREE1116/lancet/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#라이선스)
 
-**AI 에이전트와 개발자를 위한 초정밀 코드·AST·복합 문서 탐색, 열람, 리팩터링 단일 CLI.**
+[English](./README.md) · [쿼리 문법](./docs/grammar.md) · [에이전트 지침](./docs/agent-instructions.md) · [벤치마크](#벤치마크)
 
-[English README](./README.md) · [쿼리 문법 명세 (LQL)](./docs/grammar.md) · [에이전트 지침 (`AGENTS.md`)](./docs/agent-instructions.md)
+</div>
 
----
+<p align="center">
+  <img src="docs/assets/bench-linux.svg" width="100%" alt="Linux 커널(파일 86,218개)에서 lancet은 텍스트 쿼리를 항상 최신인 auto 모드로 ripgrep보다 6–10배, --trust-index로 12–223배 빠르게 처리하고, AST 패턴은 ast-grep보다 5배, 파일 목록은 fd보다 4배 빠릅니다.">
+</p>
 
-## 왜 Lancet인가?
+Lancet은 `rg` + `fd` + `ast-grep` + `cat` + `pdftotext`로 이어지던 도구 사슬을 **인덱스와 좌표계를 공유하는** 단일 Rust 바이너리 하나로 바꿉니다. 파일 탐색, 텍스트·구문 검색, 정확한 범위·심볼 열람, 코드 리라이트까지 — 소스 코드든 PDF든 엑셀이든 한글(HWP) 문서든 압축 파일이든 똑같이 동작합니다.
 
-기존 워크플로에서는 텍스트 검색(`rg`), 파일 탐색(`fd`), 구문 구조 리팩터링(`ast-grep`), 문서 변환(`pdftotext`, `pandoc`, `unzip`)이 모두 따로 놀며 인덱스·줄 번호·토큰 예산을 공유하지 못합니다. 특히 한국어 업무 환경의 `.hwp`(5.0 OLE)·`.hwpx`나 `.xlsx`, `.pdf`, `.zip` 내부 로그는 검색 후에도 에이전트가 곧바로 열람하기 어렵습니다.
-
-**Lancet**은 **"탐색(fd/outline) → 검색(search/refs) → 정밀 열람(read) → 안전 리팩터링(ast)"** 전 과정을 순수 Rust 단일 바이너리와 선택적 제로카피 트라이그램 인덱스(`.lancet`) 하나로 통합합니다.
-
-- **`lancet <QUERY>`** — 불리언(`AND`, `OR`, `NOT`), 단어 근접도(`near`, `before`), 레벤슈타인 오타 허용 `fuzzy("단어", k)`, 정규식, Tree-sitter 함수/심볼 범위(`in function`, `symbol(...)`), 토큰 예산(`| budget tokens:1500`) 지원.
-- **`lancet fd`** — `.gitignore` 자동 인식 고속 파일·폴더 탐색, `--tree` 디렉터리 트리, `--trust-index` mmap 즉시 조회.
-- **`lancet ast`** — Rust, Python, JS, TS, TSX, Go 대상 구조적 AST 검색 및 안전한 `--rewrite` / `--apply` 리팩터링 (트라이그램 인덱스 + SIMD 프리필터 자동 가속).
-- **`lancet read`** — 검색 결과와 **1:1로 일치하는 줄 번호** 기반 범위 읽기, 심볼 선언 단위 읽기(`--symbol`), PDF/PPTX 페이지(`--page`), 엑셀 시트·행·열(`--sheet`, `--rows`, `--cols`), 압축파일 내부 항목(`archive.zip!file.log`) 직접 읽기.
-- **`lancet outline`** — 코드 심볼 골격, Markdown 헤딩 목차, 엑셀 시트 스키마, 압축 아카이브 엔트리 요약 추출.
-- **`lancet refs`** — 주석·문자열 리터럴을 자동 배제한 고속 AST 심볼 정의(`[def]`) 및 참조(`[ref]`) 위치 추적.
-- **무결성 보장 (`Scan == Auto`)** — 인덱스는 후보 파일만 좁히고 동일한 평가기로 검증하며, 변경된 파일(`mtime + size`)은 자동으로 재스캔하므로 결과가 절대 오래되지 않습니다.
+AI 코딩 에이전트와 그 옆에서 일하는 개발자를 위해 만들었습니다. 구조화된 JSON, 토큰 예산 하드 캡, 그리고 **조용한 근사치 없음**.
 
 ---
 
-## 기성 도구 대비 벤치마크 실측 (Apple M4 Pro, 12코어, 24 GB RAM)
+## 두 가지 핵심
 
-[`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_competitors.py`](./bench/bench_competitors.py), [`bench/official_suite.sh`](./bench/official_suite.sh)로 재현 가능합니다.
-코드 코퍼스: `28,352`개 파일 (`452.6 MiB`). 초기 인덱스 빌드 **`1.17초`** (`36.3 MiB`, 원본 대비 **`8.0%`**), 변경 없을 때 증분 동기화 **`64.6 ms`**.
+### 1 · 인덱스 속도, 그러나 오래된 결과는 절대 없음
 
-### 1. 코드·불리언·근접·퍼지 검색 (`lancet` vs `ripgrep 15.2.0`)
+<p align="center"><img src="docs/assets/pipeline.svg" width="100%" alt="쿼리는 필수 트라이그램으로 컴파일되어 인덱스에서 교집합되고, 인덱싱 이후 바뀐 파일은 즉시 스캔되며, 모든 후보는 풀스캔과 같은 평가기로 검증됩니다: 파일 86,218개 중 7,814개만 열어 7,073개 매치."></p>
 
-| 쿼리 (`28,352` 파일) | `rg 15.2` | `lancet` (scan) | `lancet` (auto 인덱스) | `lancet` (`--trust-index`) |
+- 인덱스는 **열지 않을 파일만 정합니다.** 모든 후보를 풀스캔과 같은 평가기로 검증하므로 결과가 풀스캔과 "대체로"가 아니라 정확히 같습니다.
+- 마지막 `lancet index` 이후 수정된 파일은 `(mtime, size)`로 감지해 그 자리에서 스캔합니다. **감시 데몬도, 재인덱싱 단계도, 오래된 결과도 없습니다.**
+- 신선도를 포기하고 속도를 원할 때는 명시적으로 선택합니다: `--trust-index`는 인덱스만 보고 답합니다(Linux 커널에서 5–90 ms).
+
+### 2 · 하나의 좌표계: 찾기 → 읽기 → 고치기
+
+<p align="center"><img src="docs/assets/coordinates.svg" width="100%" alt="검색 결과, 읽기 범위, 심볼, AST 리라이트가 같은 경로·줄·구간을 공유하고, 수정된 파일은 다음 쿼리에서 자동으로 다시 스캔됩니다."></p>
+
+- 검색 결과의 42번째 줄은 `lancet read`에서도 42번째 줄입니다. `.pdf`, `.xlsx`, `.hwp`, `bundle.zip!node.log` 안에서도 마찬가지입니다. 검색과 열람이 **같은 인프로세스 추출 파이프라인**을 쓰기 때문입니다.
+- `read --symbol`, `outline`, `refs`, `ast`가 모두 같은 Tree-sitter 구간을 쓰므로, 에이전트가 함수 끝 줄을 추측할 일이 없습니다.
+- 리라이트는 기본이 dry-run diff이고 `--apply`로 원자적으로 반영됩니다. 다음 쿼리는 이미 바뀐 내용을 봅니다.
+
+---
+
+## 빠른 시작
+
+```bash
+cargo install --git https://github.com/CREE1116/lancet      # Rust 1.88+
+lancet index .                                              # 선택: .lancet 인덱스를 한 번 빌드
+```
+
+```bash
+lancet fd --tree --max-depth 2 .                            # 구조 파악
+lancet 'near("gradient", "clip", 30) in function' src       # 검색: 불리언·근접·퍼지·AST 범위
+lancet read src/search.rs --symbol execute_one              # 심볼 하나를 문서 주석까지 정확히 읽기
+lancet refs SearchOptions src                               # 정의 + 참조 (주석·문자열 제외)
+lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'      # 구조적 리라이트 미리보기 …
+lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply   # … 원자적으로 반영
+```
+
+## 명령어
+
+| 명령 | 하는 일 |
+|---|---|
+| `lancet <QUERY> [PATH]` | `AND` / `OR` / `NOT`, `near` / `before`, `fuzzy("단어", k)`, `regex(...)`, `in function`, `symbol(...)`, `\| expand parent \| limit 5 \| budget tokens:1500` 같은 파이프 — [쿼리 문법](./docs/grammar.md) 참고 |
+| `lancet fd` | `.gitignore` 인식 파일·폴더 탐색, `--tree`, 크기·수정 시각 필터, `--trust-index` 조회 |
+| `lancet ast` | **24개 언어** Tree-sitter 구조 검색과 `--rewrite` (`$X`, `$_`, `$$$ARGS`) |
+| `lancet read` | 정확한 줄 범위, `--symbol`, PDF/PPTX `--page`, 엑셀 `--sheet --rows --cols`, `archive.zip!항목`, 이어읽기 커서가 있는 `--budget-tokens` |
+| `lancet outline` | 코드 선언 골격, Markdown 목차, 워크북 스키마, 압축 파일 목록 |
+| `lancet refs` | 주석·문자열 리터럴을 건너뛰는 인덱스 가속 `[def]` / `[ref]` 추적 |
+| `lancet batch` | 여러 쿼리를 인덱스 한 번 열고 디렉터리 한 번 훑어 처리 |
+| `lancet index` · `status` · `explain` | 인덱스 빌드·갱신, 상태 확인, 쿼리에 필요한 트라이그램 보기 |
+
+**AST 언어:** Rust, Python, JavaScript, TypeScript, TSX, Go, C, C++, Zig, Java, C#, Kotlin, Scala, Swift, Ruby, PHP, Bash, Lua, HCL, HTML, CSS, JSON, YAML, TOML.
+**문서·압축 파일** (기본 `adapters` 기능): `.pdf`, `.docx`, `.pptx`, `.odt`, `.hwp` (5.0), `.hwpx`, `.epub`, `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.ods`, `.zip`, `.tar`, `.gz`, `.tgz` — 16 MiB 폭탄 방어 상한 안에서 프로세스 내부 추출, `--ocr`은 선택.
+
+---
+
+## 벤치마크
+
+맨 위 차트는 Apple M4 Pro에서 잰 Linux 커널 v6.12(파일 86,218개, 1.4 GB) 결과입니다. [`bench/scale_bench.py`](./bench/scale_bench.py)로 재현하고 [`bench/readme_figures.py`](./bench/readme_figures.py)로 다시 그릴 수 있습니다. 인덱스 없는 `scan` 모드에서는 텍스트 검색이 ripgrep과 같은 속도이고, 배수는 인덱스에서 나옵니다.
+
+<details>
+<summary><b>크레이트 소스 코퍼스 (파일 28,352개, 452.6 MiB) — 검색·탐색·AST·문서</b></summary>
+
+[`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_competitors.py`](./bench/bench_competitors.py), [`bench/official_suite.sh`](./bench/official_suite.sh)로 재현합니다. 콜드 인덱스 빌드 **1.17초** (36.3 MiB, 원본의 8.0%), 변경 없는 동기화 **64.6 ms**.
+
+**텍스트 검색** (`lancet` vs `ripgrep 15.2.0`)
+
+| 쿼리 | `rg` | lancet scan | lancet auto | lancet `--trust-index` |
 |---|---:|---:|---:|---:|
 | 희귀 리터럴 (`ThreadPoolBuilder`, 32건) | 307.7 ms | 310.6 ms | **60.5 ms (5.1×)** | **5.1 ms (60.3×)** |
 | 일반 리터럴 (`unwrap_or_else`, 582건) | 311.3 ms | 314.6 ms | **65.4 ms (4.8×)** | **13.0 ms (23.9×)** |
-| 불리언 (`"unsafe" AND "transmute" NOT "miri"`) | 469.8 ms | **304.8 ms** | **62.6 ms (7.5×)** | **10.1 ms (46.5×)** |
+| 불리언 (`"unsafe" AND "transmute" NOT "miri"`) | 469.8 ms¹ | **304.8 ms** | **62.6 ms (7.5×)** | **10.1 ms (46.5×)** |
 | 정규식 (`pub unsafe fn \w+\(`) | 307.4 ms | 317.9 ms | **80.5 ms (3.8×)** | **26.9 ms (11.4×)** |
 | 근접 (`near("unsafe", "transmute", 15)`) | *미지원* | 307.1 ms | **65.9 ms** | **13.6 ms** |
-| 오타 허용 (`fuzzy("transmte", 1)`) | *미지원* | 334.7 ms | **156.7 ms** | **107.4 ms** |
-| 6개 쿼리 공유 배치 (`lancet batch`) | ~1,850 ms | 1,570.6 ms | **93.1 ms** | **30.7 ms (쿼리당 5.1 ms)** |
+| 오타 퍼지 (`fuzzy("transmte", 1)`) | *미지원* | 334.7 ms | **156.7 ms** | **107.4 ms** |
+| 6개 쿼리 일괄 (`lancet batch`) | ~1,850 ms | 1,570.6 ms | **93.1 ms** | **30.7 ms (쿼리당 5.1 ms)** |
 
-### 2. 파일·폴더 탐색 (`lancet fd` vs `fd 10.5.2` vs `rg --files` vs `find`)
+*¹ `rg`는 파일 단위 `AND`에 두 번의 패스가 필요합니다.*
 
-| 작업 (`28,352` 파일) | `find` | `rg --files` | `fd 10.5` | `lancet fd` (scan) | `lancet fd --trust-index` |
+**파일 탐색** (`lancet fd` vs `fd 10.5.2`, `rg --files`, `find`)
+
+| 작업 | `find` | `rg --files` | `fd` | lancet fd | lancet fd `--trust-index` |
 |---|---:|---:|---:|---:|---:|
-| 전체 파일 나열 (`28,352`개) | 176.0 ms | 47.5 ms | 49.8 ms | 60.6 ms | **14.4 ms (fd 대비 3.5×)** |
-| 확장자 + 이름 (`-e toml -p Cargo`) | — | — | 47.1 ms | 52.1 ms | **6.6 ms (fd 대비 7.1×)** |
-| 용량 필터 (`>= 100 KiB`, 637개) | 169.1 ms | — | 65.4 ms | **53.3 ms** | **5.6 ms (fd 대비 11.7×)** |
+| 전체 파일 목록 (28,352) | 176.0 ms | 47.5 ms | 49.8 ms | 60.6 ms | **14.4 ms (3.5×)** |
+| 확장자 + 이름 (`-e toml -p Cargo`) | — | — | 47.1 ms | 52.1 ms | **6.6 ms (7.1×)** |
+| 크기 필터 (≥ 100 KiB, 637개) | 169.1 ms | — | 65.4 ms | **53.3 ms** | **5.6 ms (11.7×)** |
 
-### 3. 구조적 AST 검색 (`lancet ast` vs `ast-grep 0.51.3`)
+**구조 검색** (`lancet ast` vs `ast-grep 0.51.3`)
 
-| Rust AST 패턴 (`28,352` 파일) | `ast-grep 0.51` | `lancet ast` (scan) | `lancet ast` (auto 인덱스) | `lancet ast` (`--trust-index`) |
+| Rust 패턴 | `ast-grep` | lancet scan | lancet auto | lancet `--trust-index` |
 |---|---:|---:|---:|---:|
 | `std::mem::transmute($X)` (19건) | 1,764.7 ms | **251.1 ms (7.0×)** | **176.6 ms (10.0×)** | **95.3 ms (18.5×)** |
 | `$X.unwrap_or_else($F)` (963건) | 1,649.2 ms | **268.6 ms (6.1×)** | **245.7 ms (6.7×)** | **153.0 ms (10.8×)** |
 | `unreachable!($$$ARGS)` (1,893건) | 1,782.2 ms | **484.8 ms (3.7×)** | **526.7 ms (3.4×)** | **343.3 ms (5.2×)** |
 | `ThreadPoolBuilder::new()` (75건) | 1,716.7 ms | **241.5 ms (7.1×)** | **65.2 ms (26.3×)** | **13.9 ms (123.5×)** |
 
-### 4. 복합 문서·압축파일 검색 (`lancet` vs `ripgrep-all 0.10.10`, 120개 문서)
+**문서·압축 파일** (`lancet` vs `ripgrep-all 0.10.10`, 혼합 파일 120개)
 
-| 문서 형식 및 검색어 | `rga` (cold) | `rga` (zstd 캐시) | `lancet` (scan) | `lancet` (auto) | `lancet` (`--trust-index`) |
+| 형식·쿼리 | `rga` 콜드 | `rga` 캐시 | lancet scan | lancet auto | lancet `--trust-index` |
 |---|---:|---:|---:|---:|---:|
 | PDF (`QUARTERLY_REVENUE_ANOMALY`) | 263.5 ms | 67.3 ms | **10.6 ms** | **6.9 ms** | **3.4 ms** |
 | DOCX (`SLA_INDEMNITY_CLAUSE`) | 262.0 ms | 67.5 ms | **10.7 ms** | **7.6 ms** | **4.1 ms** |
-| XLSX (`H100_CLUSTER_CAPEX`) | *0건 (미지원)* | *0건* | **11.3 ms** | **7.5 ms** | **3.6 ms** |
-| ZIP 내부 로그 (`RAFT_QUORUM_STALL`) | 274.8 ms | 67.3 ms | **12.2 ms** | **7.1 ms** | **3.5 ms** |
-| 한글 HWPX (`국가클라우드보안인증검토`) | *0건 (미지원)* | *0건* | **11.2 ms** | **8.1 ms** | **3.7 ms** |
+| XLSX (`H100_CLUSTER_CAPEX`) | *0건* | *0건* | **11.3 ms** | **7.5 ms** | **3.6 ms** |
+| ZIP 로그 (`RAFT_QUORUM_STALL`) | 274.8 ms | 67.3 ms | **12.2 ms** | **7.1 ms** | **3.5 ms** |
+| HWPX (`국가클라우드보안인증검토`) | *0건* | *0건* | **11.2 ms** | **8.1 ms** | **3.7 ms** |
+
+</details>
 
 ---
 
-## 설치 및 빠른 사용법
+## 인덱스는 어떻게 동작하나
+
+<p align="center"><img src="docs/assets/index-lifecycle.svg" width="100%" alt="작업 트리를 mtime과 크기로 비교하고, 새 파일은 불변 mmap 세그먼트에 쓰며 이전 버전은 툼스톤으로 표시하고, 작은 세그먼트는 계층형 컴팩션으로 합칩니다. Linux: 콜드 빌드 4.2초, 피크 메모리 약 350 MB, 인덱스 140 MB, 변경 없는 동기화 110 ms."></p>
+
+1. **보수적인 트라이그램 하한.** 쿼리와 정규식 HIR을 모든 매치가 반드시 만족하는 트라이그램 불리언 식(`Req`)으로 컴파일합니다. 포스팅 리스트는 가장 드문 것부터 교집합하고, 파일의 85% 이상에 나오는 트라이그램은 건너뜁니다. 식이 보수적이라 인덱스는 후보를 줄일 뿐 매치를 놓치지 않습니다.
+2. **인덱스 위의 퍼지 검색.** q-gram 보조정리에 따라 트라이그램이 `|G|`개인 단어는 편집 거리 `k` 안에서 최소 `|G| − 3k`개(한글 음절은 `|G| − k`개)를 유지하므로, `fuzzy(...)`도 풀스캔 대신 `k`-of-`n` 포스팅 집계로 처리합니다.
+3. **3단 AST 매칭.** 패턴의 식별자 리터럴로 (a) 인덱스에서 파일을 거르고, (b) SIMD `memmem` 검사를 통과한 파일만 Tree-sitter로 파싱하고, (c) 리터럴이 없는 서브트리는 아예 건너뛴 뒤, 미리 컴파일한 `u16 kind_id` 패턴 트리로 매칭합니다.
+4. **유니코드 대소문자 궤도.** 대소문자 동치 문자(`k`, `K`, 켈빈 `K`)를 인덱스와 평가기 모두에서 하나의 대표 문자로 접고, ASCII 리터럴은 정규식 오토마타 대신 `memchr2` 양방향 대소문자 스캔을 씁니다.
+5. **제로카피 `LANCET03` 세그먼트.** 인덱스를 열 때는 `mmap`한 파일의 40바이트 헤더만 읽습니다. 조회는 할당이 없고, 줄 번호는 실제로 매치된 구간에서만 계산합니다.
+6. **메모리가 묶인 LSM 유지보수.** 바뀐 파일은 새 불변 세그먼트로 가고 이전 버전은 툼스톤 처리되며, 계층형 컴팩션이 작은 세그먼트를 합칩니다. 빌드 버퍼를 세그먼트 사이에 재사용해 Linux 커널 콜드 빌드도 350 MB 안팎에 머뭅니다.
+
+**정확성 보장.** 잘못된 쿼리, 모르는 플래그, 파싱할 수 없는 패턴은 추측하지 않고 정확한 진단과 함께 실패합니다. `--rewrite`는 `--apply` 없이 파일을 건드리지 않고, `--apply`는 `--limit`과 함께 쓸 수 없습니다(부분 리라이트 방지).
+
+---
+
+## 왜 `cat`, `sed`, 기본 `Read` 대신 `lancet read`인가?
+
+- **모든 형식에서 검색과 같은 줄 번호** — PDF, 오피스 문서, HWP, 압축 파일 내부 항목까지.
+- **의미 단위 절개** — `--symbol`, `--page`, `--sheet --rows --cols`로 원하는 단위만 한 번에.
+- **토큰 예산 하드 캡** — `--budget-tokens 800`은 경계에서 멈추고 이어 읽을 `next_line`을 돌려줍니다.
+- **임시 파일·외부 변환기 없음** — 16 MiB 추출 상한 안에서 컨테이너를 메모리에서 바로 엽니다.
+
+## AI 에이전트와 함께 쓰기
+
+[`docs/agent-instructions.md`](./docs/agent-instructions.md)를 `AGENTS.md`, `CLAUDE.md`, 시스템 규칙에 넣으세요. 에이전트가 여러 도구를 엮은 셸 명령 대신 구조화되고 토큰 예산이 걸린 `lancet` 호출을 쓰게 됩니다.
+
+## 설치 옵션
 
 ```bash
-# 빌드 및 설치 (Rust 1.88 이상)
-cargo install --git https://github.com/CREE1116/lancet
-
-# 1. 작업 공간 구조 및 파일 골격 파악
-lancet fd --tree --max-depth 2 .
-lancet outline src/search.rs
-
-# 2. 인덱스 생성 및 코드·문서 통합 검색
-lancet index .
-lancet 'near("gradient", "clip", 30) in function | expand parent' src
-lancet '("위약금" AND "통지") in type:document'
-
-# 3. 함수 단위 / PDF 페이지 / 엑셀 시트 / ZIP 내부 파일 직접 읽기
-lancet read src/search.rs --symbol execute_one
-lancet read report.pdf --page 2:3
-lancet read budget.xlsx --sheet 1 --rows 1:20 --cols A:D
-lancet read logs.zip!node_0.log --lines 1:40
-
-# 4. 심볼 정의·참조 추적 및 안전한 AST 일괄 리팩터링
-lancet refs SearchOptions src
-lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'          # Dry-run diff 미리보기
-lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply  # 원자적 반영
+cargo install --git https://github.com/CREE1116/lancet                          # 전체 빌드
+cargo install --git https://github.com/CREE1116/lancet --no-default-features    # 텍스트·코드 전용: Tree-sitter, 문서 어댑터 제외
 ```
-
----
-
-## 왜 `cat` / `sed` / 기본 `Read` 대신 `lancet read`인가?
-
-`lancet read`는 단순 텍스트 출력기가 아니라 **검색 엔진과 좌표계를 공유하는 컨텍스트 메스(Context Scalpel)** 입니다.
-
-1. **검색 좌표 ↔ 열람 좌표의 1:1 동형성 (Coordinate Isomorphism)**: 기존 워크플로에서는 `.pdf`, `.docx`, `.xlsx`, `.hwp`/`.hwpx`, `.zip` 내부에서 "42번째 줄 히트"를 찾아도 기본 `Read`/`cat`으로는 바이너리를 읽지 못하거나, 다른 외부 파서를 거치며 줄 번호가 어긋납니다. `lancet read`는 검색기와 **완전히 동일한 인프로세스 추출 파이프라인**을 공유하므로 검색이 가리킨 42번째 줄이 어떤 포맷에서든 정확히 같은 42번째 줄입니다.
-2. **줄 번호 추측 없는 의미 단위 절개 (`--symbol`, `--page`, `--sheet`)**: 함수 끝 줄을 몰라 100줄씩 여러 번 읽는 왕복 낭비 없이, `lancet read src/search.rs --symbol execute_one` 한 번으로 해당 심볼의 시작~끝(상단 `///` 문서 주석·어트리뷰트 포함)만 정확히 도려냅니다.
-3. **토큰 예산 하드 캡 및 이어읽기 커서 (`--budget-tokens`)**: 미니파이된 번들이나 거대 로그가 컨텍스트 창을 터뜨리지 않도록 토큰 예산 내에서 안전하게 끊고 다음 재개 위치(`next_line`)를 반환합니다.
-4. **무임시파일·무설치 컨테이너 투과**: `/tmp` 압축 해제나 `pandoc`/`libreoffice` 없이 `16 MiB` 폭탄 방어 상한 안에서 PDF 페이지, 엑셀 행·열(`--rows 1:30 --cols A:D`), `logs.zip!node_0.log`를 메모리에서 바로 읽습니다.
-
----
-
-## 핵심 알고리즘 (5대 기술 기둥)
-
-1. **보수적 트라이그램 하한 유도 & 무데몬 무결성 (`Scan == Auto`)**: 쿼리 식과 정규식 HIR에서 매칭 파일이 반드시 포함해야 하는 트라이그램 수식(`Req`)만 보수적으로 유도하고 최소 빈도(`peek_count`) 포스팅부터 교집합합니다. 디스크 `(mtime_ns, size)`가 바뀐 파일만 실시간 스캔에 합류시키고 모든 후보를 동일한 평가기로 검증하므로, **백그라운드 감시 데몬(`watch`) 없이도 `rg` 대비 5~60배 빠르면서 풀스캔과 100% 동일한 결과**를 보장합니다.
-2. **q-gram 임계 보조정리 기반 인덱스 퍼지 검색**: 편집 거리 `k` 이내의 단어는 최대 `3k`개의 ASCII 트라이그램(3바이트 한글 음절은 `k`개)만 깨진다는 보조정리(`min = |G| - 3k`)로 `Req::AtLeast` `k`-of-`n` 포스팅 누산을 수행해 오타 검색도 인덱스로 가속합니다.
-3. **3단 하이브리드 AST 매칭 (`Trigram Index` → `SIMD memmem` → `u16 kind_id` 패턴 트리)**: 패턴 AST에서 불변 식별자 리터럴을 추출해 ① 인덱스로 파일 오픈 생략, ② 스캔 모드에서도 SIMD `memmem`으로 무관한 파일의 Tree-sitter 파싱 생략, ③ 사전 컴파일된 `u16 kind_id` 정수 트리와 스레드별 파서 캐싱으로 순회하여 **`ast-grep` 대비 무인덱스 7배, 인덱스 최대 123배** 가속을 달성합니다.
-4. **유니코드 동치 궤도 폴딩(Case-Orbit) + SIMD 2-바이트 스캔**: 유니코드 대소문자 동치류(`'k'`, `'K'`, `'K' U+212A`)를 대표 문자로 정규화하되, ASCII 리터럴은 정규식 오토마타 대신 `memchr2` 벡터 명령으로 고속 스캔합니다.
-5. **제로힙 `LANCET03` 세그먼트 & 지연 줄 번호 계산 (`LineMode::HitsOnly`)**: 40바이트 헤더만 확인하는 `O(1)` 제로카피 `mmap` 세그먼트(원본의 `~8%`)를 사용하며, 전체 줄바꿈 오프셋 배열을 미리 할당하지 않고 실제 매치 구간에서만 SIMD로 줄 번호를 역산합니다.
-
----
 
 ## 라이선스
 
-MIT ([LICENSE-MIT](./LICENSE-MIT)) 또는 Apache-2.0 ([LICENSE-APACHE](./LICENSE-APACHE)) 듀얼 라이선스를 따릅니다.
+[Apache License 2.0](./LICENSE-APACHE) 또는 [MIT](./LICENSE-MIT) 중 원하는 쪽을 선택하는 듀얼 라이선스입니다.

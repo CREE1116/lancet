@@ -1,38 +1,92 @@
+<div align="center">
+
 # Lancet
+
+**Find, read, and change code and documents — on one coordinate system, at index speed.**
 
 [![CI](https://github.com/CREE1116/lancet/actions/workflows/ci.yml/badge.svg)](https://github.com/CREE1116/lancet/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-**Surgical code, AST, and multi-format document search, inspection, and refactoring CLI for AI agents and developers.**
+[한국어](./README.ko.md) · [Query language](./docs/grammar.md) · [Agent instructions](./docs/agent-instructions.md) · [Benchmarks](#benchmarks)
 
-[한국어 문서 (Korean README)](./README.ko.md) · [Query Language Spec](./docs/grammar.md) · [Agent Instructions (`AGENTS.md`)](./docs/agent-instructions.md)
+</div>
 
----
+<p align="center">
+  <img src="docs/assets/bench-linux.svg" width="100%" alt="On the Linux kernel (86,218 files), lancet answers text queries 6–10× faster than ripgrep in always-fresh auto mode and 12–223× faster with --trust-index; AST patterns run 5× faster than ast-grep and file listings 4× faster than fd.">
+</p>
 
-## Why Lancet?
+Lancet is a single Rust binary that replaces the `rg` + `fd` + `ast-grep` + `cat` + `pdftotext` chain with one tool that **shares an index and a coordinate system** across every step: discover files, search text and syntax, read exact ranges and symbols, and rewrite code — in source files, PDFs, spreadsheets, Korean HWP documents, and archives alike.
 
-AI coding agents and developers routinely juggle four disconnected tools — `rg` for text, `fd` for files, `ast-grep` for syntax-aware refactoring, and external extractors (`pdftotext`, `pandoc`, `unzip`) for binary documents — none of which share an index, line numbering, or token budgets.
-
-**Lancet** unifies the entire **"discover → search → inspect → refactor"** loop into a single deterministic Rust binary backed by an optional zero-copy `.lancet` trigram index:
-
-- **`lancet <QUERY>`** — Boolean (`AND`, `OR`, `NOT`), word-proximity (`near`, `before`), typo-tolerant Levenshtein `fuzzy("term", k)`, multi-line `regex(...)`, and tree-sitter `in function` / `symbol(...)` search with strict token budgeting (`| budget tokens:1500`).
-- **`lancet fd`** — `.gitignore`-aware file & folder explorer with `--tree`, size/recency filters, and sub-millisecond mmap `--trust-index` lookup.
-- **`lancet ast`** — Tree-sitter structural search and atomic `--rewrite` refactoring (`$VAR`, `$_`, `$$$ARGS`) across Rust, Python, JS, TS, TSX, and Go — accelerated by automatic trigram candidate pruning.
-- **`lancet read`** — Surgical reader for exact line ranges, AST symbols (`--symbol`), PDF/PPTX pages (`--page`), spreadsheet slices (`--sheet`, `--rows`, `--cols`), and archive entries (`archive.zip!file.log`), sharing **1-to-1 line parity** with search hits.
-- **`lancet outline`** — Instant declaration skeletons for source code, heading hierarchies for Markdown, sheet schemas for Excel/ODS, and entry manifests for ZIP/TAR archives.
-- **`lancet refs`** — Index-accelerated lexical AST `[def]` + `[ref]` lookup that automatically ignores comments and string literals.
-- **Zero-Stale Guarantee (`Scan == Auto`)** — Every indexed candidate is verified by the exact scan evaluator, and files modified since indexing (`mtime + size`) are re-scanned automatically. Indexed results are **mathematically identical** to a full scan.
+It is built for AI coding agents and the developers working beside them: structured JSON, hard token budgets, and **no silent approximations**.
 
 ---
 
-## Benchmarks (Apple M4 Pro, 12-core, 24 GB RAM)
+## Two ideas
 
-Reproducible via [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_competitors.py`](./bench/bench_competitors.py), and [`bench/official_suite.sh`](./bench/official_suite.sh).
-Code corpus: `28,352` files (`452.6 MiB` local Cargo crate sources). Cold index build: **`1.17 s`** (`36.3 MiB`, **`8.0%`** of corpus size); incremental no-op sync: **`64.6 ms`**.
+### 1 · Index speed, never a stale result
 
-### 1. Code & Boolean/Proximity Search (`lancet` vs `ripgrep 15.2.0`)
+<p align="center"><img src="docs/assets/pipeline.svg" width="100%" alt="A query compiles to required trigrams, is intersected over the index, files changed since indexing are scanned live, and every candidate is verified by the full-scan evaluator: 86,218 files, 7,814 opened, 7,073 matches."></p>
 
-| Query (`28,352` files, `452.6 MiB`) | `rg 15.2` | `lancet` (scan) | `lancet` (auto index) | `lancet` (`--trust-index`) |
+- The index **only decides what not to open.** Every candidate is checked by the same evaluator a full scan uses, so indexed results are identical to a scan — not "usually the same".
+- Files edited since the last `lancet index` are detected by `(mtime, size)` and scanned live. **No watcher daemon, no reindex step, no stale hits.**
+- When you *want* to trade freshness for speed, you say so explicitly: `--trust-index` answers straight from the index (5–90 ms on the Linux kernel).
+
+### 2 · One coordinate system: find → read → change
+
+<p align="center"><img src="docs/assets/coordinates.svg" width="100%" alt="Search hits, read ranges, symbols, and AST rewrites share paths, lines and spans; an edited file is rescanned automatically on the next query."></p>
+
+- A search hit at line 42 is line 42 in `lancet read` — even inside a `.pdf`, `.xlsx`, `.hwp`, or `bundle.zip!node.log`, because search and read run the **same in-process extraction**.
+- `read --symbol`, `outline`, `refs`, and `ast` all resolve the same Tree-sitter spans, so an agent never guesses where a function ends.
+- Rewrites are dry-run diffs by default and land atomically with `--apply`; the next query already sees them.
+
+---
+
+## Quick start
+
+```bash
+cargo install --git https://github.com/CREE1116/lancet      # Rust 1.88+
+lancet index .                                              # optional: build the .lancet index once
+```
+
+```bash
+lancet fd --tree --max-depth 2 .                            # orient
+lancet 'near("gradient", "clip", 30) in function' src       # search: boolean, proximity, fuzzy, AST scope
+lancet read src/search.rs --symbol execute_one              # read one symbol, doc comments included
+lancet refs SearchOptions src                               # definitions + references, comments/strings excluded
+lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'      # preview a structural rewrite …
+lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply   # … and apply it atomically
+```
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `lancet <QUERY> [PATH]` | `AND` / `OR` / `NOT`, `near` / `before`, `fuzzy("term", k)`, `regex(...)`, `in function`, `symbol(...)`, pipes like `\| expand parent \| limit 5 \| budget tokens:1500` — see the [query language](./docs/grammar.md) |
+| `lancet fd` | `.gitignore`-aware file & folder finder, `--tree`, size / recency filters, `--trust-index` lookups |
+| `lancet ast` | Tree-sitter structural search & `--rewrite` (`$X`, `$_`, `$$$ARGS`) across **24 languages** |
+| `lancet read` | Exact line ranges, `--symbol`, PDF/PPTX `--page`, spreadsheet `--sheet --rows --cols`, `archive.zip!entry`, `--budget-tokens` with resume cursors |
+| `lancet outline` | Declaration skeletons, Markdown headings, workbook schemas, archive manifests |
+| `lancet refs` | Index-accelerated `[def]` / `[ref]` lookup that skips comments and string literals |
+| `lancet batch` | Many queries over one shared index open and directory walk |
+| `lancet index` · `status` · `explain` | Build / update the index, inspect it, see which trigrams a query needs |
+
+**AST languages:** Rust, Python, JavaScript, TypeScript, TSX, Go, C, C++, Zig, Java, C#, Kotlin, Scala, Swift, Ruby, PHP, Bash, Lua, HCL, HTML, CSS, JSON, YAML, TOML.
+**Documents & archives** (default `adapters` feature): `.pdf`, `.docx`, `.pptx`, `.odt`, `.hwp` (5.0), `.hwpx`, `.epub`, `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.ods`, `.zip`, `.tar`, `.gz`, `.tgz` — extracted in-process with 16 MiB bomb caps, plus opt-in `--ocr`.
+
+---
+
+## Benchmarks
+
+The chart at the top is the Linux kernel v6.12 (86,218 files, 1.4 GB) on an Apple M4 Pro, reproducible with [`bench/scale_bench.py`](./bench/scale_bench.py) and redrawn by [`bench/readme_figures.py`](./bench/readme_figures.py). Without an index (`scan` mode) lancet runs at ripgrep's speed on text; the index is where the multiples come from.
+
+<details>
+<summary><b>Crate-source corpus (28,352 files, 452.6 MiB) — search, discovery, AST, documents</b></summary>
+
+Reproducible via [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_competitors.py`](./bench/bench_competitors.py), and [`bench/official_suite.sh`](./bench/official_suite.sh). Cold index build **1.17 s** (36.3 MiB, 8.0% of corpus); no-op sync **64.6 ms**.
+
+**Text search** (`lancet` vs `ripgrep 15.2.0`)
+
+| Query | `rg` | lancet scan | lancet auto | lancet `--trust-index` |
 |---|---:|---:|---:|---:|
 | Rare literal (`ThreadPoolBuilder`, 32 hits) | 307.7 ms | 310.6 ms | **60.5 ms (5.1×)** | **5.1 ms (60.3×)** |
 | Medium literal (`unwrap_or_else`, 582 hits) | 311.3 ms | 314.6 ms | **65.4 ms (4.8×)** | **13.0 ms (23.9×)** |
@@ -42,158 +96,72 @@ Code corpus: `28,352` files (`452.6 MiB` local Cargo crate sources). Cold index 
 | Typo fuzzy (`fuzzy("transmte", 1)`) | *unsupported* | 334.7 ms | **156.7 ms** | **107.4 ms** |
 | Shared 6-query batch (`lancet batch`) | ~1,850 ms | 1,570.6 ms | **93.1 ms** | **30.7 ms (5.1 ms/q)** |
 
-*¹ `rg` requires chaining two separate passes for file-level `AND`.*
+*¹ `rg` needs two passes for a file-level `AND`.*
 
-### 2. File & Directory Discovery (`lancet fd` vs `fd 10.5.2` vs `rg --files` vs `find`)
+**File discovery** (`lancet fd` vs `fd 10.5.2`, `rg --files`, `find`)
 
-| Workload (`28,352` files) | POSIX `find` | `rg --files` | `fd 10.5` | `lancet fd` (scan) | `lancet fd --trust-index` |
+| Workload | `find` | `rg --files` | `fd` | lancet fd | lancet fd `--trust-index` |
 |---|---:|---:|---:|---:|---:|
-| List all files (`28,352`) | 176.0 ms | 47.5 ms | 49.8 ms | 60.6 ms | **14.4 ms (3.5× vs `fd`)** |
-| Extension + name (`-e toml -p Cargo`) | — | — | 47.1 ms | 52.1 ms | **6.6 ms (7.1× vs `fd`)** |
-| Size filter (`>= 100 KiB`, 637 files) | 169.1 ms | — | 65.4 ms | **53.3 ms** | **5.6 ms (11.7× vs `fd`)** |
+| List all files (28,352) | 176.0 ms | 47.5 ms | 49.8 ms | 60.6 ms | **14.4 ms (3.5×)** |
+| Extension + name (`-e toml -p Cargo`) | — | — | 47.1 ms | 52.1 ms | **6.6 ms (7.1×)** |
+| Size filter (≥ 100 KiB, 637 files) | 169.1 ms | — | 65.4 ms | **53.3 ms** | **5.6 ms (11.7×)** |
 
-### 3. Structural AST Search (`lancet ast` vs `ast-grep 0.51.3`)
+**Structural search** (`lancet ast` vs `ast-grep 0.51.3`)
 
-| Rust AST Pattern (`28,352` files) | `ast-grep 0.51` | `lancet ast` (scan) | `lancet ast` (auto index) | `lancet ast` (`--trust-index`) |
+| Rust pattern | `ast-grep` | lancet scan | lancet auto | lancet `--trust-index` |
 |---|---:|---:|---:|---:|
 | `std::mem::transmute($X)` (19 hits) | 1,764.7 ms | **251.1 ms (7.0×)** | **176.6 ms (10.0×)** | **95.3 ms (18.5×)** |
 | `$X.unwrap_or_else($F)` (963 hits) | 1,649.2 ms | **268.6 ms (6.1×)** | **245.7 ms (6.7×)** | **153.0 ms (10.8×)** |
 | `unreachable!($$$ARGS)` (1,893 hits) | 1,782.2 ms | **484.8 ms (3.7×)** | **526.7 ms (3.4×)** | **343.3 ms (5.2×)** |
 | `ThreadPoolBuilder::new()` (75 hits) | 1,716.7 ms | **241.5 ms (7.1×)** | **65.2 ms (26.3×)** | **13.9 ms (123.5×)** |
 
-### 4. Multi-Format Documents & Archives (`lancet` vs `ripgrep-all 0.10.10`)
+**Documents & archives** (`lancet` vs `ripgrep-all 0.10.10`, 120 mixed files)
 
-Measured over 120 mixed binary documents (`.pdf`, `.docx`, `.xlsx`, `.hwpx`, `.zip`). `lancet` extracts formats in-process in pure Rust with bomb-safe byte caps (`MAX_EXTRACTED_BYTES = 16 MiB`):
-
-| Document Format & Query | `rga` (cold) | `rga` (zstd cached) | `lancet` (scan) | `lancet` (auto) | `lancet` (`--trust-index`) |
+| Format & query | `rga` cold | `rga` cached | lancet scan | lancet auto | lancet `--trust-index` |
 |---|---:|---:|---:|---:|---:|
 | PDF (`QUARTERLY_REVENUE_ANOMALY`) | 263.5 ms | 67.3 ms | **10.6 ms** | **6.9 ms** | **3.4 ms** |
 | DOCX (`SLA_INDEMNITY_CLAUSE`) | 262.0 ms | 67.5 ms | **10.7 ms** | **7.6 ms** | **4.1 ms** |
-| XLSX (`H100_CLUSTER_CAPEX`) | *0 hits (unsupported)* | *0 hits* | **11.3 ms** | **7.5 ms** | **3.6 ms** |
+| XLSX (`H100_CLUSTER_CAPEX`) | *0 hits* | *0 hits* | **11.3 ms** | **7.5 ms** | **3.6 ms** |
 | ZIP logs (`RAFT_QUORUM_STALL`) | 274.8 ms | 67.3 ms | **12.2 ms** | **7.1 ms** | **3.5 ms** |
-| HWPX (`국가클라우드보안인증검토`) | *0 hits (unsupported)* | *0 hits* | **11.2 ms** | **8.1 ms** | **3.7 ms** |
+| HWPX (`국가클라우드보안인증검토`) | *0 hits* | *0 hits* | **11.2 ms** | **8.1 ms** | **3.7 ms** |
+
+</details>
 
 ---
 
-## Installation
+## How the index works
+
+<p align="center"><img src="docs/assets/index-lifecycle.svg" width="100%" alt="Working tree compared by mtime and size; new files go to immutable mmap segments with tombstones; small segments are merged by tiered compaction. Linux: 4.2 s cold build, about 350 MB peak memory, 140 MB index, 110 ms no-op sync."></p>
+
+1. **Sound trigram lower bounds.** Queries and regex HIRs compile to a boolean trigram formula (`Req`) that every match must satisfy. Posting lists are intersected rarest-first; ultra-common trigrams (> 85% of files) are skipped. The formula is conservative, so the index can narrow but never drop a match.
+2. **Fuzzy search on the index.** By the q-gram lemma, a word with `|G|` trigrams at edit distance `k` keeps at least `|G| − 3k` of them (`|G| − k` for Hangul syllables), so `fuzzy(...)` runs as a `k`-of-`n` posting count instead of a full scan.
+3. **Three-stage AST matching.** Identifier literals in the pattern (a) prune files through the index, (b) gate Tree-sitter behind a SIMD `memmem` check, and (c) skip every subtree that does not contain them, before matching a precompiled `u16 kind_id` pattern tree.
+4. **Unicode case orbits.** Case-equivalent characters (`k`, `K`, Kelvin `K`) fold to one representative in both index and evaluator; ASCII literals use `memchr2` dual-case scans instead of regex automata.
+5. **Zero-copy `LANCET03` segments.** Opening the index reads a 40-byte header of an `mmap`'d file; lookups allocate nothing, and line numbers are computed only for byte spans that actually match.
+6. **LSM upkeep with bounded memory.** Changed files go to new immutable segments and old versions are tombstoned; tiered compaction merges small segments. Build buffers are reused across segments, keeping a Linux-kernel cold build near 350 MB.
+
+**Exactness guarantees.** Malformed queries, unknown flags, and unparseable patterns fail with exact diagnostics instead of a best guess. `--rewrite` never touches a file without `--apply`, and `--apply` refuses to combine with `--limit` (no partial rewrites).
+
+---
+
+## Why `lancet read` instead of `cat`, `sed`, or a built-in `Read`?
+
+- **Same line numbers as search, in every format** — PDFs, Office files, HWP, and archive entries included.
+- **Semantic slices** — `--symbol`, `--page`, `--sheet --rows --cols` return exactly the unit you asked for in one call.
+- **Hard token budgets** — `--budget-tokens 800` stops at the boundary and returns `next_line` to resume.
+- **No temp files, no external converters** — containers are opened in memory under 16 MiB extraction caps.
+
+## Using Lancet with AI agents
+
+Drop [`docs/agent-instructions.md`](./docs/agent-instructions.md) into your `AGENTS.md`, `CLAUDE.md`, or system rules. Agents then replace multi-tool shell chains with structured, token-budgeted `lancet` calls.
+
+## Installation options
 
 ```bash
-# From source (Rust 1.88+)
-cargo install --git https://github.com/CREE1116/lancet
-
-# Minimal pure-text/code build (disables tree-sitter & binary document adapters)
-cargo install --git https://github.com/CREE1116/lancet --no-default-features
+cargo install --git https://github.com/CREE1116/lancet                          # full build
+cargo install --git https://github.com/CREE1116/lancet --no-default-features    # text/code only: no Tree-sitter, no document adapters
 ```
-
----
-
-## Quick Tour
-
-### 1. Orient & Outline (`fd` + `outline`)
-
-```bash
-# Compact .gitignore-aware workspace tree
-lancet fd --tree --max-depth 2 .
-
-# Structural declaration skeleton of a source file, Markdown doc, Excel workbook, or ZIP
-lancet outline src/search.rs
-lancet outline finance/q4_budget.xlsx
-```
-
-### 2. Search Code & Binary Documents (`lancet`)
-
-```bash
-# Optional: build/update the .lancet trigram index once for sub-100ms queries
-lancet index .
-
-# Boolean, proximity, fuzzy, and AST-scoped queries
-lancet '("OOM" OR "out of memory") NOT "CPU" in line'
-lancet 'near("gradient", "clip", 30) in function | expand parent | limit 5' src
-lancet 'fuzzy("accumlation", 2) in type:(document, config)'
-lancet '"SLA_INDEMNITY" in type:document | budget tokens:1200'
-```
-
-### 3. Surgical Inspection (`read` + `refs`)
-
-```bash
-# Read an exact function/struct by symbol name (includes doc comments)
-lancet read src/search.rs --symbol execute_one
-
-# Read PDF pages, Excel cell slices, or inner archive logs without extracting to disk
-lancet read docs/architecture.pdf --page 2:4
-lancet read finance/q4_budget.xlsx --sheet 1 --rows 1:20 --cols A:D
-lancet read archives/cluster_logs.zip!node_0.log --lines 1:50
-
-# Find AST symbol definitions + call/reference sites (comments & strings excluded)
-lancet refs SearchOptions src
-```
-
-### 4. Safe Structural AST Search & Refactoring (`ast`)
-
-```bash
-# Match syntax trees across rs, py, js, ts, tsx, go
-lancet ast '$X.unwrap()' src --lang rs
-lancet ast '$A == $A' src --lang py
-
-# Preview unified diff (dry-run by default), then apply atomically
-lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'
-lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply
-```
-
----
-
-## Why `lancet read` Instead of `cat` / `sed` / Built-in `Read`?
-
-`lancet read` is not a plain text viewer — it is a **context scalpel** that shares an exact coordinate system with the search engine:
-
-1. **1-to-1 Coordinate Isomorphism Across Binary Formats**: Standard search-then-read workflows break as soon as a match lands inside a `.pdf`, `.docx`, `.xlsx`, `.hwp`/`.hwpx`, or `.zip`. External tools (`cat`, `Read`, or mismatched Python extractors) either fail on binary bytes or produce completely different line numbers. `lancet read` runs the **exact same in-process extraction pipeline** as `lancet` search — line `42` in a search hit is guaranteed to be line `42` in `lancet read`, whether in Rust source, a PDF report, a Korean HWP file, or `bundle.zip!node_0.log`.
-2. **Semantic Slicing Without Guessing Line Numbers (`--symbol`, `--page`, `--sheet`)**: Instead of 2–3 agent round-trips guessing where a function ends, `lancet read src/search.rs --symbol execute_one` uses Tree-sitter byte spans to extract the exact symbol body (plus contiguous `///` doc comments and attributes above it) in a single call.
-3. **Hard Token-Budget Caps with Resumable Cursors (`--budget-tokens`)**: Minified bundles or wide logs cannot blow up an agent's context window. `lancet read --budget-tokens 800` stops cleanly at the budget boundary and emits `next_line` (`resume with --lines 236:`).
-4. **Zero-Tempfile Bomb-Safe Container Piercing**: Reads PDF pages, spreadsheet row/column slices (`--rows 1:30 --cols A:D`), and `.zip`/`.tar.gz` entries in memory with strict `16 MiB` extraction caps — no `/tmp` clutter and no `pandoc`/`libreoffice` subprocesses.
-
----
-
-## Using Lancet with AI Coding Agents
-
-Drop [`docs/agent-instructions.md`](./docs/agent-instructions.md) into your project's `AGENTS.md`, `CLAUDE.md`, or system rules so agents automatically replace multi-tool shell chains (`rg` + `fd` + `ast-grep` + `cat` + Python PDF scripts) with structured, token-budgeted `lancet` calls.
-
----
-
-## Core Algorithms & Architecture
-
-```text
-                       ┌───────────────────────────────────────────┐
-                       │          .lancet/ (LANCET03 mmap)         │
-                       │  40B header + doc meta + delta-varint 3g  │
-                       └─────────────────────┬─────────────────────┘
-                                             │ sound candidate narrowing
-                                             │ (q-gram lemma + AST literals)
-                                             ▼
-┌──────────────┐   ┌──────────────────┐   ┌────────────────────────┐   ┌──────────────────┐
-│ lancet <LQL> │──▶│ Strict IR Parser │──▶│ Candidate Planner      │──▶│ Exact Evaluator  │
-│ lancet fd    │   │ & AST Compiler   │   │ Scan == Auto == Trust* │   │ SIMD + TreeSitter│
-│ lancet ast   │   └──────────────────┘   └────────────────────────┘   │ + Pure-Rust Docs │
-│ lancet refs  │                                                       └────────┬─────────┘
-│ lancet read  │◀─────────────────── 1-to-1 line parity ────────────────────────┘
-└──────────────┘
-```
-
-1. **Conservative Trigram Lower-Bounds & Zero-Daemon Freshness (`Scan == Auto`)**: Queries and regex HIRs compile into a sound boolean trigram formula (`Req`). Posting lists are intersected rarest-first (`peek_count` ordering; ultra-common `>85%` trigrams are skipped automatically). At query time, files whose disk `(mtime_ns, size)` match the segment metadata are pruned via the index, modified/new files are scanned live, and every surviving candidate is verified by the exact scan evaluator — delivering **5–60× speedups with zero background watcher daemons and zero stale results**.
-2. **Indexed Fuzzy Search via the q-gram Threshold Lemma**: Traditional trigram indexes fall back to full scans on typo-tolerant queries. Lancet applies the q-gram lemma — a word of trigram count `|G|` at Levenshtein distance `k` must still share at least `|G| - 3k` ASCII trigrams (`|G| - k` for 3-byte Hangul syllables) — evaluating `Req::AtLeast` (`k`-of-`n` posting accumulation) directly over the index.
-3. **3-Stage Hybrid AST Matching (`Trigram Index` → `SIMD memmem` → `u16 kind_id` Pattern Tree)**: `ast-grep` parses every candidate language file with Tree-sitter. `lancet ast` extracts non-string, non-comment identifier literals from the pattern AST to (a) prune files via `.lancet` trigrams without opening them, (b) run SIMD `memmem` prefilters before invoking Tree-sitter even in `--no-index` scan mode, and (c) match against a precompiled `u16 kind_id` pattern tree with thread-local parser caching (**7× faster than `ast-grep` unindexed, up to 123× faster indexed**).
-4. **Unicode Case-Orbit Folding + SIMD Dual-Byte Prefilters**: Equivalent Unicode case-folding orbits (`'k'`, `'K'`, Kelvin `'K' U+212A`) map to a canonical representative across both index and evaluator, while ASCII literals use `memchr2` dual-case SIMD vector scans instead of regex automata.
-5. **Zero-Heap `LANCET03` Segments & Lazy Line Resolution (`LineMode::HitsOnly`)**: Opening an index validates only a 40-byte `mmap` header (`O(1)`, zero heap allocation) at `~8%` of corpus size. During evaluation, full newline offset tables are never allocated up front; line numbers are computed via SIMD `memchr` only on byte spans that actually match.
-
-- **Zero silent approximations**: malformed queries, unknown flags, or unparseable AST patterns fail fast with exact diagnostics; `--rewrite` never mutates files without `--apply`.
-- **Supported document & archive formats** (`adapters` feature, enabled by default): `.pdf`, `.docx`, `.pptx`, `.odt`, `.hwp` (5.0 OLE/CFB), `.hwpx`, `.epub`, `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.ods`, `.zip`, `.tar`, `.gz`, `.tgz`/`.tar.gz` (plus opt-in `--ocr` via `tesseract`/`pdftoppm`).
-
----
 
 ## License
 
-Dual-licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](./LICENSE-APACHE))
-- MIT License ([LICENSE-MIT](./LICENSE-MIT))
-
-at your option.
+Dual-licensed under either of [Apache License 2.0](./LICENSE-APACHE) or [MIT](./LICENSE-MIT), at your option.
