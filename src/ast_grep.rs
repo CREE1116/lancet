@@ -596,10 +596,51 @@ mod imp {
         out.into_iter().collect()
     }
 
+    /// `if (c) $S` / `{ $$$B }`: a metavariable standing alone as a statement needs a
+    /// `;` to parse in C-like languages. Returns the pattern with one added after each
+    /// such metavariable, or `None` if there is none.
+    fn add_statement_semicolons(
+        prep: &str,
+        sentinels: &HashMap<String, MetaSpec>,
+    ) -> Option<String> {
+        let mut at: Vec<usize> = Vec::new();
+        for k in sentinels.keys() {
+            for (i, _) in prep.match_indices(k.as_str()) {
+                let before = prep[..i].trim_end().chars().last();
+                let after = prep[i + k.len()..].trim_start().chars().next();
+                if matches!(before, None | Some('{' | ';' | ')' | '}'))
+                    && matches!(after, None | Some('}'))
+                {
+                    at.push(i + k.len());
+                }
+            }
+        }
+        if at.is_empty() {
+            return None;
+        }
+        at.sort_unstable();
+        let mut out = prep.to_string();
+        for i in at.into_iter().rev() {
+            out.insert(i, ';');
+        }
+        Some(out)
+    }
+
     fn build_pat_node(node: Node<'_>, src: &str, sentinels: &HashMap<String, MetaSpec>) -> PatNode {
         let trimmed = src[node.byte_range()].trim().trim_matches('"');
         if let Some(spec) = sentinels.get(trimmed) {
             return PatNode::Meta(spec.clone());
+        }
+        // A statement that is only a metavariable (`$S;`) stands for any statement, so
+        // `$S` matches blocks, returns, ifs…, and `$$$B` several statements in a block.
+        let kids = non_comment_children(node);
+        if node.kind().ends_with("statement")
+            && (kids.len() == 1 || (kids.len() == 2 && kids[1].kind() == ";"))
+        {
+            let t = src[kids[0].byte_range()].trim().trim_matches('"');
+            if let Some(spec) = sentinels.get(t) {
+                return PatNode::Meta(spec.clone());
+            }
         }
         let children: Vec<PatNode> = non_comment_children(node)
             .into_iter()
@@ -631,6 +672,10 @@ mod imp {
                 preprocess_pattern(trimmed, lang == Lang::Json)?;
             let ends_with_semi = trimmed.ends_with(';');
             let (pat_tree, pat_src, node_path) = try_extract(lang, &prep, ends_with_semi)
+                .or_else(|| {
+                    let with_semis = add_statement_semicolons(&prep, &sentinels)?;
+                    try_extract(lang, &with_semis, ends_with_semi)
+                })
                 .ok_or_else(|| {
                     format!(
                         "could not parse pattern `{raw}` as valid {} AST",
