@@ -11,7 +11,6 @@ use crate::edit::{self, Edit};
 use crate::output::{ErrorInfo, Status};
 use crate::read_cmd::find_symbol_lines;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -187,7 +186,7 @@ pub fn edit_file(o: &EditOptions) -> EditResponse {
             "documents and archives are read-only: their text is extracted, so there is no byte range to write back".into(),
         );
     }
-    let bytes = match fs::read(&o.path) {
+    let bytes = match edit::read_shared(&o.path) {
         Ok(b) => b,
         Err(e) => return fail(r, Status::InvalidQuery, format!("read error: {e}")),
     };

@@ -80,9 +80,19 @@ pub fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
     let tmp = parent.join(format!(".{name}.lancet-tmp.{}.{seq}", std::process::id()));
     fs::write(&tmp, data)?;
     let _ = fs::set_permissions(&tmp, perms);
-    if let Err(e) = fs::rename(&tmp, path) {
-        let _ = fs::remove_file(&tmp);
-        return Err(e);
+    for attempt in 0..8 {
+        match fs::rename(&tmp, path) {
+            Ok(()) => return Ok(()),
+            Err(e)
+                if cfg!(windows) && e.kind() == io::ErrorKind::PermissionDenied && attempt < 7 =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            Err(e) => {
+                let _ = fs::remove_file(&tmp);
+                return Err(e);
+            }
+        }
     }
     Ok(())
 }
@@ -246,6 +256,32 @@ pub enum WriteError {
     Io(io::Error),
 }
 
+/// Read `path` while holding a shared lock, retrying transient Windows sharing
+/// errors so a concurrent `write_if_rev` serialises cleanly instead of causing
+/// `ERROR_LOCK_VIOLATION`.
+pub fn read_shared(path: &Path) -> io::Result<Vec<u8>> {
+    for attempt in 0..16 {
+        let mut f = match File::open(path) {
+            Ok(f) => f,
+            Err(e)
+                if cfg!(windows) && e.kind() == io::ErrorKind::PermissionDenied && attempt < 15 =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
+        f.lock_shared()?;
+        if !same_file(&f, path) {
+            continue;
+        }
+        let mut buf = Vec::new();
+        f.read_to_end(&mut buf)?;
+        return Ok(buf);
+    }
+    Err(io::Error::other("file kept being replaced while reading"))
+}
+
 /// Compare-and-swap write: replace `path` with `data` only if its content revision
 /// is still `expect_rev`.
 ///
@@ -255,8 +291,17 @@ pub enum WriteError {
 /// editor) are not serialised, but a change they made before the check still
 /// yields `Conflict`.
 pub fn write_if_rev(path: &Path, expect_rev: &str, data: &[u8]) -> Result<(), WriteError> {
-    for _ in 0..16 {
-        let mut f = File::open(path).map_err(WriteError::Io)?;
+    for attempt in 0..16 {
+        let mut f = match File::open(path) {
+            Ok(f) => f,
+            Err(e)
+                if cfg!(windows) && e.kind() == io::ErrorKind::PermissionDenied && attempt < 15 =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+                continue;
+            }
+            Err(e) => return Err(WriteError::Io(e)),
+        };
         f.lock().map_err(WriteError::Io)?;
         // A writer may have renamed a new file over `path` while we waited.
         if !same_file(&f, path) {

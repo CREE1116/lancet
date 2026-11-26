@@ -1796,14 +1796,22 @@ fn concurrent_edits_with_same_rev_have_exactly_one_winner() {
                 o.rev = Some(rev0);
                 o.apply = true;
                 barrier.wait(); // all agents read the same revision, then race
-                edit_file(&o).status
+                let resp = edit_file(&o);
+                (resp.status, resp.error.map(|e| e.message))
             })
         })
         .collect();
-    let statuses: Vec<Status> = handles.into_iter().map(|h| h.join().unwrap()).collect();
-    let winners = statuses.iter().filter(|s| **s == Status::Complete).count();
-    let conflicts = statuses.iter().filter(|s| **s == Status::Conflict).count();
-    assert_eq!((winners, conflicts), (1, n - 1), "{statuses:?}");
+    let results: Vec<(Status, Option<String>)> =
+        handles.into_iter().map(|h| h.join().unwrap()).collect();
+    let winners = results
+        .iter()
+        .filter(|(s, _)| *s == Status::Complete)
+        .count();
+    let conflicts = results
+        .iter()
+        .filter(|(s, _)| *s == Status::Conflict)
+        .count();
+    assert_eq!((winners, conflicts), (1, n - 1), "{results:?}");
 
     // Exactly the winner's line was added; no update was lost or interleaved.
     let text = fs::read_to_string(&f).unwrap();
