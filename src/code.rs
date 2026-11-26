@@ -531,6 +531,20 @@ mod imp {
         }
     }
 
+    /// Number of Tree-sitter ERROR / MISSING nodes, or `None` for unsupported files.
+    pub fn syntax_errors(path: &Path, src: &[u8]) -> Option<usize> {
+        with_tree(path, src, |_, root| {
+            if !root.has_error() {
+                return 0;
+            }
+            let mut n = 0;
+            visit_dfs(root, |node| {
+                n += (node.is_error() || node.is_missing()) as usize
+            });
+            n
+        })
+    }
+
     pub fn extract_functions(path: &Path, src: &[u8]) -> Option<Vec<CodeSpan>> {
         with_tree(path, src, |lang, root| {
             let mut out = Vec::new();
@@ -649,6 +663,9 @@ mod imp {
     pub fn supports_path(_path: &Path) -> bool {
         false
     }
+    pub fn syntax_errors(_path: &Path, _src: &[u8]) -> Option<usize> {
+        None
+    }
     pub fn extract_functions(_path: &Path, _src: &[u8]) -> Option<Vec<CodeSpan>> {
         None
     }
@@ -666,4 +683,7 @@ mod imp {
 
 #[cfg(feature = "ast")]
 pub use imp::Lang;
-pub use imp::{extract_functions, extract_symbols, find_identifier_spans, supports_path, ENABLED};
+pub use imp::{
+    extract_functions, extract_symbols, find_identifier_spans, supports_path, syntax_errors,
+    ENABLED,
+};

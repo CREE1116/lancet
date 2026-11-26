@@ -41,7 +41,7 @@ Use `lancet` as your unified, deterministic CLI replacement for `rg`, `fd`, `ast
 
 ## 5. Structural AST Search & Safe Refactoring (`lancet ast` — replaces `ast-grep`)
 
-Supported languages: `rs` (`rust`), `py` (`python`), `js`, `ts`, `tsx`, `go`.
+Supported languages (24): `rs`, `py`, `js`, `ts`, `tsx`, `go`, `c`, `cpp`, `zig`, `java`, `cs`, `kt`, `scala`, `swift`, `rb`, `php`, `bash`, `lua`, `hcl`, `html`, `css`, `json`, `yaml`, `toml`.
 
 - Match syntax trees (`$VAR` single node, `$_` wildcard, `$$$ARGS` 0+ sibling nodes):
   - `lancet ast '$X.unwrap()' src --lang rs`
@@ -50,3 +50,14 @@ Supported languages: `rs` (`rust`), `py` (`python`), `js`, `ts`, `tsx`, `go`.
 - **Always preview rewrites first** (default `--rewrite` prints a unified diff without touching disk), then pass `--apply`:
   - `lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'`
   - `lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply`
+
+## 6. Edit by Coordinates (`lancet edit` — replaces `sed -i` / hand-written patches)
+
+- Address lines exactly as `lancet read` does, then replace, delete, or insert:
+  - `lancet edit src/search.rs --symbol execute_one --with-file new_fn.rs`
+  - `lancet edit src/search.rs --lines 120:135 --with-file - < patch.txt`
+  - `lancet edit src/search.rs --lines 42 --insert-after '    log::debug!("x");'`
+  - `lancet edit src/search.rs --lines 42:44 --delete`
+- `--symbol` covers the doc comments and attributes above the declaration, exactly as `read --symbol` shows them; include them in the replacement or they are removed.
+- **Always pass the `rev` you read** (`lancet read --json` → `"rev"`): `--rev <REV>` makes the edit fail with `conflict` if the file changed since. Chain edits with the returned `rev_after`.
+- Default is a dry-run diff; add `--apply` to write atomically. Edits that add Tree-sitter syntax errors are refused (`--allow-syntax-errors` overrides). PDFs, Office files, HWP, and archive entries are read-only.

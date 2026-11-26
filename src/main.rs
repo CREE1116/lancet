@@ -1,5 +1,6 @@
-use clap::Parser;
+use clap::{ArgGroup, Parser};
 use lancet::ast_grep::{print_ast_human, search_ast, AstOptions};
+use lancet::edit_cmd::{edit_file, EditOptions, Op, Target};
 use lancet::fd::{find_files, parse_duration, parse_size, print_fd_human, FdOptions, PatternMode};
 use lancet::index::{self, Index};
 use lancet::outline::{build_outline, print_outline_human, OutlineOptions};
@@ -26,6 +27,7 @@ Examples:
   lancet 'near(\"gradient\", \"clip\", 30) in function | expand parent | limit 5' src
   lancet fd --tree --max-depth 2 .
   lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'
+  lancet edit src/search.rs --symbol execute_one --with-file new.rs --rev <REV>
   lancet read src/search.rs --symbol execute_one
   lancet read report.pdf --page 2
   lancet outline src/search.rs
@@ -35,6 +37,7 @@ Subcommands:
   lancet fd [PATTERN] [PATH]    fast .gitignore-aware file & folder finder / tree view
   lancet ast <PATTERN> [PATH]   tree-sitter structural search & safe AST rewrite
   lancet read <TARGET>          surgical line / symbol / page / sheet / archive reader
+  lancet edit <PATH>            replace / delete / insert lines addressed like `read`
   lancet outline [PATH]         document table-of-contents & code declaration skeleton
   lancet refs <SYMBOL> [PATH]   lexical AST symbol definitions & references
   lancet index [PATH]           build or incrementally update the index (PATH/.lancet)
@@ -462,6 +465,7 @@ fn main() -> ExitCode {
         Some("fd") => run_fd(FdCli::parse_from(&args[1..])),
         Some("ast") => run_ast(AstCli::parse_from(&args[1..])),
         Some("read") => run_read(ReadCli::parse_from(&args[1..])),
+        Some("edit") => run_edit(EditCli::parse_from(&args[1..])),
         Some("outline") => run_outline(OutlineCli::parse_from(&args[1..])),
         Some("refs") => run_refs(RefsCli::parse_from(&args[1..])),
         Some("index") => run_index(IndexCli::parse_from(&args[1..])),
@@ -910,6 +914,129 @@ fn cli_invalid(json: bool, msg: &str) -> ExitCode {
         eprintln!("error: {msg}");
     }
     ExitCode::from(2)
+}
+
+#[derive(Parser)]
+#[command(
+    name = "lancet edit",
+    about = "Replace, delete, or insert lines addressed like `lancet read` (dry-run diff unless --apply)",
+    group(ArgGroup::new("target").required(true).args(["lines", "symbol"])),
+    group(ArgGroup::new("op").required(true).args(["with", "with_file", "delete", "insert_before", "insert_after"]))
+)]
+struct EditCli {
+    /// File to edit (plain-text files; documents and archives are read-only)
+    path: PathBuf,
+    /// 1-based line range, as in `lancet read` (`10:50`, `42`, `100:`)
+    #[arg(short = 'l', long)]
+    lines: Option<String>,
+    /// The lines of an AST symbol, exactly as `lancet read --symbol` shows them
+    /// (doc comments and attributes above it included: replace them too, or they go)
+    #[arg(short = 's', long)]
+    symbol: Option<String>,
+    /// Replace the addressed lines with TEXT
+    #[arg(long, allow_hyphen_values = true)]
+    with: Option<String>,
+    /// Replace the addressed lines with the contents of FILE (`-` reads stdin)
+    #[arg(long)]
+    with_file: Option<PathBuf>,
+    /// Delete the addressed lines
+    #[arg(long)]
+    delete: bool,
+    /// Insert TEXT before the addressed lines
+    #[arg(long, allow_hyphen_values = true)]
+    insert_before: Option<String>,
+    /// Insert TEXT after the addressed lines
+    #[arg(long, allow_hyphen_values = true)]
+    insert_after: Option<String>,
+    /// Refuse unless the file's content revision equals REV (from read/ast/edit JSON)
+    #[arg(long)]
+    rev: Option<String>,
+    /// Write the change atomically (default: print a dry-run diff)
+    #[arg(long)]
+    apply: bool,
+    /// Write even if the edit adds Tree-sitter syntax errors
+    #[arg(long)]
+    allow_syntax_errors: bool,
+    /// Print machine-readable JSON
+    #[arg(long)]
+    json: bool,
+}
+
+fn run_edit(cli: EditCli) -> ExitCode {
+    let target = match (&cli.lines, cli.symbol) {
+        (Some(l), _) => match parse_line_spec(l) {
+            Ok((a, b)) => Target::Lines(a, b),
+            Err(msg) => return cli_invalid(cli.json, &msg),
+        },
+        (None, Some(s)) => Target::Symbol(s),
+        (None, None) => unreachable!("clap requires --lines or --symbol"),
+    };
+    let op = if cli.delete {
+        Op::Delete
+    } else if let Some(t) = cli.with {
+        Op::Replace(t)
+    } else if let Some(f) = cli.with_file {
+        let text = if f.as_os_str() == "-" {
+            let mut s = String::new();
+            io::Read::read_to_string(&mut io::stdin(), &mut s).map(|_| s)
+        } else {
+            std::fs::read_to_string(&f)
+        };
+        match text {
+            Ok(t) => Op::Replace(t),
+            Err(e) => return cli_invalid(cli.json, &format!("cannot read {}: {e}", f.display())),
+        }
+    } else if let Some(t) = cli.insert_before {
+        Op::InsertBefore(t)
+    } else if let Some(t) = cli.insert_after {
+        Op::InsertAfter(t)
+    } else {
+        unreachable!("clap requires one edit operation")
+    };
+
+    let mut opts = EditOptions::new(cli.path, target, op);
+    opts.rev = cli.rev;
+    opts.apply = cli.apply;
+    opts.allow_syntax_errors = cli.allow_syntax_errors;
+    let resp = edit_file(&opts);
+
+    let stdout = io::stdout();
+    let mut out = io::BufWriter::new(stdout.lock());
+    if cli.json {
+        let _ = serde_json::to_writer(&mut out, &resp)
+            .map_err(io::Error::other)
+            .and_then(|_| writeln!(out));
+    } else {
+        if !resp.diff.is_empty() {
+            let _ = write!(out, "{}", resp.diff);
+        }
+        let _ = out.flush();
+        if let Some(err) = &resp.error {
+            eprintln!("error: {}", err.message);
+        } else if resp.status == Status::Empty {
+            eprintln!("[lancet edit] no change");
+        } else {
+            let hint = if resp.applied {
+                ""
+            } else {
+                " (re-run with --apply to write)"
+            };
+            eprintln!(
+                "[lancet edit] {}: lines {}-{} of {}, rev {}{hint}",
+                resp.mode,
+                resp.start_line,
+                resp.end_line,
+                resp.path,
+                resp.rev_after.as_deref().unwrap_or("-"),
+            );
+        }
+    }
+    let _ = out.flush();
+    match resp.status {
+        Status::Complete => ExitCode::SUCCESS,
+        Status::Empty => ExitCode::from(1),
+        _ => ExitCode::from(2),
+    }
 }
 
 fn run_read(cli: ReadCli) -> ExitCode {

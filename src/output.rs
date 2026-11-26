@@ -20,6 +20,8 @@ pub enum Status {
     Empty,
     InvalidQuery,
     Unsupported,
+    /// The file changed since the caller's `rev` was taken; nothing was written.
+    Conflict,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq)]

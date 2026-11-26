@@ -1606,3 +1606,118 @@ fn polyglot_24_languages_ast_and_symbols() {
         }
     }
 }
+
+#[test]
+fn edit_lines_symbol_rev_and_syntax_guard() {
+    use lancet::edit::rev;
+    use lancet::edit_cmd::{edit_file, EditOptions, Op, Target};
+
+    let dir = TempDir::new().unwrap();
+    let rs = dir.path().join("a.rs");
+    let orig = "/// Adds.\nfn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\nfn main() {}\n";
+    fs::write(&rs, orig).unwrap();
+
+    // Dry-run by default: diff, nothing written.
+    let mut o = EditOptions::new(
+        &rs,
+        Target::Symbol("add".into()),
+        Op::Replace("/// Adds.\nfn add(a: i32, b: i32) -> i32 {\n    b + a\n}".into()),
+    );
+    let r = edit_file(&o);
+    assert_eq!(r.status, Status::Complete);
+    assert_eq!((r.start_line, r.end_line, r.applied), (1, 4, false));
+    assert!(r.diff.contains("+    b + a"));
+    assert_eq!(fs::read_to_string(&rs).unwrap(), orig);
+
+    // Apply against the rev that `read` reported.
+    let read_rev = read_file_range(&ReadOptions::new(rs.to_string_lossy().into_owned()))
+        .rev
+        .unwrap();
+    o.rev = Some(read_rev.clone());
+    o.apply = true;
+    let r = edit_file(&o);
+    assert!(r.applied);
+    let now = fs::read_to_string(&rs).unwrap();
+    assert!(now.contains("    b + a\n"));
+    assert_eq!(r.rev_after, Some(rev(now.as_bytes())));
+
+    // The old rev is stale now: conflict, nothing written.
+    let mut del = EditOptions::new(&rs, Target::Lines(1, Some(1)), Op::Delete);
+    del.rev = Some(read_rev);
+    del.apply = true;
+    assert_eq!(edit_file(&del).status, Status::Conflict);
+    assert_eq!(fs::read_to_string(&rs).unwrap(), now);
+
+    // An edit that breaks the syntax is refused unless explicitly allowed.
+    #[cfg(feature = "ast")]
+    {
+        let mut bad = EditOptions::new(
+            &rs,
+            Target::Lines(4, Some(4)),
+            Op::Replace("    b +".into()),
+        );
+        bad.apply = true;
+        let r = edit_file(&bad);
+        assert_eq!(r.status, Status::InvalidQuery);
+        assert!(r.rev_after.is_none());
+        assert_eq!(fs::read_to_string(&rs).unwrap(), now);
+        bad.allow_syntax_errors = true;
+        assert!(edit_file(&bad).applied);
+        fs::write(&rs, &now).unwrap();
+    }
+
+    // Insert before / after, delete, out-of-range.
+    let mut ins = EditOptions::new(
+        &rs,
+        Target::Lines(6, None),
+        Op::InsertAfter("// end".into()),
+    );
+    ins.apply = true;
+    edit_file(&ins);
+    let mut ins = EditOptions::new(
+        &rs,
+        Target::Lines(1, Some(1)),
+        Op::InsertBefore("// top".into()),
+    );
+    ins.apply = true;
+    edit_file(&ins);
+    let txt = fs::read_to_string(&rs).unwrap();
+    assert!(txt.starts_with("// top\n/// Adds.\n") && txt.ends_with("fn main() {}\n// end\n"));
+    let r = edit_file(&EditOptions::new(
+        &rs,
+        Target::Lines(99, Some(99)),
+        Op::Delete,
+    ));
+    assert_eq!(r.status, Status::InvalidQuery);
+
+    // Line endings: no trailing newline stays absent, CRLF stays CRLF.
+    let py = dir.path().join("n.py");
+    fs::write(&py, "x = 1\ny = 2").unwrap();
+    let mut o = EditOptions::new(&py, Target::Lines(2, Some(2)), Op::Replace("y = 3".into()));
+    o.apply = true;
+    edit_file(&o);
+    assert_eq!(fs::read_to_string(&py).unwrap(), "x = 1\ny = 3");
+    let crlf = dir.path().join("c.txt");
+    fs::write(&crlf, "a\r\nb\r\n").unwrap();
+    let mut o = EditOptions::new(
+        &crlf,
+        Target::Lines(1, Some(1)),
+        Op::Replace("A1\nA2".into()),
+    );
+    o.apply = true;
+    edit_file(&o);
+    assert_eq!(fs::read_to_string(&crlf).unwrap(), "A1\r\nA2\r\nb\r\n");
+
+    // Documents and archives are read-only.
+    #[cfg(feature = "adapters")]
+    {
+        let zip = dir.path().join("z.zip");
+        fs::write(&zip, make_zip_bytes(&[("x.log", b"hello\n")])).unwrap();
+        let r = edit_file(&EditOptions::new(
+            &zip,
+            Target::Lines(1, Some(1)),
+            Op::Delete,
+        ));
+        assert_eq!(r.status, Status::Unsupported);
+    }
+}

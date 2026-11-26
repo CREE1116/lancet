@@ -37,7 +37,8 @@ It is built for AI coding agents and the developers working beside them: structu
 
 - A search hit at line 42 is line 42 in `lancet read` — even inside a `.pdf`, `.xlsx`, `.hwp`, or `bundle.zip!node.log`, because search and read run the **same in-process extraction**.
 - `read --symbol`, `outline`, `refs`, and `ast` all resolve the same Tree-sitter spans, so an agent never guesses where a function ends.
-- Rewrites are dry-run diffs by default and land atomically with `--apply`; the next query already sees them.
+- `lancet edit` changes the exact lines `read` showed. Pass the `rev` that `read` reported and the edit refuses to run if the file changed in between; edits that add syntax errors are refused too.
+- Rewrites and edits are dry-run diffs by default and land atomically with `--apply`; the next query already sees them.
 
 ---
 
@@ -55,6 +56,7 @@ lancet read src/search.rs --symbol execute_one              # read one symbol, d
 lancet refs SearchOptions src                               # definitions + references, comments/strings excluded
 lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'      # preview a structural rewrite …
 lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply   # … and apply it atomically
+lancet edit src/search.rs --symbol execute_one --with-file new.rs --rev <REV> --apply  # edit by read's coordinates
 ```
 
 ## Commands
@@ -65,6 +67,7 @@ lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply   # … and apply
 | `lancet fd` | `.gitignore`-aware file & folder finder, `--tree`, size / recency filters, `--trust-index` lookups |
 | `lancet ast` | Tree-sitter structural search & `--rewrite` (`$X`, `$_`, `$$$ARGS`) across **24 languages** |
 | `lancet read` | Exact line ranges, `--symbol`, PDF/PPTX `--page`, spreadsheet `--sheet --rows --cols`, `archive.zip!entry`, `--budget-tokens` with resume cursors |
+| `lancet edit` | Replace / delete / insert lines addressed like `read` (`--lines`, `--symbol`); refuses on a stale `--rev` or new syntax errors; dry-run unless `--apply` |
 | `lancet outline` | Declaration skeletons, Markdown headings, workbook schemas, archive manifests |
 | `lancet refs` | Index-accelerated `[def]` / `[ref]` lookup that skips comments and string literals |
 | `lancet batch` | Many queries over one shared index open and directory walk |
@@ -140,7 +143,7 @@ Reproducible via [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_com
 5. **Zero-copy `LANCET03` segments.** Opening the index reads a 40-byte header of an `mmap`'d file; lookups allocate nothing, and line numbers are computed only for byte spans that actually match.
 6. **LSM upkeep with bounded memory.** Changed files go to new immutable segments and old versions are tombstoned; tiered compaction merges small segments. Build buffers are reused across segments, keeping a Linux-kernel cold build near 350 MB.
 
-**Exactness guarantees.** Malformed queries, unknown flags, and unparseable patterns fail with exact diagnostics instead of a best guess. `--rewrite` never touches a file without `--apply`, and `--apply` refuses to combine with `--limit` (no partial rewrites).
+**Exactness guarantees.** Malformed queries, unknown flags, and unparseable patterns fail with exact diagnostics instead of a best guess. `--rewrite` and `edit` never touch a file without `--apply`, `--apply` refuses to combine with `--limit` (no partial rewrites), and `edit --rev` refuses to write over a file that changed since it was read.
 
 ---
 

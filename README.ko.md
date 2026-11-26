@@ -37,7 +37,8 @@ AI 코딩 에이전트와 그 옆에서 일하는 개발자를 위해 만들었�
 
 - 검색 결과의 42번째 줄은 `lancet read`에서도 42번째 줄입니다. `.pdf`, `.xlsx`, `.hwp`, `bundle.zip!node.log` 안에서도 마찬가지입니다. 검색과 열람이 **같은 인프로세스 추출 파이프라인**을 쓰기 때문입니다.
 - `read --symbol`, `outline`, `refs`, `ast`가 모두 같은 Tree-sitter 구간을 쓰므로, 에이전트가 함수 끝 줄을 추측할 일이 없습니다.
-- 리라이트는 기본이 dry-run diff이고 `--apply`로 원자적으로 반영됩니다. 다음 쿼리는 이미 바뀐 내용을 봅니다.
+- `lancet edit`는 `read`가 보여 준 바로 그 줄을 고칩니다. `read`가 알려 준 `rev`를 넘기면 그사이 파일이 바뀐 경우 편집을 거부하고, 구문 오류가 생기는 편집도 거부합니다.
+- 리라이트와 편집은 기본이 dry-run diff이고 `--apply`로 원자적으로 반영됩니다. 다음 쿼리는 이미 바뀐 내용을 봅니다.
 
 ---
 
@@ -55,6 +56,7 @@ lancet read src/search.rs --symbol execute_one              # 심볼 하나를 �
 lancet refs SearchOptions src                               # 정의 + 참조 (주석·문자열 제외)
 lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'      # 구조적 리라이트 미리보기 …
 lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply   # … 원자적으로 반영
+lancet edit src/search.rs --symbol execute_one --with-file new.rs --rev <REV> --apply  # read 좌표 그대로 편집
 ```
 
 ## 명령어
@@ -65,6 +67,7 @@ lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply   # … 원자적
 | `lancet fd` | `.gitignore` 인식 파일·폴더 탐색, `--tree`, 크기·수정 시각 필터, `--trust-index` 조회 |
 | `lancet ast` | **24개 언어** Tree-sitter 구조 검색과 `--rewrite` (`$X`, `$_`, `$$$ARGS`) |
 | `lancet read` | 정확한 줄 범위, `--symbol`, PDF/PPTX `--page`, 엑셀 `--sheet --rows --cols`, `archive.zip!항목`, 이어읽기 커서가 있는 `--budget-tokens` |
+| `lancet edit` | `read`와 같은 좌표(`--lines`, `--symbol`)로 줄 교체·삭제·삽입. `--rev`가 오래됐거나 구문 오류가 생기면 거부, `--apply` 전에는 dry-run |
 | `lancet outline` | 코드 선언 골격, Markdown 목차, 워크북 스키마, 압축 파일 목록 |
 | `lancet refs` | 주석·문자열 리터럴을 건너뛰는 인덱스 가속 `[def]` / `[ref]` 추적 |
 | `lancet batch` | 여러 쿼리를 인덱스 한 번 열고 디렉터리 한 번 훑어 처리 |
@@ -140,7 +143,7 @@ lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply   # … 원자적
 5. **제로카피 `LANCET03` 세그먼트.** 인덱스를 열 때는 `mmap`한 파일의 40바이트 헤더만 읽습니다. 조회는 할당이 없고, 줄 번호는 실제로 매치된 구간에서만 계산합니다.
 6. **메모리가 묶인 LSM 유지보수.** 바뀐 파일은 새 불변 세그먼트로 가고 이전 버전은 툼스톤 처리되며, 계층형 컴팩션이 작은 세그먼트를 합칩니다. 빌드 버퍼를 세그먼트 사이에 재사용해 Linux 커널 콜드 빌드도 350 MB 안팎에 머뭅니다.
 
-**정확성 보장.** 잘못된 쿼리, 모르는 플래그, 파싱할 수 없는 패턴은 추측하지 않고 정확한 진단과 함께 실패합니다. `--rewrite`는 `--apply` 없이 파일을 건드리지 않고, `--apply`는 `--limit`과 함께 쓸 수 없습니다(부분 리라이트 방지).
+**정확성 보장.** 잘못된 쿼리, 모르는 플래그, 파싱할 수 없는 패턴은 추측하지 않고 정확한 진단과 함께 실패합니다. `--rewrite`와 `edit`는 `--apply` 없이 파일을 건드리지 않고, `--apply`는 `--limit`과 함께 쓸 수 없으며(부분 리라이트 방지), `edit --rev`는 읽은 뒤 바뀐 파일에 덮어쓰지 않습니다.
 
 ---
 

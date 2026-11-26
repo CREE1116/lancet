@@ -230,7 +230,7 @@ fn byte_to_line(line_starts: &[usize], byte_off: usize) -> usize {
     }
 }
 
-fn find_symbol_lines(
+pub(crate) fn find_symbol_lines(
     path: &Path,
     bytes: &[u8],
     all_lines: &[&str],
