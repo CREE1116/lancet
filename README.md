@@ -45,7 +45,7 @@ It is built for AI coding agents and the developers working beside them: structu
 ## Quick start
 
 ```bash
-cargo install --git https://github.com/CREE1116/lancet      # Rust 1.88+
+cargo install --git https://github.com/CREE1116/lancet      # Rust 1.89+
 lancet index .                                              # optional: build the .lancet index once
 ```
 

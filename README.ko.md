@@ -45,7 +45,7 @@ AI 코딩 에이전트와 그 옆에서 일하는 개발자를 위해 만들었�
 ## 빠른 시작
 
 ```bash
-cargo install --git https://github.com/CREE1116/lancet      # Rust 1.88+
+cargo install --git https://github.com/CREE1116/lancet      # Rust 1.89+
 lancet index .                                              # 선택: .lancet 인덱스를 한 번 빌드
 ```
 

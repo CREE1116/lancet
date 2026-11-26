@@ -5,8 +5,8 @@
 //! line ranges, symbols, reference sites); everything that touches disk is here,
 //! so every command gets the same safety guarantees.
 
-use std::fs;
-use std::io;
+use std::fs::{self, File};
+use std::io::{self, Read};
 use std::path::Path;
 
 /// Replace `src[start..end]` with `replacement` (byte offsets on char boundaries).
@@ -210,6 +210,62 @@ pub fn unified_diff(rel: &str, old: &str, new: &str) -> String {
     }
     out
 }
+/// Why [`write_if_rev`] did not write.
+#[derive(Debug)]
+pub enum WriteError {
+    /// The file's revision is no longer the expected one; `now` is the current one.
+    Conflict {
+        now: String,
+    },
+    Io(io::Error),
+}
+
+/// Compare-and-swap write: replace `path` with `data` only if its content revision
+/// is still `expect_rev`.
+///
+/// Lancet writers hold an exclusive lock on the file across check-and-write, so
+/// concurrent agents serialise: the first wins, the others get `Conflict` instead
+/// of silently overwriting it (no lost updates). Writers that bypass lancet (an
+/// editor) are not serialised, but a change they made before the check still
+/// yields `Conflict`.
+pub fn write_if_rev(path: &Path, expect_rev: &str, data: &[u8]) -> Result<(), WriteError> {
+    for _ in 0..16 {
+        let mut f = File::open(path).map_err(WriteError::Io)?;
+        f.lock().map_err(WriteError::Io)?;
+        // A writer may have renamed a new file over `path` while we waited.
+        if !same_file(&f, path) {
+            continue;
+        }
+        let mut cur = Vec::new();
+        f.read_to_end(&mut cur).map_err(WriteError::Io)?;
+        let now = rev(&cur);
+        if now != expect_rev {
+            return Err(WriteError::Conflict { now });
+        }
+        // `f` (and its lock) lives until after the rename.
+        return write_atomic(path, data).map_err(WriteError::Io);
+    }
+    Err(WriteError::Io(io::Error::other(
+        "file kept being replaced by other writers",
+    )))
+}
+
+#[cfg(unix)]
+fn same_file(f: &File, path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (f.metadata(), fs::metadata(path)) {
+        (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+        _ => false,
+    }
+}
+
+#[cfg(not(unix))]
+fn same_file(_: &File, _: &Path) -> bool {
+    // Windows refuses to rename over a file another handle has open, so the
+    // file cannot be swapped under our lock.
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

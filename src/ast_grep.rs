@@ -1044,9 +1044,19 @@ mod imp {
                 let udiff = edit::unified_diff(&target.rel, &src, &new_src);
                 let mut applied = false;
                 if apply {
-                    match edit::write_atomic(&target.path, new_src.as_bytes()) {
+                    match edit::write_if_rev(
+                        &target.path,
+                        &edit::rev(src.as_bytes()),
+                        new_src.as_bytes(),
+                    ) {
                         Ok(()) => applied = true,
-                        Err(e) => {
+                        Err(edit::WriteError::Conflict { .. }) => {
+                            warning = Some(format!(
+                                "{} changed while rewriting; skipped (re-run to rewrite it)",
+                                target.rel
+                            ));
+                        }
+                        Err(edit::WriteError::Io(e)) => {
                             warning =
                                 Some(format!("failed writing rewrite to {}: {e}", target.rel));
                         }

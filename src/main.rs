@@ -920,8 +920,8 @@ fn cli_invalid(json: bool, msg: &str) -> ExitCode {
 #[command(
     name = "lancet edit",
     about = "Replace, delete, or insert lines addressed like `lancet read` (dry-run diff unless --apply)",
-    group(ArgGroup::new("target").required(true).args(["lines", "symbol"])),
-    group(ArgGroup::new("op").required(true).args(["with", "with_file", "delete", "insert_before", "insert_after"]))
+    group(ArgGroup::new("target").required(true).args(["lines", "symbol", "edits"])),
+    group(ArgGroup::new("op").args(["with", "with_file", "delete", "insert_before", "insert_after"]).conflicts_with("edits"))
 )]
 struct EditCli {
     /// File to edit (plain-text files; documents and archives are read-only)
@@ -948,6 +948,11 @@ struct EditCli {
     /// Insert TEXT after the addressed lines
     #[arg(long, allow_hyphen_values = true)]
     insert_after: Option<String>,
+    /// Several hunks in one atomic call, from a JSON file (`-` reads stdin):
+    /// `[{"lines": "10:12", "with": "…"}, {"symbol": "f", "delete": true}]`.
+    /// All hunks use the original file's line numbers.
+    #[arg(long)]
+    edits: Option<PathBuf>,
     /// Refuse unless the file's content revision equals REV (from read/ast/edit JSON)
     #[arg(long)]
     rev: Option<String>,
@@ -962,27 +967,44 @@ struct EditCli {
     json: bool,
 }
 
+fn read_text_arg(f: &Path) -> io::Result<String> {
+    if f.as_os_str() == "-" {
+        let mut s = String::new();
+        io::Read::read_to_string(&mut io::stdin(), &mut s).map(|_| s)
+    } else {
+        std::fs::read_to_string(f)
+    }
+}
+
 fn run_edit(cli: EditCli) -> ExitCode {
+    if let Some(f) = &cli.edits {
+        let hunks = match read_text_arg(f)
+            .map_err(|e| format!("cannot read {}: {e}", f.display()))
+            .and_then(|j| lancet::edit_cmd::parse_hunks(&j))
+        {
+            Ok(h) => h,
+            Err(msg) => return cli_invalid(cli.json, &msg),
+        };
+        let mut opts = EditOptions::multi(cli.path.clone(), hunks);
+        opts.rev = cli.rev.clone();
+        opts.apply = cli.apply;
+        opts.allow_syntax_errors = cli.allow_syntax_errors;
+        return report_edit(&edit_file(&opts), cli.json);
+    }
     let target = match (&cli.lines, cli.symbol) {
         (Some(l), _) => match parse_line_spec(l) {
             Ok((a, b)) => Target::Lines(a, b),
             Err(msg) => return cli_invalid(cli.json, &msg),
         },
         (None, Some(s)) => Target::Symbol(s),
-        (None, None) => unreachable!("clap requires --lines or --symbol"),
+        (None, None) => unreachable!("clap requires --lines, --symbol or --edits"),
     };
     let op = if cli.delete {
         Op::Delete
     } else if let Some(t) = cli.with {
         Op::Replace(t)
     } else if let Some(f) = cli.with_file {
-        let text = if f.as_os_str() == "-" {
-            let mut s = String::new();
-            io::Read::read_to_string(&mut io::stdin(), &mut s).map(|_| s)
-        } else {
-            std::fs::read_to_string(&f)
-        };
-        match text {
+        match read_text_arg(&f) {
             Ok(t) => Op::Replace(t),
             Err(e) => return cli_invalid(cli.json, &format!("cannot read {}: {e}", f.display())),
         }
@@ -991,19 +1013,24 @@ fn run_edit(cli: EditCli) -> ExitCode {
     } else if let Some(t) = cli.insert_after {
         Op::InsertAfter(t)
     } else {
-        unreachable!("clap requires one edit operation")
+        return cli_invalid(
+            cli.json,
+            "give one of --with, --with-file, --delete, --insert-before, --insert-after (or --edits)",
+        );
     };
 
     let mut opts = EditOptions::new(cli.path, target, op);
     opts.rev = cli.rev;
     opts.apply = cli.apply;
     opts.allow_syntax_errors = cli.allow_syntax_errors;
-    let resp = edit_file(&opts);
+    report_edit(&edit_file(&opts), cli.json)
+}
 
+fn report_edit(resp: &lancet::edit_cmd::EditResponse, json: bool) -> ExitCode {
     let stdout = io::stdout();
     let mut out = io::BufWriter::new(stdout.lock());
-    if cli.json {
-        let _ = serde_json::to_writer(&mut out, &resp)
+    if json {
+        let _ = serde_json::to_writer(&mut out, resp)
             .map_err(io::Error::other)
             .and_then(|_| writeln!(out));
     } else {
@@ -1021,11 +1048,14 @@ fn run_edit(cli: EditCli) -> ExitCode {
             } else {
                 " (re-run with --apply to write)"
             };
+            let what = if resp.hunks.len() > 1 {
+                format!("{} hunks", resp.hunks.len())
+            } else {
+                format!("lines {}-{}", resp.start_line, resp.end_line)
+            };
             eprintln!(
-                "[lancet edit] {}: lines {}-{} of {}, rev {}{hint}",
+                "[lancet edit] {}: {what} of {}, rev {}{hint}",
                 resp.mode,
-                resp.start_line,
-                resp.end_line,
                 resp.path,
                 resp.rev_after.as_deref().unwrap_or("-"),
             );

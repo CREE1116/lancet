@@ -1766,3 +1766,94 @@ fn freshness_catches_preserved_mtime_and_racy_files() {
     assert_eq!(auto.matched, 1);
     assert!(auto.stats.stale_files.unwrap_or(0) >= 1);
 }
+
+#[test]
+fn concurrent_edits_with_same_rev_have_exactly_one_winner() {
+    use lancet::edit_cmd::{edit_file, EditOptions, Op, Target};
+    use std::sync::{Arc, Barrier};
+
+    let dir = TempDir::new().unwrap();
+    let f = dir.path().join("shared.rs");
+    fs::write(&f, "fn base() {}\n").unwrap();
+    let rev0 = lancet::edit::rev(&fs::read(&f).unwrap());
+
+    let n = 8;
+    let barrier = Arc::new(Barrier::new(n));
+    let handles: Vec<_> = (0..n)
+        .map(|i| {
+            let (f, rev0, barrier) = (f.clone(), rev0.clone(), barrier.clone());
+            std::thread::spawn(move || {
+                let mut o = EditOptions::new(
+                    &f,
+                    Target::Lines(1, Some(1)),
+                    Op::InsertAfter(format!("fn agent_{i}() {{}}")),
+                );
+                o.rev = Some(rev0);
+                o.apply = true;
+                barrier.wait(); // all agents read the same revision, then race
+                edit_file(&o).status
+            })
+        })
+        .collect();
+    let statuses: Vec<Status> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+    let winners = statuses.iter().filter(|s| **s == Status::Complete).count();
+    let conflicts = statuses.iter().filter(|s| **s == Status::Conflict).count();
+    assert_eq!((winners, conflicts), (1, n - 1), "{statuses:?}");
+
+    // Exactly the winner's line was added; no update was lost or interleaved.
+    let text = fs::read_to_string(&f).unwrap();
+    assert_eq!(text.lines().count(), 2, "{text}");
+    assert!(text.starts_with("fn base() {}\nfn agent_"));
+}
+
+#[test]
+fn multi_hunk_edits_use_original_coordinates_and_are_all_or_nothing() {
+    use lancet::edit_cmd::{edit_file, parse_hunks, EditOptions};
+
+    let dir = TempDir::new().unwrap();
+    let f = dir.path().join("m.rs");
+    let orig = "fn a() {}\nfn b() {}\nfn c() {}\nfn d() {}\n";
+    fs::write(&f, orig).unwrap();
+
+    // Hunk 1 grows by two lines; hunks 2 and 3 still address the original lines 3 and 4.
+    let hunks = parse_hunks(
+        r#"[{"lines": "1", "with": "fn a() {\n    // grew\n}"},
+            {"lines": "3", "delete": true},
+            {"symbol": "d", "insert_after": "fn e() {}"}]"#,
+    )
+    .unwrap();
+    let mut o = EditOptions::multi(&f, hunks);
+    o.apply = true;
+    let r = edit_file(&o);
+    assert_eq!(r.status, Status::Complete);
+    assert_eq!(r.hunks, vec![[1, 1], [3, 3], [4, 4]]);
+    assert_eq!(
+        fs::read_to_string(&f).unwrap(),
+        "fn a() {\n    // grew\n}\nfn b() {}\nfn d() {}\nfn e() {}\n"
+    );
+
+    // Overlapping hunks, ambiguous same-spot inserts, or one bad hunk: nothing is written.
+    fs::write(&f, orig).unwrap();
+    for spec in [
+        r#"[{"lines": "1:2", "delete": true}, {"lines": "2", "with": "x"}]"#,
+        r#"[{"lines": "1", "insert_after": "x"}, {"lines": "2", "insert_before": "y"}]"#,
+        r#"[{"lines": "1", "with": "x"}, {"lines": "99", "delete": true}]"#,
+        r#"[{"lines": "1", "with": "x"}, {"symbol": "missing", "delete": true}]"#,
+    ] {
+        let mut o = EditOptions::multi(&f, parse_hunks(spec).unwrap());
+        o.apply = true;
+        assert_eq!(edit_file(&o).status, Status::InvalidQuery, "{spec}");
+        assert_eq!(fs::read_to_string(&f).unwrap(), orig, "{spec}");
+    }
+
+    // Malformed specs are rejected up front.
+    for bad in [
+        r#"[]"#,
+        r#"[{"lines": "1"}]"#,
+        r#"[{"lines": "1", "symbol": "a", "delete": true}]"#,
+        r#"[{"lines": "1", "with": "x", "delete": true}]"#,
+        r#"[{"lines": "1", "replace": "x"}]"#,
+    ] {
+        assert!(parse_hunks(bad).is_err(), "{bad}");
+    }
+}
