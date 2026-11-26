@@ -47,6 +47,7 @@ def main() -> int:
   version "{ver}"
   license any_of: ["MIT", "Apache-2.0"]
   head "https://github.com/CREE1116/lancet.git", branch: "main"
+  depends_on "rust" => :build if build.head?
 
   on_macos do
     on_arm do
