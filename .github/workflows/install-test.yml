@@ -1,0 +1,54 @@
+name: Install test
+
+# Runs the published installers against the latest GitHub Release on every OS we ship.
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+  push:
+    branches: [main]
+    paths: [install.sh, install.ps1, .github/workflows/install-test.yml]
+
+jobs:
+  unix:
+    name: install.sh (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: ubuntu-x86_64, os: ubuntu-latest, container: "" }
+          - { name: ubuntu-aarch64, os: ubuntu-24.04-arm, container: "" }
+          - { name: macos-arm64, os: macos-latest, container: "" }
+          - { name: debian-11, os: ubuntu-latest, container: "debian:11" }
+          - { name: alpine, os: ubuntu-latest, container: "alpine:3" }
+    steps:
+      - name: Prepare container
+        if: matrix.container != ''
+        run: |
+          if command -v apk >/dev/null; then apk add --no-cache curl tar
+          else apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null; fi
+      - uses: actions/checkout@v4
+      - name: Install
+        run: LANCET_INSTALL_DIR="$PWD/bin" sh install.sh
+      - name: Smoke test
+        run: |
+          ./bin/lancet --version
+          ./bin/lancet rg -c LANCET_INSTALL_DIR install.sh
+
+  windows:
+    name: install.ps1 (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        shell: pwsh
+        run: |
+          $env:LANCET_INSTALL_DIR = "$PWD\bin"
+          ./install.ps1
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          ./bin/lancet.exe --version
+          ./bin/lancet.exe rg -c LANCET_INSTALL_DIR install.ps1
