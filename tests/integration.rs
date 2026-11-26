@@ -2417,3 +2417,64 @@ fn edits_keep_the_file_the_same_file() {
         0o640
     );
 }
+
+#[test]
+fn rg_supports_max_depth_max_filesize_follow_and_color() {
+    use lancet::rg::{parse_filesize, run, RgOptions};
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    fs::write(root.join("top.txt"), "needle\n").unwrap();
+    fs::create_dir_all(root.join("sub")).unwrap();
+    fs::write(root.join("sub/deep.txt"), "needle\n").unwrap();
+    fs::write(root.join("big.txt"), format!("needle\n{}", "x".repeat(200))).unwrap();
+
+    #[cfg(unix)]
+    let _ext = {
+        let ext = TempDir::new().unwrap();
+        fs::write(ext.path().join("linked.txt"), "needle via link\n").unwrap();
+        std::os::unix::fs::symlink(ext.path().join("linked.txt"), root.join("sym.txt")).unwrap();
+        ext
+    };
+
+    // Build index first to verify auto and trust modes also respect new filters.
+    index::rebuild(root, &index::default_dir(root), &WalkOpts::default()).unwrap();
+
+    let run_with = |mode: IndexMode, f: &dyn Fn(&mut RgOptions)| -> String {
+        let mut o = RgOptions::new(vec!["needle".into()]);
+        o.paths = vec![root.to_path_buf()];
+        o.index = mode;
+        f(&mut o);
+        let mut out = Vec::new();
+        let _ = run(&o, &mut out).unwrap();
+        String::from_utf8(out).unwrap()
+    };
+
+    for mode in [IndexMode::Off, IndexMode::Auto, IndexMode::Trust] {
+        // max_depth=1 keeps top-level only (excludes sub/deep.txt)
+        let d1 = run_with(mode, &|o| o.walk.max_depth = Some(1));
+        assert!(d1.contains("top.txt"), "{mode:?}: {d1}");
+        assert!(!d1.contains("sub/deep.txt"), "{mode:?}: {d1}");
+
+        // max_filesize=50 excludes big.txt
+        let sz = run_with(mode, &|o| {
+            o.walk.max_filesize = Some(parse_filesize("50").unwrap())
+        });
+        assert!(sz.contains("top.txt"), "{mode:?}: {sz}");
+        assert!(!sz.contains("big.txt"), "{mode:?}: {sz}");
+
+        // follow=true finds symlinked file even when an index exists
+        #[cfg(unix)]
+        {
+            let no_l = run_with(mode, &|_| {});
+            assert!(!no_l.contains("sym.txt"), "{mode:?}: {no_l}");
+            let with_l = run_with(mode, &|o| o.walk.follow = true);
+            assert!(with_l.contains("sym.txt"), "{mode:?}: {with_l}");
+        }
+    }
+
+    // Color output emits ANSI SGR only when enabled.
+    let plain = run_with(IndexMode::Auto, &|_| {});
+    assert!(!plain.contains("\x1b["));
+    let colored = run_with(IndexMode::Auto, &|o| o.color = true);
+    assert!(colored.contains("\x1b[35m") && colored.contains("\x1b[1;31mneedle\x1b[0m"));
+}

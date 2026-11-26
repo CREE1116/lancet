@@ -14,6 +14,9 @@ pub struct WalkOpts {
     pub no_ignore: bool,
     /// 0 = automatic.
     pub threads: usize,
+    pub follow: bool,
+    pub max_depth: Option<usize>,
+    pub max_filesize: Option<u64>,
 }
 
 #[derive(Clone, Debug)]
@@ -224,6 +227,9 @@ pub fn walk(root: &Path, opts: &WalkOpts, filter: &FileFilter, need_meta: bool) 
         .git_global(ig)
         .git_exclude(ig)
         .parents(ig)
+        .follow_links(opts.follow)
+        .max_depth(opts.max_depth)
+        .max_filesize(opts.max_filesize)
         .threads(opts.threads)
         .filter_entry(|e| e.file_name() != crate::index::DIR_NAME);
     if ig {
@@ -244,11 +250,23 @@ pub fn walk(root: &Path, opts: &WalkOpts, filter: &FileFilter, need_meta: bool) 
             let Ok(ent) = res else {
                 return WalkState::Continue;
             };
-            if ent.file_type().is_some_and(|t| t.is_file()) {
+            let is_sym = ent.file_type().is_some_and(|t| t.is_symlink());
+            let is_file = ent.file_type().is_some_and(|t| t.is_file())
+                || (opts.follow
+                    && is_sym
+                    && std::fs::metadata(ent.path()).is_ok_and(|m| {
+                        m.is_file() && opts.max_filesize.is_none_or(|max| m.len() <= max)
+                    }));
+            if is_file {
                 let rel = rel_path(root, ent.path());
                 if filter.accepts(&rel) {
                     let (size, mtime, (ctime, ino)) = if need_meta {
-                        match ent.metadata() {
+                        let meta = if opts.follow && is_sym {
+                            std::fs::metadata(ent.path())
+                        } else {
+                            ent.metadata().map_err(std::io::Error::other)
+                        };
+                        match meta {
                             Ok(m) => (m.len(), mtime_ns(&m), change_stamp(&m)),
                             Err(_) => return WalkState::Continue,
                         }

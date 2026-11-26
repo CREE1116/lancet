@@ -14,7 +14,7 @@ use lancet::search::{explain, search, search_batch, IndexMode, SearchOptions};
 use lancet::walk::WalkOpts;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -499,6 +499,7 @@ fn run_search(cli: SearchCli) -> ExitCode {
         hidden: cli.hidden,
         no_ignore: cli.no_ignore,
         threads: cli.threads.unwrap_or(0),
+        ..WalkOpts::default()
     };
     opts.index = index_mode(cli.no_index, cli.trust_index);
     opts.ocr = cli.ocr;
@@ -562,6 +563,7 @@ fn run_index(cli: IndexCli) -> ExitCode {
         hidden: cli.hidden,
         no_ignore: cli.no_ignore,
         threads: cli.threads.unwrap_or(0),
+        ..WalkOpts::default()
     };
     let res = if cli.rebuild {
         index::rebuild_with_ocr(&cli.path, &dir, &wopts, cli.ocr)
@@ -650,6 +652,7 @@ fn run_explain(cli: ExplainCli) -> ExitCode {
         hidden: cli.hidden,
         no_ignore: cli.no_ignore,
         threads: 0,
+        ..WalkOpts::default()
     };
     opts.index = index_mode(cli.no_index, cli.trust_index);
     let rep = explain(&cli.query, &opts);
@@ -694,6 +697,7 @@ fn run_batch(cli: BatchCli) -> ExitCode {
         hidden: cli.hidden,
         no_ignore: cli.no_ignore,
         threads: cli.threads.unwrap_or(0),
+        ..WalkOpts::default()
     };
     opts.index = index_mode(cli.no_index, cli.trust_index);
     opts.ocr = cli.ocr;
@@ -869,6 +873,7 @@ fn run_fd(cli: FdCli) -> ExitCode {
         hidden: cli.hidden,
         no_ignore: cli.no_ignore,
         threads: cli.threads.unwrap_or(0),
+        ..WalkOpts::default()
     };
     opts.index = index_mode(cli.no_index, cli.trust_index);
     opts.index_dir = cli.index_dir;
@@ -1101,6 +1106,15 @@ struct RgCli {
     /// Don't respect .gitignore/.ignore/.rgignore
     #[arg(long)]
     no_ignore: bool,
+    /// Follow symbolic links while traversing directories
+    #[arg(short = 'L', long)]
+    follow: bool,
+    /// Limit directory traversal depth (1 = direct children only)
+    #[arg(long, value_name = "NUM")]
+    max_depth: Option<usize>,
+    /// Ignore files larger than NUM bytes (K, M, G suffixes supported)
+    #[arg(long, value_name = "NUM+SUFFIX")]
+    max_filesize: Option<String>,
     /// Print the files that would be searched
     #[arg(long)]
     files: bool,
@@ -1113,7 +1127,7 @@ struct RgCli {
     /// Accepted for compatibility; output never uses headings
     #[arg(long)]
     no_heading: bool,
-    /// Accepted for compatibility; output is never colored
+    /// Color output: auto (TTY only, default), always, ansi, or never
     #[arg(long, value_name = "WHEN")]
     color: Option<String>,
     /// Ignore the lancet index (search like plain ripgrep)
@@ -1128,7 +1142,7 @@ struct RgCli {
 }
 
 fn run_rg(cli: RgCli) -> ExitCode {
-    use lancet::rg::{list_files, run, Case, RgOptions};
+    use lancet::rg::{list_files, parse_filesize, run, Case, RgOptions};
     let fail = |msg: &str| {
         eprintln!("lancet rg: {msg}");
         ExitCode::from(2)
@@ -1191,7 +1205,29 @@ fn run_rg(cli: RgCli) -> ExitCode {
     o.column = cli.column;
     o.vimgrep = cli.vimgrep;
     o.json = cli.json;
+    let max_filesize = match cli.max_filesize.as_deref() {
+        Some(s) => match parse_filesize(s) {
+            Ok(v) => Some(v),
+            Err(e) => return fail(&e),
+        },
+        None => None,
+    };
+    let color = match cli.color.as_deref() {
+        None | Some("auto") => {
+            io::stdout().is_terminal()
+                && std::env::var_os("NO_COLOR").is_none()
+                && std::env::var("TERM").as_deref() != Ok("dumb")
+        }
+        Some("always") | Some("ansi") => true,
+        Some("never") => false,
+        Some(other) => {
+            return fail(&format!(
+                "invalid --color value '{other}'; expected auto, always, ansi, or never"
+            ))
+        }
+    };
     o.null = cli.null;
+    o.color = color;
     o.replace = cli.replace;
     o.text = cli.text || cli.unrestricted >= 3;
     o.docs = cli.docs;
@@ -1203,6 +1239,9 @@ fn run_rg(cli: RgCli) -> ExitCode {
         hidden: cli.hidden || cli.unrestricted >= 2,
         no_ignore: cli.no_ignore || cli.unrestricted >= 1,
         threads: cli.threads.unwrap_or(0),
+        follow: cli.follow,
+        max_depth: cli.max_depth,
+        max_filesize,
     };
     o.index = index_mode(cli.no_index, cli.trust_index);
     o.index_dir = cli.index_dir;
@@ -1475,6 +1514,7 @@ fn run_outline(cli: OutlineCli) -> ExitCode {
         hidden: cli.hidden,
         no_ignore: cli.no_ignore,
         threads: cli.threads.unwrap_or(0),
+        ..WalkOpts::default()
     };
     opts.ocr = cli.ocr;
 
@@ -1515,6 +1555,7 @@ fn run_refs(cli: RefsCli) -> ExitCode {
         hidden: cli.hidden,
         no_ignore: cli.no_ignore,
         threads: cli.threads.unwrap_or(0),
+        ..WalkOpts::default()
     };
     opts.index = index_mode(cli.no_index, cli.trust_index);
     opts.index_dir = cli.index_dir;
@@ -1562,6 +1603,7 @@ fn run_ast(cli: AstCli) -> ExitCode {
         hidden: cli.hidden,
         no_ignore: cli.no_ignore,
         threads: cli.threads.unwrap_or(0),
+        ..WalkOpts::default()
     };
     opts.index = index_mode(cli.no_index, cli.trust_index);
     opts.index_dir = cli.index_dir;

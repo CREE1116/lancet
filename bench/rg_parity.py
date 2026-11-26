@@ -95,6 +95,11 @@ CASES: list[list[str]] = [
     ["^$"],
     ["-x", ""],
     ["-n", "-A", "1", "-B", "1", "two|five"],
+    ["--max-depth", "1", "foo"],
+    ["--max-depth", "2", "foo"],
+    ["--max-filesize", "20", "foo"],
+    ["--max-filesize", "1K", "foo"],
+    ["-L", "foo"],
 ]
 
 FILE_ARG_CASES: list[list[str]] = [
@@ -130,6 +135,9 @@ def main() -> int:
         p = tmp / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(body.encode())
+    link_target = tmp.parent / f"{tmp.name}-link-target.txt"
+    link_target.write_text("foo via symlink\n")
+    os.symlink(link_target, tmp / "linked.txt")
     subprocess.run(["git", "init", "-q"], cwd=tmp)  # .gitignore needs a repo
 
     total = failed = 0
@@ -166,6 +174,7 @@ def main() -> int:
             check(c, args.extra.resolve(), str(args.extra))
 
     shutil.rmtree(tmp)
+    link_target.unlink(missing_ok=True)
     print(f"{total - failed}/{total} identical")
     return 1 if failed else 0
 

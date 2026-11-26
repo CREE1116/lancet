@@ -4,7 +4,7 @@
 
 ## Verification
 
-- **Fixture parity (`bench/rg_parity.py`):** 67 edge-case queries (Unicode case folding, CRLF, missing final newline, binary files, hidden/ignored files, nested directories, adjacent word boundaries, `-m` with `-C`, `--vimgrep`, `--files`, etc.) match `ripgrep 15.2` byte-for-byte in stdout and exit code.
+- **Fixture parity (`bench/rg_parity.py`):** 68 edge-case queries (Unicode case folding, CRLF, missing final newline, binary files, hidden/ignored files, nested directories, adjacent word boundaries, `-m` with `-C`, `--vimgrep`, `--files`, `--max-depth`, `--max-filesize`, `-L`/`--follow`, etc.) match `ripgrep 15.2` byte-for-byte in stdout and exit code.
 - **Linux kernel parity:** Full-tree queries on Linux kernel v6.12 match `ripgrep 15.2` byte-for-byte both with and without `.lancet` (3.7–8.3× faster with the index).
 
 ---
@@ -26,7 +26,7 @@
 | `-v`, `--invert-match` | Print lines that do not match | Supported | |
 | `-U`, `--multiline` | Allow matches to span lines | Supported | |
 | `--multiline-dotall` | With `-U`, allow `.` to match newlines | Supported | |
-| `-P`, `--pcre2` | PCRE2 engine (lookarounds, backreferences) | Unsupported | Uses Rust `regex` only |
+| `-P`, `--pcre2` | PCRE2 engine (lookarounds, backreferences) | Unsupported | Uses Rust `regex` for guaranteed linear-time matching (no catastrophic backtracking), sound HIR → trigram index compilation, and zero C PCRE2 dependency |
 
 ### Output & Formatting
 
@@ -49,7 +49,7 @@
 | `-r`, `--replace <TEXT>` | Replace matches in output (`$1`, `${name}`) | Supported | |
 | `--sort <SORTBY>` | Sort output | No-op | Output is **always** sorted by path component |
 | `--no-heading` | Never print filename headings | No-op | Headings are never used |
-| `--color <WHEN>` | Colorize output | No-op | Output is never colored |
+| `--color <WHEN>` | Colorize output (`auto`, `always`, `ansi`, `never`) | Supported | `--color auto` (default) colors on TTYs (`NO_COLOR`/`TERM=dumb` respected) and emits plain text when piped |
 | `--passthru` | Print both matching and non-matching lines | Unsupported | |
 
 ### File Filtering & Traversal
@@ -67,9 +67,9 @@
 | `--no-ignore` | Do not respect `.gitignore` / `.ignore` / `.rgignore` | Supported | |
 | `--files` | Print files that would be searched | Supported | Respects `-g`, `-t`, `--hidden`, `-u` |
 | `-j`, `--threads <NUM>` | Worker thread count | Supported | |
-| `-L`, `--follow` | Follow symbolic links | Unsupported | |
-| `--max-depth <NUM>` | Maximum traversal depth | Unsupported | Use `lancet fd --max-depth` |
-| `--max-filesize <NUM>` | Skip files larger than `NUM` | Unsupported | |
+| `-L`, `--follow` | Follow symbolic links | Supported | Follows symlinked files and directories (`--trust-index -L` falls back to live walk so unindexed symlinks are never missed) |
+| `--max-depth <NUM>` | Maximum traversal depth | Supported | Enforced in both live walk and `--trust-index` |
+| `--max-filesize <NUM>` | Skip files larger than `NUM` (`K`/`M`/`G` suffixes supported) | Supported | Enforced in both live walk and `--trust-index` |
 | `-z`, `--search-zip` | Search compressed files via external tools | Not needed | Lancet extracts `.zip`, `.tar`, `.gz`, `.tgz` natively in-process |
 | `--pre`, `--type-add` | Preprocessor command / custom file types | Unsupported | |
 

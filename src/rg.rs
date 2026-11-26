@@ -53,6 +53,7 @@ pub struct RgOptions {
     pub vimgrep: bool,
     pub json: bool,
     pub null: bool,
+    pub color: bool,
     pub replace: Option<String>,
     /// Search binary files as text (`-a`, `-uuu`).
     pub text: bool,
@@ -95,6 +96,7 @@ impl RgOptions {
             vimgrep: false,
             json: false,
             null: false,
+            color: false,
             replace: None,
             text: false,
             docs: false,
@@ -107,6 +109,31 @@ impl RgOptions {
             index_dir: None,
         }
     }
+}
+
+/// Parse ripgrep-style `--max-filesize` (`NUM[K|M|G]` or `KB`/`KiB` etc., base 1024).
+pub fn parse_filesize(s: &str) -> Result<u64, String> {
+    let raw = s.trim();
+    if raw.is_empty() {
+        return Err("empty filesize".into());
+    }
+    let split = raw.find(|c: char| !c.is_ascii_digit()).unwrap_or(raw.len());
+    let (num_str, suf) = raw.split_at(split);
+    if num_str.is_empty() {
+        return Err(format!("invalid filesize '{s}'"));
+    }
+    let n: u64 = num_str
+        .parse()
+        .map_err(|_| format!("invalid filesize '{s}'"))?;
+    let mult: u64 = match suf.to_ascii_uppercase().as_str() {
+        "" | "B" => 1,
+        "K" | "KB" | "KIB" => 1024,
+        "M" | "MB" | "MIB" => 1024 * 1024,
+        "G" | "GB" | "GIB" => 1024 * 1024 * 1024,
+        _ => return Err(format!("unknown filesize suffix in '{s}' (use K, M, or G)")),
+    };
+    n.checked_mul(mult)
+        .ok_or_else(|| format!("filesize '{s}' overflows u64"))
 }
 
 /// ripgrep's smart case: does the pattern contain an uppercase *literal*? Parsed
@@ -460,7 +487,13 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
                 fo.selected
             };
             if cx.show_name {
-                fo.out.extend_from_slice(fo.display.as_bytes());
+                if o.color && !o.null {
+                    fo.out.extend_from_slice(b"\x1b[35m");
+                    fo.out.extend_from_slice(fo.display.as_bytes());
+                    fo.out.extend_from_slice(b"\x1b[0m");
+                } else {
+                    fo.out.extend_from_slice(fo.display.as_bytes());
+                }
                 fo.out.push(if o.null { 0 } else { b':' });
             }
             fo.out.extend_from_slice(format!("{n}\n").as_bytes());
@@ -509,6 +542,14 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
                 } else {
                     render_replace(cx, text)
                 };
+                let hl_one = [(0, shown.len())];
+                let hl = if o.only_matching {
+                    Some(&hl_one[..])
+                } else if o.replace.is_none() {
+                    Some(spans.as_slice())
+                } else {
+                    None
+                };
                 emit(
                     &mut fo.out,
                     cx,
@@ -517,6 +558,7 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
                     b':',
                     col.filter(|_| o.column || o.vimgrep),
                     &shown,
+                    hl,
                 );
             }
             if spans.is_empty() && !o.only_matching {
@@ -528,10 +570,12 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
                     b':',
                     None,
                     &render_replace(cx, text),
+                    None,
                 );
             }
         } else {
             let col = spans.first().map(|s| s.0 + 1).filter(|_| o.column);
+            let hl = (!o.invert && o.replace.is_none()).then_some(spans.as_slice());
             emit(
                 &mut fo.out,
                 cx,
@@ -540,6 +584,7 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
                 b':',
                 col,
                 &render_replace(cx, text),
+                hl,
             );
         }
         let mut last = *i;
@@ -590,9 +635,10 @@ fn emit_text_line(
     col: Option<usize>,
 ) {
     let (s, e) = lines[i];
-    emit(buf, cx, display, i + 1, sep, col, &data[s..e]);
+    emit(buf, cx, display, i + 1, sep, col, &data[s..e], None);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit(
     buf: &mut Vec<u8>,
     cx: &Ctx<'_>,
@@ -601,26 +647,65 @@ fn emit(
     sep: u8,
     col: Option<usize>,
     text: &[u8],
+    hl_spans: Option<&[(usize, usize)]>,
 ) {
     let o = cx.o;
+    let use_color = o.color && !o.vimgrep && !o.null;
     if cx.show_name || o.vimgrep {
-        buf.extend_from_slice(display.as_bytes());
+        if use_color {
+            buf.extend_from_slice(b"\x1b[35m");
+            buf.extend_from_slice(display.as_bytes());
+            buf.extend_from_slice(b"\x1b[0m");
+        } else {
+            buf.extend_from_slice(display.as_bytes());
+        }
         buf.push(if o.null { 0 } else { sep });
     }
     if o.line_number || o.vimgrep {
-        buf.extend_from_slice(line_no.to_string().as_bytes());
+        if use_color {
+            buf.extend_from_slice(b"\x1b[32m");
+            buf.extend_from_slice(line_no.to_string().as_bytes());
+            buf.extend_from_slice(b"\x1b[0m");
+        } else {
+            buf.extend_from_slice(line_no.to_string().as_bytes());
+        }
         buf.push(sep);
     }
     if let Some(c) = col {
         buf.extend_from_slice(c.to_string().as_bytes());
         buf.push(sep);
     }
+    if use_color {
+        if let Some(spans) = hl_spans.filter(|s| !s.is_empty()) {
+            let mut pos = 0;
+            for &(s, e) in spans {
+                let s = s.min(text.len());
+                let e = e.min(text.len());
+                if s >= pos && e > s {
+                    buf.extend_from_slice(&text[pos..s]);
+                    buf.extend_from_slice(b"\x1b[1;31m");
+                    buf.extend_from_slice(&text[s..e]);
+                    buf.extend_from_slice(b"\x1b[0m");
+                    pos = e;
+                }
+            }
+            buf.extend_from_slice(&text[pos..]);
+            buf.push(b'\n');
+            return;
+        }
+    }
     buf.extend_from_slice(text);
     buf.push(b'\n');
 }
 
 fn emit_path(buf: &mut Vec<u8>, o: &RgOptions, display: &str) {
-    buf.extend_from_slice(display.as_bytes());
+    if o.color && !o.null {
+        buf.extend_from_slice(b"\x1b[35m");
+        buf.extend_from_slice(display.as_bytes());
+        buf.extend_from_slice(b"\x1b[0m");
+    } else {
+        buf.extend_from_slice(display.as_bytes());
+    }
     buf.push(if o.null { 0 } else { b'\n' });
 }
 
@@ -733,6 +818,12 @@ fn targets(o: &RgOptions, req: &Req) -> Result<(TargetList, bool), String> {
     let mut any_dir = false;
     for root in &roots {
         if root.is_file() {
+            if o.walk
+                .max_filesize
+                .is_some_and(|max| root.metadata().is_ok_and(|m| m.len() > max))
+            {
+                continue;
+            }
             // Explicitly named files are searched as given, like ripgrep.
             out.push((root.clone(), root.to_string_lossy().into_owned(), true));
             continue;
@@ -745,7 +836,13 @@ fn targets(o: &RgOptions, req: &Req) -> Result<(TargetList, bool), String> {
         }
         any_dir = true;
         let filter = FileFilter::rg(root, &o.globs, &o.iglobs, &o.types, &o.types_not)?;
-        let mode = if o.text { IndexMode::Off } else { o.index };
+        // `.lancet` is built without following symlinks, so `--trust-index -L`
+        // falls back to a live walk rather than missing symlinked targets.
+        let mode = if o.text || (o.walk.follow && o.index == IndexMode::Trust) {
+            IndexMode::Off
+        } else {
+            o.index
+        };
         let mut planned: Option<Vec<Target>> = None;
         if mode != IndexMode::Off {
             match index::discover(root, o.index_dir.as_deref()) {
@@ -883,5 +980,16 @@ mod tests {
     #[test]
     fn replace_shifts_groups_under_word_mode() {
         assert_eq!(shift_group_refs("<$1|${2}|$0>"), "<${2}|${3}|${1}>");
+    }
+
+    #[test]
+    fn parse_filesize_supports_suffixes_and_rejects_invalid() {
+        assert_eq!(parse_filesize("100").unwrap(), 100);
+        assert_eq!(parse_filesize("1K").unwrap(), 1024);
+        assert_eq!(parse_filesize("2m").unwrap(), 2 * 1024 * 1024);
+        assert_eq!(parse_filesize("1GiB").unwrap(), 1024 * 1024 * 1024);
+        assert!(parse_filesize("").is_err());
+        assert!(parse_filesize("10X").is_err());
+        assert!(parse_filesize("abc").is_err());
     }
 }

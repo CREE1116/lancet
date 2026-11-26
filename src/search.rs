@@ -587,6 +587,12 @@ pub(crate) fn plan_targets_with_req(
                 if flags & (FLAG_BINARY | FLAG_ERROR) != 0 {
                     return;
                 }
+                if walk_opts
+                    .max_filesize
+                    .is_some_and(|max| seg.doc_meta(id).size > max)
+                {
+                    return;
+                }
                 let doc_rel = seg.doc_rel(id);
                 let local_rel: String = if rel_prefix.is_empty() {
                     doc_rel.into_owned()
@@ -606,6 +612,12 @@ pub(crate) fn plan_targets_with_req(
                         .map(|n| n.to_string_lossy().into_owned())
                         .unwrap_or_default()
                 };
+                if walk_opts
+                    .max_depth
+                    .is_some_and(|d| local_rel.split('/').count() > d)
+                {
+                    return;
+                }
                 if rel_prefix.is_empty() || is_dir || !local_rel.is_empty() {
                     stats.files_considered += 1;
                 }
