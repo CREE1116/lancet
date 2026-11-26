@@ -332,7 +332,7 @@ fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Planned, (Status, Strin
         });
     }
 
-    let bytes = fs::read(&path).map_err(|e| invalid(format!("{rel}: {e}")))?;
+    let bytes = edit::read_shared(&path).map_err(|e| invalid(format!("{rel}: {e}")))?;
     if crate::content::is_binary(&bytes) {
         return Err((Status::Unsupported, format!("{rel}: binary file")));
     }
@@ -381,16 +381,31 @@ fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Planned, (Status, Strin
     let mut min_line = 0usize; // hunks apply in order and may not overlap
     for (n, h) in fp.hunks.iter().enumerate() {
         let want = h.old_start.saturating_sub(1);
-        let at = locate(&file_lines, &h.old, want, min_line).ok_or_else(|| {
-            (
-                Status::Conflict,
-                format!(
-                    "{rel}: hunk {} (@@ -{} @@) does not match the file; nothing applied",
-                    n + 1,
-                    h.old_start
-                ),
-            )
-        })?;
+        let at = match locate(&file_lines, &h.old, want, min_line) {
+            Located::At(at) => at,
+            Located::Missing => {
+                return Err((
+                    Status::Conflict,
+                    format!(
+                        "{rel}: hunk {} (@@ -{} @@) does not match the file; nothing applied",
+                        n + 1,
+                        h.old_start
+                    ),
+                ))
+            }
+            Located::Ambiguous(a, b) => {
+                return Err((
+                    Status::Conflict,
+                    format!(
+                        "{rel}: hunk {} (@@ -{} @@) matches equally well at lines {} and {}; nothing applied (regenerate the diff against the current file)",
+                        n + 1,
+                        h.old_start,
+                        a + 1,
+                        b + 1
+                    ),
+                ))
+            }
+        };
         offsets.push(at as isize - want as isize);
         min_line = at + h.old.len();
         let s = starts.get(at).copied().unwrap_or(src.len());
@@ -446,23 +461,41 @@ fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Planned, (Status, Strin
     })
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum Located {
+    At(usize),
+    Missing,
+    /// Two matches at the same distance from the stated line: refuse, don't guess.
+    Ambiguous(usize, usize),
+}
+
 /// Where `old` occurs in `file` at or after `min`: the stated position if it
-/// matches, else the nearest unique-distance match (ties prefer earlier lines).
-fn locate(file: &[String], old: &[String], want: usize, min: usize) -> Option<usize> {
+/// matches, else the nearest match — unless the nearest distance has two.
+fn locate(file: &[String], old: &[String], want: usize, min: usize) -> Located {
     let fits =
         |at: usize| at >= min && at + old.len() <= file.len() && file[at..at + old.len()] == *old;
     if old.is_empty() {
         // Pure insertion: trust the header position.
-        return (want.max(min) <= file.len()).then_some(want.max(min));
+        let at = want.max(min);
+        return if at <= file.len() {
+            Located::At(at)
+        } else {
+            Located::Missing
+        };
     }
     if fits(want) {
-        return Some(want);
+        return Located::At(want);
     }
-    (1..=file.len()).find_map(|d| {
+    for d in 1..=file.len() {
         let before = want.checked_sub(d).filter(|&a| fits(a));
         let after = Some(want + d).filter(|&a| fits(a));
-        before.or(after)
-    })
+        match (before, after) {
+            (Some(a), Some(b)) => return Located::Ambiguous(a, b),
+            (Some(a), None) | (None, Some(a)) => return Located::At(a),
+            (None, None) => {}
+        }
+    }
+    Located::Missing
 }
 
 fn write_one(p: &Planned) -> Result<(), String> {
@@ -541,8 +574,14 @@ mod tests {
             .map(|s| s.to_string())
             .collect();
         let old: Vec<String> = vec!["a".into(), "b".into()];
-        assert_eq!(locate(&f, &old, 4, 0), Some(4));
-        assert_eq!(locate(&f, &old, 3, 0), Some(4)); // distance 1 after beats 2 before
-        assert_eq!(locate(&f, &old, 3, 5), None);
+        assert_eq!(locate(&f, &old, 4, 0), Located::At(4));
+        assert_eq!(locate(&f, &old, 3, 0), Located::At(4)); // distance 1 after beats 2 before
+        assert_eq!(locate(&f, &old, 3, 5), Located::Missing);
+        // Equidistant copies: refuse instead of picking one.
+        let g: Vec<String> = ["a", "b", "x", "x", "a", "b"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(locate(&g, &old, 2, 0), Located::Ambiguous(0, 4));
     }
 }

@@ -1071,8 +1071,23 @@ mod imp {
         rewrite: Option<&str>,
         apply: bool,
     ) -> Option<FileResult> {
-        let bytes = match fs::read(&target.path) {
+        // Rewrites read under a shared lock so a concurrent lancet writer can't make
+        // the read fail (Windows byte-range locks), and a failed read is reported.
+        let read = if rewrite.is_some() {
+            edit::read_shared(&target.path)
+        } else {
+            fs::read(&target.path)
+        };
+        let bytes = match read {
             Ok(b) => b,
+            Err(e) if rewrite.is_some() => {
+                return Some(FileResult {
+                    parsed: false,
+                    matches: Vec::new(),
+                    diff: None,
+                    warning: Some(format!("{}: not rewritten, read failed: {e}", target.rel)),
+                })
+            }
             Err(_) => return None,
         };
         if memchr::memchr(0, &bytes).is_some() {
