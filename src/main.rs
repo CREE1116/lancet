@@ -1073,6 +1073,10 @@ struct RgCli {
     /// Search binary files as text
     #[arg(short = 'a', long)]
     text: bool,
+    /// Also search inside PDFs, Office files, HWP/HWPX, EPUB and archives
+    /// (lancet extension; off by default so output matches ripgrep)
+    #[arg(long)]
+    docs: bool,
     /// Include/exclude paths by glob (`!` negates; repeatable)
     #[arg(short = 'g', long, allow_hyphen_values = true)]
     glob: Vec<String>,
@@ -1190,6 +1194,7 @@ fn run_rg(cli: RgCli) -> ExitCode {
     o.null = cli.null;
     o.replace = cli.replace;
     o.text = cli.text || cli.unrestricted >= 3;
+    o.docs = cli.docs;
     o.globs = cli.glob;
     o.iglobs = cli.iglob;
     o.types = cli.type_;

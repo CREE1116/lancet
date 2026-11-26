@@ -2375,3 +2375,45 @@ fn rg_mode_skips_late_nul_binaries_in_directory_searches() {
     let mut out = Vec::new();
     assert!(run(&o, &mut out).unwrap());
 }
+
+#[cfg(unix)]
+#[test]
+fn edits_keep_the_file_the_same_file() {
+    use lancet::edit_cmd::{edit_file, EditOptions, Op, Target};
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    fs::write(d.join("real.txt"), "old\n").unwrap();
+    std::os::unix::fs::symlink("real.txt", d.join("link.txt")).unwrap();
+    fs::write(d.join("h1.txt"), "old\n").unwrap();
+    fs::hard_link(d.join("h1.txt"), d.join("h2.txt")).unwrap();
+    fs::write(d.join("mode.txt"), "old\n").unwrap();
+    fs::set_permissions(d.join("mode.txt"), fs::Permissions::from_mode(0o640)).unwrap();
+    for f in ["link.txt", "h1.txt", "mode.txt"] {
+        let mut o = EditOptions::new(
+            d.join(f),
+            Target::Lines(1, Some(1)),
+            Op::Replace("new".into()),
+        );
+        o.apply = true;
+        assert_eq!(edit_file(&o).status, Status::Complete, "{f}");
+    }
+    // The symlink is still a symlink and its target changed.
+    assert!(fs::symlink_metadata(d.join("link.txt"))
+        .unwrap()
+        .file_type()
+        .is_symlink());
+    assert_eq!(fs::read_to_string(d.join("real.txt")).unwrap(), "new\n");
+    // Both hard-link names still see the same (new) content.
+    assert_eq!(fs::read_to_string(d.join("h2.txt")).unwrap(), "new\n");
+    // Permissions survive the atomic replace.
+    assert_eq!(
+        fs::metadata(d.join("mode.txt"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o640
+    );
+}

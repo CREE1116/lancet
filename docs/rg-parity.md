@@ -80,7 +80,7 @@
 | `--no-index` | Ignore `.lancet` and scan files directly |
 | `--trust-index` | Answer from `.lancet` without checking files for changes (mtime, size, ctime, inode) |
 | `--index-dir <DIR>` | Custom index directory (default: `PATH/.lancet` or ancestor) |
-| Document & archive extraction | Searches `.pdf`, `.docx`, `.pptx`, `.odt`, `.hwp`, `.hwpx`, `.epub`, `.xlsx`/`.xls`/`.ods`, `.zip`, `.tar`, `.gz`, `.tgz` in-process |
+| `--docs` | Also search inside `.pdf`, `.docx`, `.pptx`, `.odt`, `.hwp`, `.hwpx`, `.epub`, `.xlsx`/`.xls`/`.ods`, `.zip`, `.tar`, `.gz`, `.tgz` in-process. Off by default, so output matches ripgrep (which treats them as binary) |
 
 ---
 

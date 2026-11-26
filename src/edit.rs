@@ -6,7 +6,7 @@
 //! so every command gets the same safety guarantees.
 
 use std::fs::{self, File};
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::path::Path;
 
 /// Replace `src[start..end]` with `replacement` (byte offsets on char boundaries).
@@ -64,8 +64,17 @@ pub fn rev(bytes: &[u8]) -> String {
     format!("{h:016x}")
 }
 
+/// Replace the contents of `path` with `data`, keeping it the *same file*:
+/// - a symlink is followed: the link stays, its target gets the new content;
+/// - permissions are kept, and owner/group too where the OS allows (Unix);
+/// - a file with several hard links is rewritten in place, because renaming a new
+///   file over it would silently split the links (the other names keep the old text);
+/// - otherwise the content goes to a temp file next to it that is renamed over it,
+///   so a reader sees the old or the new file, never a mix.
 pub fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
-    let perms = fs::metadata(path)?.permissions();
+    let real = fs::canonicalize(path)?;
+    let path = real.as_path();
+    let meta = fs::metadata(path)?;
     let parent = path
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
@@ -78,8 +87,27 @@ pub fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
     static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let tmp = parent.join(format!(".{name}.lancet-tmp.{}.{seq}", std::process::id()));
+    // Written first even for the in-place case, so a full disk fails before the
+    // original is touched.
     fs::write(&tmp, data)?;
-    let _ = fs::set_permissions(&tmp, perms);
+    let _ = fs::set_permissions(&tmp, meta.permissions());
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let _ = std::os::unix::fs::chown(&tmp, Some(meta.uid()), Some(meta.gid()));
+    }
+    if hard_links(&meta) > 1 {
+        let res = fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(path)
+            .and_then(|mut f| {
+                f.write_all(data)?;
+                f.sync_all()
+            });
+        let _ = fs::remove_file(&tmp);
+        return res;
+    }
     for attempt in 0..8 {
         match fs::rename(&tmp, path) {
             Ok(()) => return Ok(()),
@@ -246,6 +274,17 @@ fn line_diff(rel: &str, old: &str, new: &str) -> String {
     }
     out
 }
+#[cfg(unix)]
+fn hard_links(m: &fs::Metadata) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    m.nlink()
+}
+
+#[cfg(not(unix))]
+fn hard_links(_: &fs::Metadata) -> u64 {
+    1
+}
+
 /// Why [`write_if_rev`] did not write.
 #[derive(Debug)]
 pub enum WriteError {

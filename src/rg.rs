@@ -56,6 +56,9 @@ pub struct RgOptions {
     pub replace: Option<String>,
     /// Search binary files as text (`-a`, `-uuu`).
     pub text: bool,
+    /// Search inside PDFs, Office files, HWP and archives (lancet's extractors).
+    /// Off by default so output matches ripgrep, which treats them as binary.
+    pub docs: bool,
     pub globs: Vec<String>,
     pub iglobs: Vec<String>,
     pub types: Vec<String>,
@@ -94,6 +97,7 @@ impl RgOptions {
             null: false,
             replace: None,
             text: false,
+            docs: false,
             globs: Vec::new(),
             iglobs: Vec::new(),
             types: Vec::new(),
@@ -341,21 +345,26 @@ struct Ctx<'a> {
 /// `explicit`: named on the command line (searched even if binary, like ripgrep).
 fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Option<FileOut> {
     let o = cx.o;
-    let data = match content::load_searchable(path, false) {
-        Ok(Some(d)) => d,
-        Ok(None) if o.text => content::read(path).ok()?,
-        _ => return None,
+    let data = if o.docs && crate::adapters::is_adapted_path(path, false) {
+        // --docs: the text lancet's extractors see (PDF, Office, HWP, archives).
+        content::load_searchable(path, false).ok()??
+    } else {
+        // Raw bytes, as ripgrep sees them — PDFs and Office files included.
+        let raw = content::read(path).ok()?;
+        // Binary files are skipped unless -a: in directory searches ripgrep treats a
+        // NUL anywhere as binary (lancet's 8 KiB sniff alone would let late-NUL
+        // protobufs through); a file named explicitly is judged by its first bytes.
+        let binary = if explicit {
+            content::is_binary(&raw)
+        } else {
+            memchr::memchr(0, &raw).is_some()
+        };
+        if binary && !o.text {
+            return None;
+        }
+        raw
     };
     let data: &[u8] = &data;
-    // In directory searches ripgrep treats a NUL byte anywhere as binary and skips the
-    // file; lancet's 8 KiB sniff alone would let late-NUL files (protobufs…) through.
-    if !explicit
-        && !o.text
-        && !crate::adapters::is_adapted_path(path, false)
-        && memchr::memchr(0, data).is_some()
-    {
-        return None;
-    }
     let mut fo = FileOut {
         display,
         out: Vec::new(),

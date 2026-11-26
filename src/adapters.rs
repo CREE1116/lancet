@@ -72,6 +72,25 @@ mod imp {
         }
     }
 
+    thread_local! {
+        /// Set while a third-party extractor runs on this thread.
+        static IN_ADAPTER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+
+    /// Extractor panics (a malformed PDF, say) are caught and the file is treated as
+    /// unreadable; don't also print a panic message for them. Other panics still print.
+    fn quiet_adapter_panics() {
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        ONCE.call_once(|| {
+            let prev = panic::take_hook();
+            panic::set_hook(Box::new(move |info| {
+                if !IN_ADAPTER.with(|c| c.get()) {
+                    prev(info);
+                }
+            }));
+        });
+    }
+
     #[inline]
     pub fn is_adapted_path(path: &Path, ocr: bool) -> bool {
         match detect(path) {
@@ -103,6 +122,8 @@ mod imp {
         if meta.len() == 0 || meta.len() > MAX_INPUT_BYTES {
             return Ok(None);
         }
+        quiet_adapter_panics();
+        IN_ADAPTER.with(|c| c.set(true));
         let res = panic::catch_unwind(AssertUnwindSafe(|| match kind {
             Kind::Pdf => {
                 let txt = extract_pdf(path)?;
@@ -125,6 +146,7 @@ mod imp {
             Kind::Zip => extract_zip(path),
             Kind::Image => Ok(run_tesseract(path).map(|s| s.into_bytes())),
         }));
+        IN_ADAPTER.with(|c| c.set(false));
         match res {
             Ok(Ok(Some(mut out))) => {
                 truncate_utf8(&mut out, MAX_EXTRACTED_BYTES);
