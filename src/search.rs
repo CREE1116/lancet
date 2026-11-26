@@ -583,7 +583,7 @@ pub(crate) fn plan_targets_with_req(
                 if ix.is_dead(si, id) {
                     return;
                 }
-                let (_, _, flags) = seg.doc_meta(id);
+                let flags = seg.doc_meta(id).flags;
                 if flags & (FLAG_BINARY | FLAG_ERROR) != 0 {
                     return;
                 }
@@ -662,8 +662,9 @@ pub(crate) fn plan_targets_with_req(
             };
             let keep = match hit {
                 Some((si, id)) => {
-                    let (mt, sz, flags) = ix.segs[si].doc_meta(id);
-                    if mt == e.mtime_ns && sz == e.size {
+                    let meta = ix.segs[si].doc_meta(id);
+                    let flags = meta.flags;
+                    if meta.matches(e) {
                         let k = flags & FLAG_BINARY == 0
                             && (flags & (FLAG_ERROR | FLAG_OVERSIZE) != 0 || ok(si, id));
                         cands += k as usize;

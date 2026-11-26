@@ -866,6 +866,8 @@ fn incremental_sync_freshness_and_segment_gc() {
     let dir = build_rich_corpus();
     let root = dir.path();
     let idx_dir = index::default_dir(root);
+    // Files written within the racy window of a sync are re-indexed on the next one.
+    std::thread::sleep(Duration::from_millis(250));
 
     let rep1 = index::sync(root, &idx_dir, &WalkOpts::default()).unwrap();
     assert_eq!(rep1.segments, 1);
@@ -1720,4 +1722,47 @@ fn edit_lines_symbol_rev_and_syntax_guard() {
         ));
         assert_eq!(r.status, Status::Unsupported);
     }
+}
+
+#[test]
+fn freshness_catches_preserved_mtime_and_racy_files() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    let a = root.join("a.txt");
+    fs::write(&a, "alpha_token\n").unwrap();
+    let old_mtime = fs::metadata(&a).unwrap().modified().unwrap();
+    std::thread::sleep(Duration::from_millis(250)); // leave the racy window
+    let idx_dir = index::default_dir(root);
+    index::sync(root, &idx_dir, &WalkOpts::default()).unwrap();
+
+    // Same size, new content, mtime put back (what `cp -p`, `tar -x`, `touch -r` do):
+    // (mtime, size) look unchanged, but ctime/inode do not.
+    fs::write(&a, "omega_token\n").unwrap();
+    fs::File::options()
+        .write(true)
+        .open(&a)
+        .unwrap()
+        .set_modified(old_mtime)
+        .unwrap();
+    assert_eq!(fs::metadata(&a).unwrap().modified().unwrap(), old_mtime);
+    for q in ["\"omega_token\"", "\"alpha_token\""] {
+        let scan = search(q, &opts(root, IndexMode::Off));
+        let auto = search(q, &opts(root, IndexMode::Auto));
+        assert_eq_responses(&scan, &auto, &format!("preserved mtime ({q})"));
+    }
+    #[cfg(unix)]
+    assert_eq!(
+        search("\"omega_token\"", &opts(root, IndexMode::Auto)).matched,
+        1
+    );
+
+    // A file written right before a sync is flagged racy and always rescanned.
+    fs::write(root.join("b.txt"), "beta_token\n").unwrap();
+    index::sync(root, &idx_dir, &WalkOpts::default()).unwrap();
+    let ix = Index::open(&idx_dir).unwrap().unwrap();
+    let (si, id) = ix.lookup_live(b"b.txt").unwrap();
+    assert_ne!(ix.segs[si].doc_meta(id).flags & index::FLAG_RACY, 0);
+    let auto = search("\"beta_token\"", &opts(root, IndexMode::Auto));
+    assert_eq!(auto.matched, 1);
+    assert!(auto.stats.stale_files.unwrap_or(0) >= 1);
 }

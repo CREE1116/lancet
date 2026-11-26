@@ -451,7 +451,8 @@ fn collect_from_index(
             if local_rel.is_empty() {
                 continue;
             }
-            let (mt, sz, _) = seg.doc_meta(id);
+            let m = seg.doc_meta(id);
+            let (mt, sz) = (m.mtime_ns, m.size);
             if cf.include_dirs {
                 let mut cur = local_rel.as_str();
                 while let Some(pos) = cur.rfind('/') {

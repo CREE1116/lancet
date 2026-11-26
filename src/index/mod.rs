@@ -1,9 +1,9 @@
-//! Optional on-disk trigram index (`LANCET03`) with zero-allocation mmap
+//! Optional on-disk trigram index (`LANCET04`) with zero-allocation mmap
 //! lookups and tiered LSM segment compaction.
 //!
 //! Layout (`<root>/.lancet/` by default):
 //! - `manifest.json`: format version, segment list, sorted tombstones.
-//! - `seg-NNNNNN.wseg`: immutable zero-copy segment (`LANCET03`, mmap'd at query time).
+//! - `seg-NNNNNN.wseg`: immutable zero-copy segment (`LANCET04`, mmap'd at query time).
 
 pub mod req;
 pub mod segment;
@@ -18,10 +18,12 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 pub use req::{EvalTrace, Req};
-pub use segment::{Segment, FLAG_BINARY, FLAG_ERROR, FLAG_OVERSIZE, MAX_INDEX_FILE_BYTES};
+pub use segment::{
+    DocMeta, Segment, FLAG_BINARY, FLAG_ERROR, FLAG_OVERSIZE, FLAG_RACY, MAX_INDEX_FILE_BYTES,
+};
 
 pub const DIR_NAME: &str = ".lancet";
-const FORMAT_VERSION: u32 = 3;
+const FORMAT_VERSION: u32 = 4;
 const MANIFEST: &str = "manifest.json";
 /// Max input bytes per new segment (bounds memory during build).
 const SEGMENT_INPUT_BYTES: u64 = 96 << 20;
@@ -234,11 +236,17 @@ pub fn sync(root: &Path, dir: &Path, wopts: &WalkOpts) -> Result<SyncReport> {
 /// Create or incrementally update the index for `root` in `dir`, optionally running OCR.
 pub fn sync_with_ocr(root: &Path, dir: &Path, wopts: &WalkOpts, ocr: bool) -> Result<SyncReport> {
     let t0 = Instant::now();
+    // Taken before the walk: anything stamped later than this minus the timestamp
+    // granularity may still change within the same tick, so it is marked racy.
+    let sync_start_ns = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos() as u64);
     fs::create_dir_all(dir)?;
     let existing = Index::open(dir)?;
     let had_existing = existing.is_some();
 
     let entries = walk(root, wopts, &FileFilter::all(), true);
+    let racy_cutoff = sync_start_ns.saturating_sub(segment::racy_window_ns(&entries));
     let mut rep = SyncReport {
         files: entries.len(),
         ..SyncReport::default()
@@ -266,8 +274,7 @@ pub fn sync_with_ocr(root: &Path, dir: &Path, wopts: &WalkOpts, ocr: bool) -> Re
                         let e_idx = hint + off;
                         hint = e_idx;
                         let e = &entries[e_idx];
-                        let (mt, sz, _) = seg.doc_meta(id);
-                        if !matched[e_idx] && mt == e.mtime_ns && sz == e.size {
+                        if !matched[e_idx] && seg.doc_meta(id).matches(e) {
                             matched[e_idx] = true;
                             rep.unchanged += 1;
                         } else {
@@ -316,7 +323,13 @@ pub fn sync_with_ocr(root: &Path, dir: &Path, wopts: &WalkOpts, ocr: bool) -> Re
         }
         let name = format!("seg-{:06}.wseg", manifest.next_seg);
         manifest.next_seg += 1;
-        segment::build(&dir.join(&name), &to_add[i..j], ocr, &mut scratch)?;
+        segment::build(
+            &dir.join(&name),
+            &to_add[i..j],
+            ocr,
+            racy_cutoff,
+            &mut scratch,
+        )?;
         manifest.segments.push(SegEntry { name, dead: vec![] });
         seg_docs.push(j - i);
         rep.bytes_indexed += bytes;

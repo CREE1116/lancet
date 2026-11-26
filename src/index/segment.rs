@@ -1,9 +1,9 @@
-//! Zero-copy immutable trigram index segment (`LANCET03`).
+//! Zero-copy immutable trigram index segment (`LANCET04`).
 //!
 //! ```text
-//! header (40 B): "LANCET03" ndocs:u32 nkeys:u32 doc_offs_off:u64 keys_off:u64 post_off:u64
+//! header (40 B): "LANCET04" ndocs:u32 nkeys:u32 doc_offs_off:u64 keys_off:u64 post_off:u64
 //! doc_offs:      (ndocs + 1) x u32 offsets relative to docs_off (docs_off = doc_offs_off + (ndocs + 1) * 4)
-//! docs:          per doc (sorted by rel_utf8_bytes): mtime_ns:u64 size:u64 flags:u8 rel_utf8_bytes
+//! docs:          per doc (sorted by rel_utf8_bytes): mtime_ns:u64 size:u64 ctime_ns:u64 ino:u64 flags:u8 rel_utf8_bytes
 //! keys:          nkeys x (key:u32 off:u32) + sentinel_end_off:u32, sorted by key
 //! postings:      varint(count) then delta-varint doc ids
 //! ```
@@ -27,10 +27,35 @@ use std::path::Path;
 pub const FLAG_BINARY: u8 = 1;
 pub const FLAG_ERROR: u8 = 2;
 pub const FLAG_OVERSIZE: u8 = 4;
+/// Indexed within the filesystem timestamp granularity of the sync: a later edit in
+/// the same tick would keep (mtime, size, ctime), so the doc is never trusted ("racy git").
+pub const FLAG_RACY: u8 = 8;
+/// Racy window on coarse filesystems (covers 1 s HFS+/ext3 and 2 s FAT timestamps).
+const RACY_WINDOW_COARSE_NS: u64 = 2_000_000_000;
+/// Racy window when timestamps carry sub-second digits (APFS, ext4, NTFS): kernels
+/// stamp files from a coarse clock that ticks every few ms, so 100 ms is ample.
+const RACY_WINDOW_FINE_NS: u64 = 100_000_000;
+
+/// How close to the sync start a file's mtime/ctime must be to count as racy,
+/// estimated from the timestamps themselves: if any sampled file has a non-zero
+/// sub-second part the filesystem is fine-grained.
+pub fn racy_window_ns(entries: &[FileEntry]) -> u64 {
+    let fine = entries
+        .iter()
+        .take(4096)
+        .any(|e| e.mtime_ns % 1_000_000_000 != 0);
+    if fine {
+        RACY_WINDOW_FINE_NS
+    } else {
+        RACY_WINDOW_COARSE_NS
+    }
+}
 /// Files larger than 64 MiB are marked `FLAG_OVERSIZE` and streamed via mmap at query time.
 pub const MAX_INDEX_FILE_BYTES: u64 = 64 << 20;
 
-const MAGIC: &[u8; 8] = b"LANCET03";
+const MAGIC: &[u8; 8] = b"LANCET04";
+/// Bytes before the relative path in a doc record.
+const DOC_FIXED: usize = 33;
 const HEADER: usize = 40;
 const KEY_ENTRY: usize = 8;
 
@@ -126,10 +151,34 @@ pub struct BuildScratch {
     post: Vec<u8>,
 }
 
+/// What the index knows about one file on disk.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DocMeta {
+    pub mtime_ns: u64,
+    pub size: u64,
+    pub ctime_ns: u64,
+    pub ino: u64,
+    pub flags: u8,
+}
+
+impl DocMeta {
+    /// True if the indexed content still describes `e`; otherwise the file must be
+    /// read from disk. Every freshness decision goes through here.
+    pub fn matches(&self, e: &FileEntry) -> bool {
+        self.flags & FLAG_RACY == 0
+            && self.mtime_ns == e.mtime_ns
+            && self.size == e.size
+            && self.ctime_ns == e.ctime_ns
+            && self.ino == e.ino
+    }
+}
+
+/// Build a segment. Files changed at or after `racy_cutoff_ns` get [`FLAG_RACY`].
 pub fn build(
     path: &Path,
     batch: &[&FileEntry],
     ocr: bool,
+    racy_cutoff_ns: u64,
     scratch: &mut BuildScratch,
 ) -> Result<()> {
     let sorted_owned: Vec<&FileEntry>;
@@ -185,7 +234,10 @@ pub fn build(
             doc_offs.extend_from_slice(&(docs.len() as u32).to_le_bytes());
             docs.extend_from_slice(&e.mtime_ns.to_le_bytes());
             docs.extend_from_slice(&e.size.to_le_bytes());
-            docs.push(flags);
+            docs.extend_from_slice(&e.ctime_ns.to_le_bytes());
+            docs.extend_from_slice(&e.ino.to_le_bytes());
+            let racy = e.mtime_ns.max(e.ctime_ns) >= racy_cutoff_ns;
+            docs.push(flags | if racy { FLAG_RACY } else { 0 });
             docs.extend_from_slice(e.rel.as_bytes());
             pairs.extend(grams.into_iter().map(|k| ((k as u64) << 32) | id as u64));
         }
@@ -382,7 +434,7 @@ impl Segment {
 
     #[inline]
     pub fn doc_rel_bytes(&self, id: u32) -> &[u8] {
-        &self.doc_record(id)[17..]
+        &self.doc_record(id)[DOC_FIXED..]
     }
 
     #[inline]
@@ -391,9 +443,15 @@ impl Segment {
     }
 
     #[inline]
-    pub fn doc_meta(&self, id: u32) -> (u64, u64, u8) {
+    pub fn doc_meta(&self, id: u32) -> DocMeta {
         let r = self.doc_record(id);
-        (u64_at(r, 0), u64_at(r, 8), r[16])
+        DocMeta {
+            mtime_ns: u64_at(r, 0),
+            size: u64_at(r, 8),
+            ctime_ns: u64_at(r, 16),
+            ino: u64_at(r, 24),
+            flags: r[32],
+        }
     }
 
     /// Zero-allocation binary search over the sorted mmap document table.

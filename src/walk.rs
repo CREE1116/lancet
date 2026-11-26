@@ -23,6 +23,11 @@ pub struct FileEntry {
     pub rel: String,
     pub size: u64,
     pub mtime_ns: u64,
+    /// Status-change time; unlike mtime it cannot be set back by `cp -p`, `tar`,
+    /// `rsync -t` or `touch -r`. 0 where the platform has none (Windows).
+    pub ctime_ns: u64,
+    /// Inode number (0 where unavailable).
+    pub ino: u64,
 }
 
 pub struct FileFilter {
@@ -102,6 +107,23 @@ pub fn rel_path(root: &Path, path: &Path) -> String {
     }
 }
 
+/// `(ctime_ns, inode)`; zeros on platforms without them.
+pub fn change_stamp(m: &std::fs::Metadata) -> (u64, u64) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let ct = (m.ctime().max(0) as u64)
+            .saturating_mul(1_000_000_000)
+            .saturating_add(m.ctime_nsec().max(0) as u64);
+        (ct, m.ino())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = m;
+        (0, 0)
+    }
+}
+
 pub fn mtime_ns(m: &std::fs::Metadata) -> u64 {
     m.modified()
         .ok()
@@ -149,19 +171,21 @@ pub fn walk(root: &Path, opts: &WalkOpts, filter: &FileFilter, need_meta: bool) 
             if ent.file_type().is_some_and(|t| t.is_file()) {
                 let rel = rel_path(root, ent.path());
                 if filter.accepts(&rel) {
-                    let (size, mtime) = if need_meta {
+                    let (size, mtime, (ctime, ino)) = if need_meta {
                         match ent.metadata() {
-                            Ok(m) => (m.len(), mtime_ns(&m)),
+                            Ok(m) => (m.len(), mtime_ns(&m), change_stamp(&m)),
                             Err(_) => return WalkState::Continue,
                         }
                     } else {
-                        (0, 0)
+                        (0, 0, (0, 0))
                     };
                     g.buf.push(FileEntry {
                         path: ent.path().to_path_buf(),
                         rel,
                         size,
                         mtime_ns: mtime,
+                        ctime_ns: ctime,
+                        ino,
                     });
                 }
             }
