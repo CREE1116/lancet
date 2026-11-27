@@ -246,6 +246,11 @@ pub fn sync_with_ocr(root: &Path, dir: &Path, wopts: &WalkOpts, ocr: bool) -> Re
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos() as u64);
     fs::create_dir_all(dir)?;
+    // A cache, not source: keep it out of `git status` without touching the repo's .gitignore.
+    let ignore = dir.join(".gitignore");
+    if !ignore.exists() {
+        let _ = fs::write(&ignore, "*\n");
+    }
     // The index is a cache: an old format (or a damaged one) is rebuilt, not an error.
     let existing = match Index::open(dir) {
         Ok(ix) => ix,

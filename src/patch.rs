@@ -24,6 +24,11 @@ struct Hunk {
     /// `\ No newline at end of file` after the old / new side.
     old_no_eol: bool,
     new_no_eol: bool,
+    /// Codex `apply_patch` hunks carry no line numbers: found by their text alone,
+    /// after the `@@ anchor` line if one is given, and at the end with `*** End of File`.
+    floating: bool,
+    anchor: Option<String>,
+    at_eof: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -34,6 +39,8 @@ struct FilePatch {
     hunks: Vec<Hunk>,
     /// Git `new mode` / `new file mode` (unix permission bits).
     new_mode: Option<u32>,
+    /// Codex `*** Delete File:` names the file without its content.
+    delete_any: bool,
 }
 
 /// What a `diff --git` block says before (or instead of) its `---`/`+++` lines.
@@ -88,6 +95,9 @@ fn parse_range(s: &str) -> Option<(usize, usize)> {
 
 /// Parse a unified diff. `strip` is `patch -p`: 1 removes `a/` / `b/`.
 fn parse(diff: &str, strip: usize) -> Result<Vec<FilePatch>, String> {
+    if diff.trim_start().starts_with("*** Begin Patch") {
+        return parse_codex(diff);
+    }
     let lines: Vec<&str> = diff.lines().collect();
     let mut files = Vec::new();
     let mut i = 0;
@@ -148,6 +158,7 @@ fn parse(diff: &str, strip: usize) -> Result<Vec<FilePatch>, String> {
                     new_path: h.new_path,
                     hunks: Vec::new(),
                     new_mode: h.new_mode,
+                    delete_any: false,
                 };
                 if fp.old_path == fp.new_path && fp.new_mode.is_none() {
                     return Err(format!(
@@ -173,6 +184,7 @@ fn parse(diff: &str, strip: usize) -> Result<Vec<FilePatch>, String> {
             new_path: strip_prefix(new, strip),
             hunks: Vec::new(),
             new_mode: git.as_ref().and_then(|g| g.new_mode),
+            delete_any: false,
         };
         i += 2;
         while i < lines.len() && lines[i].starts_with("@@ ") {
@@ -194,6 +206,9 @@ fn parse(diff: &str, strip: usize) -> Result<Vec<FilePatch>, String> {
                 new: Vec::new(),
                 old_no_eol: false,
                 new_no_eol: false,
+                floating: false,
+                anchor: None,
+                at_eof: false,
             };
             i += 1;
             let mut last = ' ';
@@ -500,7 +515,7 @@ fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Vec<Planned>, (Status, 
     let Some(new_path) = new_target else {
         // Deletion: the old side must be the whole file (an empty file has no hunk).
         let whole = match fp.hunks.as_slice() {
-            [] => src.is_empty(),
+            [] => src.is_empty() || fp.delete_any,
             [h] => h.old == file_lines,
             _ => false,
         };
@@ -536,7 +551,38 @@ fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Vec<Planned>, (Status, 
     let mut min_line = 0usize; // hunks apply in order and may not overlap
     for (n, h) in fp.hunks.iter().enumerate() {
         let want = h.old_start.saturating_sub(1);
-        let at = match locate(&file_lines, &h.old, want, min_line) {
+        let found = if h.floating {
+            locate_floating(&file_lines, h, min_line)
+        } else {
+            locate(&file_lines, &h.old, want, min_line)
+        };
+        if h.floating {
+            match found {
+                Located::At(_) => {}
+                Located::Missing => {
+                    return Err((
+                        Status::Conflict,
+                        format!(
+                            "{rel}: chunk {} does not match the file{}; nothing applied",
+                            n + 1,
+                            h.anchor.as_ref().map(|a| format!(" after `@@ {a}`")).unwrap_or_default()
+                        ),
+                    ))
+                }
+                Located::Ambiguous(a, b) => {
+                    return Err((
+                        Status::Conflict,
+                        format!(
+                            "{rel}: chunk {} matches at lines {} and {}; nothing applied (add context lines or an `@@` anchor so it matches once)",
+                            n + 1,
+                            a + 1,
+                            b + 1
+                        ),
+                    ))
+                }
+            }
+        }
+        let at = match found {
             Located::At(at) => at,
             Located::Missing => {
                 return Err((
@@ -561,7 +607,12 @@ fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Vec<Planned>, (Status, 
                 ))
             }
         };
-        offsets.push(at as isize - want as isize);
+        // Codex chunks have no line number to be off from.
+        offsets.push(if h.floating {
+            0
+        } else {
+            at as isize - want as isize
+        });
         min_line = at + h.old.len();
         let s = starts.get(at).copied().unwrap_or(src.len());
         let e = starts.get(at + h.old.len()).copied().unwrap_or(src.len());
@@ -703,6 +754,169 @@ fn locate(file: &[String], old: &[String], want: usize, min: usize) -> Located {
         }
     }
     Located::Missing
+}
+
+/// Where a Codex chunk applies: the only place at or after `min` (and after its
+/// anchor line) where its old lines occur — never the first of several, and never
+/// a whitespace-fuzzy match. A chunk with no old lines appends to the file.
+fn locate_floating(file: &[String], h: &Hunk, min: usize) -> Located {
+    let mut from = min;
+    if let Some(a) = &h.anchor {
+        match (from..file.len()).find(|&i| file[i].trim() == a.trim()) {
+            Some(i) => from = i + 1,
+            None => return Located::Missing,
+        }
+    }
+    if h.old.is_empty() {
+        return Located::At(file.len());
+    }
+    let n = h.old.len();
+    let mut hits = (from..=file.len().saturating_sub(n))
+        .filter(|&p| p + n <= file.len() && file[p..p + n] == *h.old)
+        .filter(|&p| !h.at_eof || p + n == file.len());
+    match (hits.next(), hits.next()) {
+        (Some(p), None) => Located::At(p),
+        (Some(a), Some(b)) => Located::Ambiguous(a, b),
+        (None, _) => Located::Missing,
+    }
+}
+
+/// Codex's `apply_patch` envelope:
+/// `*** Begin Patch` / `*** Add File: P` (`+` lines) / `*** Delete File: P` /
+/// `*** Update File: P` [`*** Move to: Q`] with `@@ [anchor]` chunks of ` `/`-`/`+`
+/// lines [`*** End of File`] / `*** End Patch`. Paths are used as written.
+fn parse_codex(text: &str) -> Result<Vec<FilePatch>, String> {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut i = lines
+        .iter()
+        .position(|l| l.trim() == "*** Begin Patch")
+        .ok_or("missing `*** Begin Patch`")?
+        + 1;
+    let mut files = Vec::new();
+    let new_hunk = |anchor: Option<String>| Hunk {
+        old_start: 0,
+        old: Vec::new(),
+        new: Vec::new(),
+        old_no_eol: false,
+        new_no_eol: false,
+        floating: true,
+        anchor,
+        at_eof: false,
+    };
+    loop {
+        let Some(&line) = lines.get(i) else {
+            return Err("missing `*** End Patch`".into());
+        };
+        let l = line.trim_end();
+        if l == "*** End Patch" {
+            break;
+        }
+        if let Some(p) = l.strip_prefix("*** Add File: ") {
+            let mut h = new_hunk(None);
+            i += 1;
+            while let Some(body) = lines.get(i).and_then(|x| x.strip_prefix('+')) {
+                h.new.push(body.to_string());
+                i += 1;
+            }
+            files.push(FilePatch {
+                old_path: None,
+                new_path: Some(p.trim().to_string()),
+                hunks: vec![h],
+                new_mode: None,
+                delete_any: false,
+            });
+        } else if let Some(p) = l.strip_prefix("*** Delete File: ") {
+            files.push(FilePatch {
+                old_path: Some(p.trim().to_string()),
+                new_path: None,
+                hunks: Vec::new(),
+                new_mode: None,
+                delete_any: true,
+            });
+            i += 1;
+        } else if let Some(p) = l.strip_prefix("*** Update File: ") {
+            let old = p.trim().to_string();
+            i += 1;
+            let mut new_path = old.clone();
+            if let Some(q) = lines
+                .get(i)
+                .and_then(|x| x.trim_end().strip_prefix("*** Move to: "))
+            {
+                new_path = q.trim().to_string();
+                i += 1;
+            }
+            let mut hunks: Vec<Hunk> = Vec::new();
+            let mut cur: Option<Hunk> = None;
+            while let Some(&raw) = lines.get(i) {
+                let t = raw.trim_end();
+                if t == "*** End of File" {
+                    if let Some(h) = cur.as_mut() {
+                        h.at_eof = true;
+                    }
+                    i += 1;
+                    continue;
+                }
+                if t.starts_with("*** ") {
+                    break;
+                }
+                if let Some(rest) = t.strip_prefix("@@") {
+                    hunks.extend(
+                        cur.take()
+                            .filter(|h| !h.old.is_empty() || !h.new.is_empty()),
+                    );
+                    let a = rest.trim();
+                    cur = Some(new_hunk((!a.is_empty()).then(|| a.to_string())));
+                    i += 1;
+                    continue;
+                }
+                let h = cur.get_or_insert_with(|| new_hunk(None));
+                match raw.chars().next() {
+                    Some('+') => h.new.push(raw[1..].to_string()),
+                    Some('-') => h.old.push(raw[1..].to_string()),
+                    Some(' ') => {
+                        h.old.push(raw[1..].to_string());
+                        h.new.push(raw[1..].to_string());
+                    }
+                    None => {
+                        h.old.push(String::new());
+                        h.new.push(String::new());
+                    }
+                    Some(_) => {
+                        return Err(format!(
+                            "line {}: unexpected `{raw}` in an update chunk",
+                            i + 1
+                        ))
+                    }
+                }
+                i += 1;
+            }
+            hunks.extend(
+                cur.take()
+                    .filter(|h| !h.old.is_empty() || !h.new.is_empty()),
+            );
+            if hunks.is_empty() && new_path == old {
+                return Err(format!("{old}: `*** Update File` with no changes"));
+            }
+            files.push(FilePatch {
+                old_path: Some(old),
+                new_path: Some(new_path),
+                hunks,
+                new_mode: None,
+                delete_any: false,
+            });
+        } else if l.is_empty() {
+            i += 1;
+        } else {
+            return Err(format!(
+                "line {}: expected a `*** Add/Update/Delete File:` header, found `{l}`",
+                i + 1
+            ));
+        }
+    }
+    if files.is_empty() {
+        return Err("no file changes found in the patch".into());
+    }
+    Ok(files)
 }
 
 fn write_one(p: &Planned) -> Result<(), String> {

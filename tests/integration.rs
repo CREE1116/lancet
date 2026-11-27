@@ -2698,6 +2698,7 @@ fn edit_find_replaces_exact_text_once_or_all() {
             Target::Find {
                 text: text.into(),
                 all,
+                count: None,
             },
             op,
         );
@@ -3036,4 +3037,152 @@ fn multi_file_edits_are_all_or_nothing() {
             assert!(r.error.unwrap().message.contains("nothing applied"));
         }
     }
+}
+
+#[test]
+fn builtin_tool_syntax_write_and_codex_patches() {
+    use std::process::Command;
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/a.py"),
+        "def a():\n    return 1\n\ndef b():\n    return 1\n",
+    )
+    .unwrap();
+    let run = |args: &[&str], stdin: Option<&str>| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_lancet"))
+            .args(args)
+            .current_dir(root)
+            .stdin(if stdin.is_some() {
+                std::process::Stdio::piped()
+            } else {
+                std::process::Stdio::null()
+            })
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        if let Some(s) = stdin {
+            use std::io::Write;
+            c.stdin.take().unwrap().write_all(s.as_bytes()).unwrap();
+        }
+        let o = c.wait_with_output().unwrap();
+        (
+            o.status.code().unwrap(),
+            String::from_utf8_lossy(&o.stdout).into_owned(),
+            String::from_utf8_lossy(&o.stderr).into_owned(),
+        )
+    };
+    let read = || fs::read_to_string(root.join("src/a.py")).unwrap();
+
+    // Edit's old_string / new_string / replace_all / expected_replacements.
+    let (code, _, err) = run(
+        &[
+            "edit",
+            "src/a.py",
+            "--old-string",
+            "return 1",
+            "--new-string",
+            "return 2",
+            "--expected-replacements",
+            "3",
+            "--apply",
+        ],
+        None,
+    );
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("expected 3"), "{err}");
+    let (code, _, _) = run(
+        &[
+            "edit",
+            "src/a.py",
+            "--old-string",
+            "return 1",
+            "--new-string",
+            "return 2",
+            "--replace-all",
+            "--apply",
+        ],
+        None,
+    );
+    assert_eq!(code, 0);
+    assert_eq!(read().matches("return 2").count(), 2);
+
+    // Read's offset / limit (1-based).
+    let (_, out, _) = run(&["read", "src/a.py", "--offset", "4", "--limit", "1"], None);
+    assert!(out.ends_with("   4 | def b():\n"), "{out}");
+
+    // write: creates; an existing file needs the rev it was read at.
+    let (code, _, _) = run(
+        &["write", "src/n/new.py", "--content", "x = 1\n", "--apply"],
+        None,
+    );
+    assert_eq!(code, 0);
+    assert_eq!(
+        fs::read_to_string(root.join("src/n/new.py")).unwrap(),
+        "x = 1\n"
+    );
+    let (code, _, err) = run(
+        &["write", "src/n/new.py", "--content", "x = 2\n", "--apply"],
+        None,
+    );
+    assert_eq!(code, 2);
+    let rev = err
+        .split("rev ")
+        .nth(1)
+        .unwrap()
+        .split(')')
+        .next()
+        .unwrap()
+        .to_string();
+    let (code, _, _) = run(
+        &[
+            "write",
+            "src/n/new.py",
+            "--with-file",
+            "-",
+            "--rev",
+            &rev,
+            "--apply",
+        ],
+        Some("x = 2\n"),
+    );
+    assert_eq!(code, 0);
+    assert_eq!(
+        fs::read_to_string(root.join("src/n/new.py")).unwrap(),
+        "x = 2\n"
+    );
+
+    // Codex apply_patch: anchored update, add, move, delete; ambiguity refused.
+    let ambiguous = "*** Begin Patch\n*** Update File: src/a.py\n@@\n-    return 2\n+    return 9\n*** End Patch\n";
+    let (code, _, err) = run(&["patch", "-", "--apply"], Some(ambiguous));
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("lines 2 and 5"), "{err}");
+    let patch = "*** Begin Patch\n*** Update File: src/a.py\n@@ def b():\n-    return 2\n+    return 3\n*** Add File: src/c.py\n+c = 3\n*** Update File: src/n/new.py\n*** Move to: src/n/moved.py\n@@\n-x = 2\n+x = 4\n*** End Patch\n";
+    let (code, _, err) = run(&["patch", "-", "--apply"], Some(patch));
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(read(), "def a():\n    return 2\n\ndef b():\n    return 3\n");
+    assert_eq!(
+        fs::read_to_string(root.join("src/c.py")).unwrap(),
+        "c = 3\n"
+    );
+    assert!(!root.join("src/n/new.py").exists());
+    assert_eq!(
+        fs::read_to_string(root.join("src/n/moved.py")).unwrap(),
+        "x = 4\n"
+    );
+    let (code, _, _) = run(
+        &["patch", "-", "--apply"],
+        Some("*** Begin Patch\n*** Delete File: src/c.py\n*** End Patch\n"),
+    );
+    assert_eq!(code, 0);
+    assert!(!root.join("src/c.py").exists());
+
+    // The index keeps itself out of git status.
+    run(&["index", "."], None);
+    assert_eq!(
+        fs::read_to_string(root.join(".lancet/.gitignore")).unwrap(),
+        "*\n"
+    );
 }

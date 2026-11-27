@@ -343,8 +343,14 @@ struct ReadCli {
     #[arg(required = true, num_args = 1..)]
     target: Vec<String>,
     /// 1-based line range (`10:50`, `42`, `100:`)
-    #[arg(short = 'l', long)]
+    #[arg(short = 'l', long, conflicts_with_all = ["offset", "limit"])]
     lines: Option<String>,
+    /// First line to read (1-based), as other agents' read tools take it; with --limit
+    #[arg(long, value_name = "LINE")]
+    offset: Option<usize>,
+    /// Number of lines to read (from --offset, or from line 1)
+    #[arg(long, value_name = "N")]
+    limit: Option<usize>,
     /// Extract exact AST symbol declaration (`fn`, `struct`, `class`, `method`, etc.)
     #[arg(short = 's', long)]
     symbol: Option<String>,
@@ -546,6 +552,7 @@ fn main() -> ExitCode {
         Some("rg") => run_rg(RgCli::parse_from(&args[1..])),
         Some("patch") => run_patch(PatchCli::parse_from(&args[1..])),
         Some("rename") => run_rename(RenameCli::parse_from(&args[1..])),
+        Some("write") => run_write(WriteCli::parse_from(&args[1..])),
         Some("mcp") => run_mcp(McpCli::parse_from(&args[1..])),
         _ => run_search(SearchCli::parse_from(&args)),
     }
@@ -1044,13 +1051,16 @@ struct EditCli {
     symbol: Option<String>,
     /// Exact TEXT to change (not whole lines; may span lines). Refused unless it
     /// occurs exactly once — or pass --all to change every occurrence
-    #[arg(short = 'f', long, allow_hyphen_values = true)]
+    #[arg(short = 'f', long, alias = "old-string", allow_hyphen_values = true)]
     find: Option<String>,
-    /// With --find: change every occurrence instead of requiring exactly one
-    #[arg(long, requires = "find")]
+    /// With --find: change every occurrence instead of requiring exactly one (alias --replace-all)
+    #[arg(long, alias = "replace-all", requires = "find")]
     all: bool,
-    /// Replace the addressed lines with TEXT
-    #[arg(long, allow_hyphen_values = true)]
+    /// With --find: require exactly N occurrences and change all of them
+    #[arg(long, value_name = "N", requires = "find")]
+    expected_replacements: Option<usize>,
+    /// Replace the addressed lines (or the --find text) with TEXT (alias --new-string)
+    #[arg(long, alias = "new-string", allow_hyphen_values = true)]
     with: Option<String>,
     /// Replace the addressed lines with the contents of FILE (`-` reads stdin)
     #[arg(long)]
@@ -1497,6 +1507,101 @@ fn run_rename(cli: RenameCli) -> ExitCode {
     }
 }
 
+#[derive(Parser)]
+#[command(
+    name = "lancet write",
+    about = "Create a file, or replace a whole file you have read (--rev); preview unless --apply"
+)]
+struct WriteCli {
+    /// File to create or replace
+    path: PathBuf,
+    /// The new content
+    #[arg(long, allow_hyphen_values = true, conflicts_with = "with_file")]
+    content: Option<String>,
+    /// Read the new content from FILE (`-` reads stdin)
+    #[arg(long, value_name = "FILE")]
+    with_file: Option<PathBuf>,
+    /// Required to replace an existing file: the rev you read it at
+    #[arg(long)]
+    rev: Option<String>,
+    /// Write the file (default: print a preview diff)
+    #[arg(long)]
+    apply: bool,
+    /// Write even if the content has more Tree-sitter syntax errors than the file it replaces
+    #[arg(long)]
+    allow_syntax_errors: bool,
+    /// Print machine-readable JSON
+    #[arg(long)]
+    json: bool,
+}
+
+fn run_write(cli: WriteCli) -> ExitCode {
+    let content = match (cli.content, &cli.with_file) {
+        (Some(c), _) => c,
+        (None, Some(f)) => match read_text_arg(f) {
+            Ok(t) => t,
+            Err(e) => return cli_invalid(cli.json, &format!("cannot read {}: {e}", f.display())),
+        },
+        (None, None) => {
+            return cli_invalid(
+                cli.json,
+                "give the content with --content TEXT or --with-file FILE (`-` = stdin)",
+            )
+        }
+    };
+    let o = lancet::edit_cmd::WriteOptions {
+        path: cli.path,
+        content,
+        rev: cli.rev,
+        apply: cli.apply,
+        allow_syntax_errors: cli.allow_syntax_errors,
+    };
+    let resp = lancet::edit_cmd::write_file(&o);
+    let stdout = io::stdout();
+    let mut out = io::BufWriter::new(stdout.lock());
+    if cli.json {
+        let _ = serde_json::to_writer(&mut out, &resp)
+            .map_err(io::Error::other)
+            .and_then(|_| writeln!(out));
+    } else {
+        let _ = write!(out, "{}", resp.diff);
+        let _ = out.flush();
+        if let Some(err) = &resp.error {
+            eprintln!("error: {}", err.message);
+        } else if resp.status == Status::Empty {
+            eprintln!(
+                "[lancet write] no change: {} already has that content",
+                resp.path
+            );
+        } else {
+            let after = resp.rev_after.as_deref().unwrap_or("-");
+            match (resp.applied, resp.rev.as_deref()) {
+                (false, None) => eprintln!(
+                    "[lancet write] dry-run: would create {} ({} lines); re-run with --apply",
+                    resp.path, resp.end_line
+                ),
+                (false, Some(r)) => eprintln!(
+                    "[lancet write] dry-run: {}; {}",
+                    resp.path,
+                    rev_note(false, Some(r), Some(after))
+                ),
+                (true, None) => eprintln!("[lancet write] created {} (rev {after})", resp.path),
+                (true, Some(r)) => eprintln!(
+                    "[lancet write] applied: {}; {}",
+                    resp.path,
+                    rev_note(true, Some(r), Some(after))
+                ),
+            }
+        }
+    }
+    let _ = out.flush();
+    match resp.status {
+        Status::Complete => ExitCode::SUCCESS,
+        Status::Empty => ExitCode::from(1),
+        _ => ExitCode::from(2),
+    }
+}
+
 /// Which revision to pass next: before writing, the file's current rev (what
 /// `--rev` must match); after writing, the new one (for the next edit).
 fn rev_note(applied: bool, rev: Option<&str>, rev_after: Option<&str>) -> String {
@@ -1642,7 +1747,11 @@ fn run_edit(cli: EditCli) -> ExitCode {
             Err(msg) => return cli_invalid(cli.json, &msg),
         },
         (None, Some(s), _) => Target::Symbol(s),
-        (None, None, Some(text)) => Target::Find { text, all: cli.all },
+        (None, None, Some(text)) => Target::Find {
+            text,
+            all: cli.all,
+            count: cli.expected_replacements,
+        },
         (None, None, None) => unreachable!("clap requires --lines, --symbol, --find or --edits"),
     };
     let op = if cli.delete {
@@ -1763,6 +1872,14 @@ fn run_read(cli: ReadCli) -> ExitCode {
         Ok(v) => v,
         Err(msg) => return cli_invalid(cli.json, &msg),
     };
+    let lines = match (cli.offset, cli.limit) {
+        (None, None) => lines,
+        (_, Some(0)) => return cli_invalid(cli.json, "--limit must be at least 1"),
+        (off, lim) => {
+            let start = off.unwrap_or(1).max(1);
+            Some((start, lim.map(|n| start + n - 1)))
+        }
+    };
     let pages = match cli.page.as_deref() {
         Some(raw) => match parse_line_spec(raw) {
             Ok((s, e_opt)) => Some((s, e_opt.unwrap_or(s))),
@@ -1835,6 +1952,15 @@ fn run_read(cli: ReadCli) -> ExitCode {
     let _ = out.flush();
 
     if !cli.json {
+        for resp in resps
+            .iter()
+            .filter(|r| r.status == Status::Empty && r.lines.is_empty())
+        {
+            eprintln!(
+                "[lancet read] {}: nothing in that range (the file has {} lines)",
+                resp.path, resp.total_lines
+            );
+        }
         for resp in resps.iter().filter(|r| r.truncated) {
             if let Some(next) = resp.next_line {
                 let which = if multi {

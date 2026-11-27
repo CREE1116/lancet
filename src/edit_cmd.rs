@@ -23,7 +23,13 @@ pub enum Target {
     Symbol(String),
     /// Exact text (not whole lines). It must occur once, or `all` edits every
     /// occurrence. `\n` in it matches the file's line ending (`\r\n` in CRLF files).
-    Find { text: String, all: bool },
+    /// `count`: the text must occur exactly this many times (all are changed),
+    /// like `expected_replacements` in other agents' edit tools.
+    Find {
+        text: String,
+        all: bool,
+        count: Option<usize>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -75,10 +81,18 @@ impl EditOptions {
 struct HunkSpec {
     lines: Option<String>,
     symbol: Option<String>,
+    /// `old_string` / `new_string` / `replace_all` / `expected_replacements` are
+    /// accepted too, as other agents' edit tools name them.
+    #[serde(alias = "old_string")]
     find: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "replace_all")]
     all: bool,
+    #[serde(alias = "expected_replacements")]
+    count: Option<usize>,
+    #[serde(alias = "new_string")]
     with: Option<String>,
+    /// Multi-file edits: the whole content of `path` (`lancet write`).
+    content: Option<String>,
     #[serde(default)]
     delete: bool,
     insert_before: Option<String>,
@@ -104,10 +118,10 @@ pub fn parse_hunks(json: &str) -> Result<Vec<Hunk>, String> {
     let specs = parse_specs(json)?;
     if let Some(i) = specs
         .iter()
-        .position(|h| h.path.is_some() || h.rev.is_some())
+        .position(|h| h.path.is_some() || h.rev.is_some() || h.content.is_some())
     {
         return Err(format!(
-            "hunk {}: `path`/`rev` belong to a multi-file edit (`lancet edit --edits FILE` without a PATH argument)",
+            "hunk {}: `path`/`rev`/`content` belong to a multi-file edit (`lancet edit --edits FILE` without a PATH argument)",
             i + 1
         ));
     }
@@ -124,6 +138,8 @@ pub struct FileEdits {
     pub path: PathBuf,
     pub rev: Option<String>,
     pub hunks: Vec<Hunk>,
+    /// `{"path", "content"}`: the file's whole new content (created if missing).
+    pub content: Option<String>,
 }
 
 /// Parse hunks that may name their file: `[{"path": "a.rs", "rev": "…", "find":
@@ -152,7 +168,23 @@ pub fn parse_file_hunks(
                 .then(|| default_rev.map(str::to_string))
                 .flatten()
         });
-        let hunk = spec_to_hunk(n, h)?;
+        let content = h.content.take();
+        let hunk = match content {
+            Some(_) => {
+                if h.lines.is_some()
+                    || h.symbol.is_some()
+                    || h.find.is_some()
+                    || h.with.is_some()
+                    || h.delete
+                    || h.insert_before.is_some()
+                    || h.insert_after.is_some()
+                {
+                    return Err(format!("hunk {n}: `content` replaces the whole file; it can't be combined with other fields"));
+                }
+                None
+            }
+            None => Some(spec_to_hunk(n, h)?),
+        };
         let same = |f: &FileEdits| {
             f.path == path
                 || matches!(
@@ -172,12 +204,16 @@ pub fn parse_file_hunks(
                     (None, Some(_)) => f.rev = rev,
                     _ => {}
                 }
-                f.hunks.push(hunk);
+                if content.is_some() || f.content.is_some() {
+                    return Err(format!("hunk {n}: {} gets whole `content` and other hunks too; give one or the other", path.display()));
+                }
+                f.hunks.extend(hunk);
             }
             None => files.push(FileEdits {
                 path,
                 rev,
-                hunks: vec![hunk],
+                hunks: hunk.into_iter().collect(),
+                content,
             }),
         }
     }
@@ -187,7 +223,7 @@ pub fn parse_file_hunks(
 fn spec_to_hunk(n: usize, h: HunkSpec) -> Result<Hunk, String> {
     {
         {
-            if h.all && h.find.is_none() {
+            if (h.all || h.count.is_some()) && h.find.is_none() {
                 return Err(format!("hunk {n}: `all` only applies to `find`"));
             }
             let target = match (h.lines, h.symbol, h.find) {
@@ -197,7 +233,11 @@ fn spec_to_hunk(n: usize, h: HunkSpec) -> Result<Hunk, String> {
                     Target::Lines(a, b)
                 }
                 (None, Some(s), None) => Target::Symbol(s),
-                (None, None, Some(text)) => Target::Find { text, all: h.all },
+                (None, None, Some(text)) => Target::Find {
+                    text,
+                    all: h.all,
+                    count: h.count,
+                },
                 _ => {
                     return Err(format!(
                         "hunk {n}: give exactly one of `lines`, `symbol` or `find`"
@@ -247,8 +287,8 @@ pub struct EditResponse {
 }
 
 /// Everything up to the write: the response (diff, revs) and, when there is a
-/// change to make, `(rev the file was read at, old content, new content)`.
-fn plan_edit(o: &EditOptions) -> (EditResponse, Option<(String, String, String)>) {
+/// change to make.
+fn plan_edit(o: &EditOptions) -> (EditResponse, Option<Change>) {
     let t0 = Instant::now();
     let mut r = EditResponse {
         status: Status::Complete,
@@ -352,16 +392,20 @@ fn plan_edit(o: &EditOptions) -> (EditResponse, Option<(String, String, String)>
             String::new()
         };
         let (a, b) = match &h.target {
-            Target::Find { text, all } => match find_edits(&src, &starts, text, *all, &h.op, eol) {
-                Ok(found) => {
-                    for (span, e) in found {
-                        r.hunks.push(span);
-                        edits.push((i + 1, e));
+            Target::Find { text, all, count } => {
+                match find_edits(&src, &starts, text, *all, *count, &h.op, eol) {
+                    Ok(found) => {
+                        for (span, e) in found {
+                            r.hunks.push(span);
+                            edits.push((i + 1, e));
+                        }
+                        continue;
                     }
-                    continue;
+                    Err(msg) => {
+                        return (fail(r, Status::InvalidQuery, format!("{tag}{msg}")), None)
+                    }
                 }
-                Err(msg) => return (fail(r, Status::InvalidQuery, format!("{tag}{msg}")), None),
-            },
+            }
             Target::Lines(a, b) => (*a, b.unwrap_or(lines.len())),
             Target::Symbol(name) => {
                 match find_symbol_lines(&o.path, src.as_bytes(), &lines, name) {
@@ -441,36 +485,232 @@ fn plan_edit(o: &EditOptions) -> (EditResponse, Option<(String, String, String)>
 
     r.rev_after = Some(edit::rev(new_src.as_bytes()));
     r.elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
-    (r, Some((rev, src, new_src)))
+    (
+        r,
+        Some(Change {
+            rev: Some(rev),
+            old: src,
+            new: new_src,
+        }),
+    )
 }
 
 pub fn edit_file(o: &EditOptions) -> EditResponse {
     let t0 = Instant::now();
     let (mut r, change) = plan_edit(o);
-    if let (true, Some((rev, _, new_src))) = (o.apply, change) {
-        // Check-and-write under the file lock: another writer since our read => conflict.
-        match edit::write_if_rev(&o.path, &rev, new_src.as_bytes()) {
-            Ok(()) => r.applied = true,
-            Err(edit::WriteError::Conflict { now }) => {
-                r.status = Status::Conflict;
-                r.rev_after = None;
-                r.error = Some(ErrorInfo {
-                    message: format!("file changed while editing (now rev {now}); nothing written"),
-                    pos: None,
-                });
-            }
-            Err(edit::WriteError::Io(e)) => {
-                r.status = Status::InvalidQuery;
-                r.rev_after = None;
-                r.error = Some(ErrorInfo {
-                    message: format!("write failed: {e}"),
-                    pos: None,
-                });
-            }
-        }
+    if let (true, Some(change)) = (o.apply, change) {
+        apply_or_fail(&mut r, &o.path, &change);
     }
     r.elapsed_ms += t0.elapsed().as_secs_f64() * 1000.0;
     r
+}
+
+/// A verified change to one file: what to write, and what it must still be.
+/// `rev: None` means the file must not exist yet (a creation).
+#[derive(Clone, Debug)]
+pub struct Change {
+    pub rev: Option<String>,
+    pub old: String,
+    pub new: String,
+}
+
+/// Write `c`: a locked compare-and-swap on an existing file, or an exclusive
+/// create (someone creating it first is a conflict, not an overwrite).
+fn write_change(path: &std::path::Path, c: &Change) -> Result<(), (Status, String)> {
+    match &c.rev {
+        Some(rev) => edit::write_if_rev(path, rev, c.new.as_bytes()).map_err(|e| match e {
+            edit::WriteError::Conflict { now } => (
+                Status::Conflict,
+                format!("file changed while editing (now rev {now}); nothing written"),
+            ),
+            edit::WriteError::Io(e) => (Status::InvalidQuery, format!("write failed: {e}")),
+        }),
+        None => {
+            if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+                std::fs::create_dir_all(dir)
+                    .map_err(|e| (Status::InvalidQuery, format!("write failed: {e}")))?;
+            }
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+                .and_then(|mut f| {
+                    std::io::Write::write_all(&mut f, c.new.as_bytes())?;
+                    f.sync_all()
+                })
+                .map_err(|e| {
+                    if e.kind() == std::io::ErrorKind::AlreadyExists {
+                        (
+                            Status::Conflict,
+                            "the file was created by someone else meanwhile; nothing written"
+                                .into(),
+                        )
+                    } else {
+                        (Status::InvalidQuery, format!("write failed: {e}"))
+                    }
+                })
+        }
+    }
+}
+
+/// Undo a written change (best effort): put the old content back, or remove a created file.
+fn undo_change(path: &std::path::Path, c: &Change) -> bool {
+    match &c.rev {
+        Some(_) => edit::write_if_rev(path, &edit::rev(c.new.as_bytes()), c.old.as_bytes()).is_ok(),
+        None => std::fs::remove_file(path).is_ok(),
+    }
+}
+
+fn apply_or_fail(r: &mut EditResponse, path: &std::path::Path, c: &Change) {
+    match write_change(path, c) {
+        Ok(()) => {
+            r.applied = true;
+            r.mode = "applied";
+        }
+        Err((status, message)) => {
+            r.status = status;
+            r.rev_after = None;
+            r.error = Some(ErrorInfo { message, pos: None });
+        }
+    }
+}
+
+/// `lancet write`: the whole content of a file. A new file is created; an existing
+/// one is replaced only at the given `rev` (the file must have been read first).
+#[derive(Clone, Debug)]
+pub struct WriteOptions {
+    pub path: PathBuf,
+    pub content: String,
+    pub rev: Option<String>,
+    pub apply: bool,
+    pub allow_syntax_errors: bool,
+}
+
+pub fn write_file(o: &WriteOptions) -> EditResponse {
+    let t0 = Instant::now();
+    let (mut r, change) = plan_write(&o.path, &o.content, o.rev.as_deref(), o.allow_syntax_errors);
+    if let (true, Some(c)) = (o.apply, change) {
+        apply_or_fail(&mut r, &o.path, &c);
+    }
+    r.elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+    r
+}
+
+fn plan_write(
+    path: &std::path::Path,
+    content: &str,
+    want_rev: Option<&str>,
+    allow_syntax_errors: bool,
+) -> (EditResponse, Option<Change>) {
+    let mut r = EditResponse {
+        status: Status::Complete,
+        mode: "dry-run",
+        path: path.to_string_lossy().into_owned(),
+        rev: None,
+        rev_after: None,
+        start_line: 1,
+        end_line: content.lines().count().max(1),
+        hunks: Vec::new(),
+        applied: false,
+        diff: String::new(),
+        error: None,
+        elapsed_ms: 0.0,
+    };
+    let fail = |mut r: EditResponse, status: Status, message: String| {
+        r.status = status;
+        r.error = Some(ErrorInfo { message, pos: None });
+        (r, None)
+    };
+    if crate::adapters::is_adapted_path(path, false) {
+        return fail(
+            r,
+            Status::Unsupported,
+            "documents and archives are read-only".into(),
+        );
+    }
+    let old = if path.exists() {
+        if !path.is_file() {
+            return fail(
+                r,
+                Status::InvalidQuery,
+                format!("`{}` is not a file", path.display()),
+            );
+        }
+        let bytes = match edit::read_shared(path) {
+            Ok(b) => b,
+            Err(e) => return fail(r, Status::InvalidQuery, format!("read error: {e}")),
+        };
+        let Ok(old) = String::from_utf8(bytes) else {
+            return fail(
+                r,
+                Status::Unsupported,
+                "the existing file is not valid UTF-8".into(),
+            );
+        };
+        let rev = edit::rev(old.as_bytes());
+        r.rev = Some(rev.clone());
+        match want_rev {
+            None => {
+                return fail(
+                    r,
+                    Status::Conflict,
+                    format!(
+                        "`{}` already exists (rev {rev}); read it and pass --rev {rev} to replace it, or change part of it with `lancet edit`",
+                        path.display()
+                    ),
+                )
+            }
+            Some(w) if w != rev => {
+                return fail(
+                    r,
+                    Status::Conflict,
+                    format!("file changed since rev {w} (now {rev}); read it again before writing"),
+                )
+            }
+            _ => Some(old),
+        }
+    } else {
+        if let Some(w) = want_rev {
+            return fail(
+                r,
+                Status::Conflict,
+                format!("`{}` doesn't exist (expected rev {w})", path.display()),
+            );
+        }
+        None
+    };
+    let before = old.as_deref().unwrap_or("");
+    if before == content {
+        r.status = Status::Empty;
+        return (r, None);
+    }
+    if !allow_syntax_errors {
+        let b0 = crate::code::syntax_errors(path, before.as_bytes()).unwrap_or(0);
+        if let Some(b1) = crate::code::syntax_errors(path, content.as_bytes()) {
+            if b1 > b0 {
+                return fail(
+                    r,
+                    Status::InvalidQuery,
+                    format!(
+                        "the content has {} more syntax error(s) than the file it replaces ({b0} -> {b1}); nothing written (pass --allow-syntax-errors to write anyway)",
+                        b1 - b0
+                    ),
+                );
+            }
+        }
+    }
+    r.hunks = vec![[r.start_line, r.end_line]];
+    r.diff = edit::unified_diff(&r.path, before, content);
+    r.rev_after = Some(edit::rev(content.as_bytes()));
+    let rev = r.rev.clone();
+    (
+        r,
+        Some(Change {
+            rev,
+            old: before.to_string(),
+            new: content.to_string(),
+        }),
+    )
 }
 
 /// Edits for every occurrence of `text` (exactly one unless `all`), with the
@@ -480,6 +720,7 @@ fn find_edits(
     starts: &[usize],
     text: &str,
     all: bool,
+    count: Option<usize>,
     op: &Op,
     eol: &str,
 ) -> Result<Vec<([usize; 2], Edit)>, String> {
@@ -490,6 +731,15 @@ fn find_edits(
     }
     let line_of = |byte: usize| starts.partition_point(|&s| s <= byte);
     let hits: Vec<usize> = src.match_indices(&needle).map(|(at, _)| at).collect();
+    if let Some(n) = count {
+        if hits.len() != n {
+            return Err(format!(
+                "expected {n} occurrence(s) of the --find text, found {}; nothing changed",
+                hits.len()
+            ));
+        }
+    }
+    let all = all || count.is_some();
     match hits.len() {
         0 => return Err("--find text does not occur in the file".into()),
         1 => {}
@@ -602,10 +852,15 @@ pub fn edit_files(
     };
     let mut planned = Vec::with_capacity(files.len());
     for f in files {
-        let mut o = EditOptions::multi(&f.path, f.hunks.clone());
-        o.rev = f.rev.clone();
-        o.allow_syntax_errors = allow_syntax_errors;
-        let (r, change) = plan_edit(&o);
+        let (r, change) = match &f.content {
+            Some(c) => plan_write(&f.path, c, f.rev.as_deref(), allow_syntax_errors),
+            None => {
+                let mut o = EditOptions::multi(&f.path, f.hunks.clone());
+                o.rev = f.rev.clone();
+                o.allow_syntax_errors = allow_syntax_errors;
+                plan_edit(&o)
+            }
+        };
         planned.push((f.path.clone(), change));
         out.files.push(r);
     }
@@ -632,30 +887,20 @@ pub fn edit_files(
     if !apply {
         return finish(out);
     }
-    let mut written: Vec<(&PathBuf, &String, &String)> = Vec::new();
+    let mut written: Vec<(&PathBuf, &Change)> = Vec::new();
     for (i, (path, change)) in planned.iter().enumerate() {
-        let Some((rev, old, new)) = change else {
+        let Some(change) = change else {
             continue;
         };
-        if let Err(e) = edit::write_if_rev(path, rev, new.as_bytes()) {
-            let why = match e {
-                edit::WriteError::Conflict { now } => {
-                    out.status = Status::Conflict;
-                    format!("changed while editing (now rev {now})")
-                }
-                edit::WriteError::Io(e) => {
-                    out.status = Status::InvalidQuery;
-                    format!("write failed: {e}")
-                }
-            };
+        if let Err((status, why)) = write_change(path, change) {
+            out.status = status;
             let mut failed_restore = Vec::new();
-            for (p, old_src, new_src) in written.iter().rev() {
-                if edit::write_if_rev(p, &edit::rev(new_src.as_bytes()), old_src.as_bytes())
-                    .is_err()
-                {
+            for (p, c) in written.iter().rev() {
+                if !undo_change(p, c) {
                     failed_restore.push(p.display().to_string());
                 }
             }
+            let why = why.trim_end_matches("; nothing written");
             let mut msg = format!("{}: {why}; nothing applied", path.display());
             if !failed_restore.is_empty() {
                 msg = format!(
@@ -673,7 +918,7 @@ pub fn edit_files(
             out.files[i].status = out.status;
             return finish(out);
         }
-        written.push((path, old, new));
+        written.push((path, change));
         out.files[i].applied = true;
         out.files[i].mode = "applied";
     }

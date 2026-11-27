@@ -11,6 +11,7 @@ Over MCP, the `lancet` tool takes these same arguments as an `args` array (and `
   - `--page 2` or `--page 2:5`: PDF pages / PPTX slides.
   - `--sheet NAME|1 --rows 1:30 --cols A:E` (or `1:5`): spreadsheets (`.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.ods`).
   - `--ocr`: fallback via external `tesseract` / `pdftoppm` for scanned PDFs/images.
+- **Other agents' read syntax:** `--offset N --limit M` (1-based first line, line count).
 - **Token budget pagination:** `--budget-tokens 800`; when it reports `truncated` (JSON: `truncated: true`, `next_line`), continue with `--lines NEXT:`.
 - **Revision token:** the first line of the output is `# PATH [section] rev REV` (JSON: `rev`), an XXH3-64 of the file's bytes. Documents and archives have none: they are read-only.
 
@@ -23,10 +24,10 @@ Over MCP, the `lancet` tool takes these same arguments as an `args` array (and `
 Pick **exactly one** target:
 - `--lines 10:50` / `42` / `100:`
 - `--symbol execute_one` — **spans the doc comments and attributes above it too**
-- `--find 'exact text'` (+ `--all`): refused unless it occurs exactly once, and the error lists the lines where it does. `\n` in the text also matches CRLF files.
+- `--find 'exact text'` / `--old-string` (+ `--all` / `--replace-all`, or `--expected-replacements N` to require exactly N): refused unless it occurs exactly once, and the error lists the lines where it does. `\n` in the text also matches CRLF files.
 
 Pick **exactly one** operation:
-- `--with TEXT` / `--with-file FILE` (`-` = stdin)
+- `--with TEXT` / `--new-string TEXT` / `--with-file FILE` (`-` = stdin)
 - `--delete`
 - `--insert-before TEXT`
 - `--insert-after TEXT`
@@ -45,6 +46,10 @@ Pick **exactly one** operation:
 ```
 
 Rules: each element requires **exactly one** of `lines`, `symbol`, or `find` (`all` is valid only with `find`) and **exactly one** of `with`, `delete`, `insert_before`, or `insert_after`.
+
+### JSON key aliases
+
+`old_string` = `find`, `new_string` = `with`, `replace_all` = `all`, `expected_replacements` = exact count. `{"path": …, "content": …}` creates the file or replaces it whole (an existing file needs `"rev"`).
 
 ### Several Files in One Call
 
@@ -69,16 +74,22 @@ Hunks may carry `"path"` (and that file's `"rev"`); then PATH is optional, and h
 
 ---
 
-## 3. `lancet patch`
+## 3. `lancet write`
 
-- Accepts `git diff` or `diff -u` from a file or stdin (`-`).
+- `lancet write FILE --content TEXT` or `--with-file FILE` (`-` = stdin); preview unless `--apply`.
+- A missing file is created (with its directories). An existing file is replaced only with `--rev REV` from a read: without it the write is refused and the message shows the current rev.
+- Same syntax gate and atomic write as `edit`; documents and archives are refused.
+
+## 4. `lancet patch`
+
+- Accepts `git diff` or `diff -u` from a file or stdin (`-`), and Codex `apply_patch` patches (`*** Begin Patch` … `*** End Patch` with `*** Add File:`, `*** Update File:` [+ `*** Move to:`], `*** Delete File:`, `@@ [anchor]` chunks, `*** End of File`). A Codex chunk has no line numbers: it must match exactly one place after its anchor (or the previous chunk); two matches are refused with both line numbers, never resolved by picking the first.
 - Options: `--root DIR`, `-p N` (default `1` strips `a/` and `b/`), `--apply` (default: preview), `--allow-syntax-errors`.
 - Handles `git diff -M` renames (with or without hunks), mode changes (`new mode` / `new file mode`), and created/deleted empty files; refuses binary diffs and copies.
 - Verifies every hunk in every file (exact match or unique nearest-offset relocation, never fuzzy) before writing; uses locked CAS + best-effort rollback of prior files if a concurrent writer wins mid-apply.
 
 ---
 
-## 4. `lancet rename` (Tier-1 Local Scope)
+## 5. `lancet rename` (Tier-1 Local Scope)
 
 - **CLI:** `lancet rename FILE:LINE[:COL] OLD NEW [--rev REV] [--apply] [--json]`
 - **MCP:** `{"args": ["rename", "FILE:LINE", "OLD", "NEW", "--rev", "REV", "--apply"]}`
