@@ -299,23 +299,18 @@ lancet edit src/net.rs --find 'retries = 3' \
 git diff | lancet patch --apply</pre>
       </div>
       <div class="code">
-        <div class="code-head">
-          <h4>MCP · Official Skill · AGENTS.md</h4>
-          <button type="button" class="copy" id="copy-agent-start">Copy rules</button>
-        </div>
-<pre><span class="c"># 1. Built-in MCP server (Claude Code, Cursor, Codex, Antigravity)</span>
+        <h4>MCP &amp; Official Skill</h4>
+<pre><span class="c"># 1. Register built-in MCP server (Claude Code)</span>
 claude mcp add --transport stdio lancet -- lancet mcp --root .
-<span class="c"># Other clients: see docs/mcp.md &amp; skills/lancet/references/mcp-config.json</span>
+<span class="c"># Cursor / Codex / Antigravity: see docs/mcp.md</span>
 
-<span class="c"># 2. Official Agent Skill (skills/lancet/SKILL.md)</span>
-<span class="c"># Copy skills/lancet/ into ~/.claude/skills, ~/.codex/skills,</span>
-<span class="c"># ~/.gemini/config/skills, or .agents/skills (or use AGENTS.md):</span>
+<span class="c"># 2. Install official skill (SKILL.md + mcp-config.json)</span>
+<span class="c"># Copy skills/lancet/ to ~/.claude/skills/, ~/.codex/skills/,</span>
+<span class="c"># ~/.gemini/config/skills/, or .agents/skills/</span>
 
-1. Orient:  lancet_fd / lancet_outline (or lancet fd / outline)
-2. Search:  lancet_search / lancet_rg / lancet_refs / lancet_ast
-3. Read:    lancet_read --symbol NAME  <span class="c"># capture "rev"</span>
-4. Change:  lancet_edit / lancet_patch with rev + apply: true
-5. On conflict: re-read via lancet_read and retry with the new rev.</pre>
+<span class="c"># 3. Optional 1-liner in AGENTS.md / CLAUDE.md:</span>
+Use lancet (lancet_* MCP or CLI) instead of rg/fd/ast-grep/cat/sed;
+follow the lancet skill for read --rev -&gt; edit --apply.</pre>
       </div>
     </div>
   </div>
@@ -338,6 +333,6 @@ claude mcp add --transport stdio lancet -- lancet mcp --root .
 
 <!-- Optional zero-cookie analytics (GoatCounter): replace YOUR_CODE and uncomment -->
 <!-- <script data-goatcounter="https://YOUR_CODE.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script> -->
-<script src="assets/site.js?v=7"></script>
+<script src="assets/site.js?v=8"></script>
 </body>
 </html>

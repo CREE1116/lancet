@@ -299,23 +299,18 @@ lancet edit src/net.rs --find 'retries = 3' \
 git diff | lancet patch --apply</pre>
       </div>
       <div class="code">
-        <div class="code-head">
-          <h4>MCP · 공식 스킬 · AGENTS.md</h4>
-          <button type="button" class="copy" id="copy-agent-start">지침 복사</button>
-        </div>
-<pre><span class="c"># 1. 내장 MCP 서버 연결 (Claude Code, Cursor, Codex, Antigravity)</span>
+        <h4>MCP · 공식 스킬</h4>
+<pre><span class="c"># 1. 내장 MCP 서버 등록 (Claude Code)</span>
 claude mcp add --transport stdio lancet -- lancet mcp --root .
-<span class="c"># 기타 클라이언트 설정: docs/mcp.md, skills/lancet/references/mcp-config.json</span>
+<span class="c"># Cursor / Codex / Antigravity 설정은 docs/mcp.md 참고</span>
 
-<span class="c"># 2. 공식 에이전트 스킬 (skills/lancet/SKILL.md)</span>
-<span class="c"># skills/lancet/을 ~/.claude/skills, ~/.codex/skills,</span>
-<span class="c"># ~/.gemini/config/skills 또는 .agents/skills에 복사 (또는 AGENTS.md):</span>
+<span class="c"># 2. 공식 스킬 설치 (SKILL.md + mcp-config.json)</span>
+<span class="c"># skills/lancet/ 폴더를 ~/.claude/skills, ~/.codex/skills,</span>
+<span class="c"># ~/.gemini/config/skills 또는 .agents/skills에 복사</span>
 
-1. 파악:  lancet_fd / lancet_outline (또는 lancet fd / outline)
-2. 검색:  lancet_search / lancet_rg / lancet_refs / lancet_ast
-3. 읽기:  lancet_read --symbol NAME  <span class="c"># "rev" 기억</span>
-4. 수정:  lancet_edit / lancet_patch에 rev + apply: true 전달
-5. conflict 시: lancet_read로 다시 읽고 새 rev로 재시도.</pre>
+<span class="c"># 3. AGENTS.md / CLAUDE.md엔 한 줄만 두면 됩니다:</span>
+rg/fd/ast-grep/cat/sed 대신 lancet(lancet_* MCP 또는 CLI)을 쓰고,
+자세한 사용법은 lancet 스킬을 따를 것.</pre>
       </div>
     </div>
   </div>
@@ -338,6 +333,6 @@ claude mcp add --transport stdio lancet -- lancet mcp --root .
 
 <!-- 선택: 쿠키 없는 무료 방문 통계 (GoatCounter): YOUR_CODE를 바꾸고 주석 해제 -->
 <!-- <script data-goatcounter="https://YOUR_CODE.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script> -->
-<script src="../assets/site.js?v=7"></script>
+<script src="../assets/site.js?v=8"></script>
 </body>
 </html>

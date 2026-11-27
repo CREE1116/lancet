@@ -58,39 +58,7 @@
     setTimeout(() => e.target.textContent = T('Copy', '복사'), 1400);
   });
 
-  /* one-click agent instructions copy */
-  const AGENT_RULES = `# Code Search, Read & Edit Rules (lancet)
-Use \`lancet\` (\`lancet_*\` MCP tools if connected, otherwise \`lancet\` CLI) instead of \`rg\`, \`fd\`, \`ast-grep\`, \`cat\`, and \`sed\`.
-
-1. Orient first: \`lancet fd --tree --max-depth 2 .\` and \`lancet outline FILE\` before reading whole files.
-2. Search: \`lancet rg -w SYMBOL src\`, \`lancet refs SYMBOL src\`, \`lancet ast '$X.unwrap()' src --lang rs\`, or \`lancet 'query in ext:rs'\`.
-3. Read & capture \`rev\`: \`lancet read FILE --symbol NAME --json\` or \`lancet read FILE:10-80 --budget-tokens 800\`. Always note \`"rev"\`.
-4. Edit with CAS: \`lancet edit FILE --find '...' --with '...' --rev REV --apply\` (or \`git diff | lancet patch --apply\`). Default is dry-run; group multiple hunks in one file via \`--edits -\` using original line numbers.
-5. On \`conflict\` (exit 2): re-read the file, re-apply your change on the new content, and retry with the new \`rev\`. Never omit \`--rev\` or blindly pass \`--allow-syntax-errors\`.`;
-
-  const copyAgent = async (btn, resetLabel) => {
-    try {
-      await navigator.clipboard.writeText(AGENT_RULES);
-      const label = btn.querySelector('span') || btn;
-      label.textContent = T('Copied to clipboard', '클립보드에 복사됨');
-      track('agent_copy');
-      setTimeout(() => label.textContent = resetLabel, 1600);
-    } catch {
-      const label = btn.querySelector('span') || btn;
-      label.textContent = T('Copy failed', '복사 실패');
-      setTimeout(() => label.textContent = resetLabel, 1600);
-    }
-  };
-  const heroAgentBtn = $('#copy-agent-hero');
-  if (heroAgentBtn) {
-    const lbl = heroAgentBtn.querySelector('span').textContent;
-    heroAgentBtn.addEventListener('click', () => copyAgent(heroAgentBtn, lbl));
-  }
-  const startAgentBtn = $('#copy-agent-start');
-  if (startAgentBtn) {
-    const lbl = startAgentBtn.textContent;
-    startAgentBtn.addEventListener('click', () => copyAgent(startAgentBtn, lbl));
-  }
+  /* (agent rules copy removed; skill + MCP setup is in #start and 'for Agent' tab) */
 
   /* GitHub Star count + click tracking */
   $$('.gh, .badge-star').forEach(el => el.addEventListener('click', () => track('github_star_click')));
