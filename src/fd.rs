@@ -113,6 +113,46 @@ pub struct FdResponse {
 }
 
 impl FdResponse {
+    /// One response for several roots (`lancet fd PAT a b c`): entries in the order
+    /// the roots were given; any root's error makes the whole call an error.
+    pub fn merge(mut rs: Vec<FdResponse>) -> FdResponse {
+        if rs.len() == 1 {
+            return rs.pop().unwrap();
+        }
+        let errors: Vec<String> = rs
+            .iter()
+            .filter_map(|r| r.error.as_ref().map(|e| e.message.clone()))
+            .collect();
+        let entries: Vec<FdEntry> = rs
+            .iter_mut()
+            .flat_map(|r| std::mem::take(&mut r.entries))
+            .collect();
+        let status = if !errors.is_empty() {
+            rs.iter()
+                .find(|r| r.error.is_some())
+                .map(|r| r.status)
+                .unwrap_or(Status::InvalidQuery)
+        } else if entries.is_empty() {
+            Status::Empty
+        } else {
+            Status::Complete
+        };
+        FdResponse {
+            status,
+            mode: rs.first().map(|r| r.mode.clone()).unwrap_or_default(),
+            total: rs.iter().map(|r| r.total).sum(),
+            returned: entries.len(),
+            truncated: rs.iter().any(|r| r.truncated),
+            entries,
+            warnings: rs.iter().flat_map(|r| r.warnings.clone()).collect(),
+            error: (!errors.is_empty()).then(|| ErrorInfo {
+                message: errors.join("; "),
+                pos: None,
+            }),
+            elapsed_ms: rs.iter().map(|r| r.elapsed_ms).sum(),
+        }
+    }
+
     fn failure(status: Status, message: String, elapsed_ms: f64) -> Self {
         FdResponse {
             status,
@@ -326,6 +366,9 @@ impl CompiledFdFilter {
 }
 
 pub fn find_files(opts: &FdOptions) -> FdResponse {
+    if let Some(msg) = crate::walk::missing_root(&opts.root) {
+        return FdResponse::failure(Status::InvalidQuery, msg, 0.0);
+    }
     let mut r = find_files_raw(opts);
     if !opts.tree {
         // The tree view draws root-relative paths under the root's own label.
@@ -649,7 +692,8 @@ pub fn print_fd_human(
     w: &mut impl Write,
 ) -> io::Result<()> {
     if let Some(err) = &resp.error {
-        return writeln!(w, "error: {}", err.message);
+        eprintln!("error: {}", err.message);
+        return Ok(());
     }
     if tree {
         if resp.entries.is_empty() {

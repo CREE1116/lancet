@@ -338,8 +338,10 @@ struct AstCli {
     about = "Read specific lines, AST symbols, PDF/PPTX pages, spreadsheet cells, or archive entries"
 )]
 struct ReadCli {
-    /// File path (supports `file:10-50`, `file:42`, or `archive.zip!inner.log`)
-    target: String,
+    /// File path (supports `file:10-50`, `file:42`, or `archive.zip!inner.log`).
+    /// Several targets are read in one call (`a.rs:10-40 b.rs:5-20`); flags apply to each
+    #[arg(required = true, num_args = 1..)]
+    target: Vec<String>,
     /// 1-based line range (`10:50`, `42`, `100:`)
     #[arg(short = 'l', long)]
     lines: Option<String>,
@@ -786,35 +788,39 @@ fn run_batch(cli: BatchCli) -> ExitCode {
     }
 }
 
+/// `[PATTERN] [PATH...]`, like fd. A first argument that is an existing directory
+/// (or, alone, looks like a path: has a `/` and no glob characters) is a path.
 fn resolve_fd_args(
     args: &[String],
     explicit_pat: Option<String>,
-) -> Result<(Option<String>, PathBuf), String> {
+) -> Result<(Option<String>, Vec<PathBuf>), String> {
+    let paths = |xs: &[String]| -> Vec<PathBuf> {
+        if xs.is_empty() {
+            vec![PathBuf::from(".")]
+        } else {
+            xs.iter().map(PathBuf::from).collect()
+        }
+    };
     if let Some(pat) = explicit_pat {
-        return match args {
-            [] => Ok((Some(pat), PathBuf::from("."))),
-            [p] => Ok((Some(pat), PathBuf::from(p))),
-            _ => Err("too many positional arguments when `--pattern` is set".into()),
-        };
+        return Ok((Some(pat), paths(args)));
     }
     match args {
-        [] => Ok((None, PathBuf::from("."))),
-        [single] => {
-            let p = Path::new(single);
-            if p.is_dir() {
-                Ok((None, PathBuf::from(single)))
-            } else {
-                Ok((Some(single.clone()), PathBuf::from(".")))
-            }
+        [] => Ok((None, paths(&[]))),
+        // `fd . PATH…`: the usual "everything under PATH" (not names containing a dot).
+        [dot, rest @ ..] if dot == "." && !rest.is_empty() => Ok((None, paths(rest))),
+        [first, ..] if Path::new(first).is_dir() => Ok((None, paths(args))),
+        [single] if single.contains('/') && !single.contains(['*', '?', '[']) => {
+            // `docs/imgaes`: a mistyped directory, reported as missing rather
+            // than searched for as a name that can never match.
+            Ok((None, paths(args)))
         }
-        [pat, path] => Ok((Some(pat.clone()), PathBuf::from(path))),
-        _ => Err("usage: `lancet fd [PATTERN] [PATH]`".into()),
+        [pat, rest @ ..] => Ok((Some(pat.clone()), paths(rest))),
     }
 }
 
 fn run_fd(cli: FdCli) -> ExitCode {
     init_threads(cli.threads);
-    let (pattern, root) = match resolve_fd_args(&cli.args, cli.pattern) {
+    let (pattern, roots) = match resolve_fd_args(&cli.args, cli.pattern) {
         Ok(x) => x,
         Err(msg) => {
             if cli.json {
@@ -917,7 +923,7 @@ fn run_fd(cli: FdCli) -> ExitCode {
         }
     };
 
-    let mut opts = FdOptions::new(&root);
+    let mut opts = FdOptions::new(&roots[0]);
     opts.pattern = pattern;
     opts.pattern_mode = if cli.regex {
         PatternMode::Regex
@@ -957,16 +963,31 @@ fn run_fd(cli: FdCli) -> ExitCode {
     opts.index_dir = cli.index_dir;
     opts.need_meta = cli.json && cli.meta;
 
-    let resp = find_files(&opts);
+    let resps: Vec<(PathBuf, lancet::fd::FdResponse)> = roots
+        .iter()
+        .map(|root| {
+            let mut o = opts.clone();
+            o.root = root.clone();
+            (root.clone(), find_files(&o))
+        })
+        .collect();
     let stdout = io::stdout();
     let mut out = io::BufWriter::new(stdout.lock());
-    let _ = if cli.json {
-        serde_json::to_writer(&mut out, &resp)
+    if !cli.json {
+        for (root, r) in &resps {
+            if let Some(err) = &r.error {
+                eprintln!("error: {}", err.message);
+            } else {
+                let _ = print_fd_human(r, root, cli.tree, &mut out);
+            }
+        }
+    }
+    let resp = lancet::fd::FdResponse::merge(resps.into_iter().map(|(_, r)| r).collect());
+    if cli.json {
+        let _ = serde_json::to_writer(&mut out, &resp)
             .map_err(io::Error::other)
-            .and_then(|_| writeln!(out))
-    } else {
-        print_fd_human(&resp, &root, cli.tree, &mut out)
-    };
+            .and_then(|_| writeln!(out));
+    }
     let _ = out.flush();
 
     if !cli.json && resp.truncated {
@@ -1696,7 +1717,7 @@ fn run_read(cli: ReadCli) -> ExitCode {
         Err(msg) => return cli_invalid(cli.json, &msg),
     };
 
-    let mut opts = ReadOptions::new(&cli.target);
+    let mut opts = ReadOptions::new(&cli.target[0]);
     opts.lines = lines;
     opts.symbol = cli.symbol;
     opts.pages = pages;
@@ -1708,31 +1729,65 @@ fn run_read(cli: ReadCli) -> ExitCode {
     opts.raw = cli.raw;
     opts.ocr = cli.ocr;
 
-    let resp = read_file_range(&opts);
+    let resps: Vec<_> = cli
+        .target
+        .iter()
+        .map(|t| {
+            let mut o = opts.clone();
+            o.target = t.clone();
+            read_file_range(&o)
+        })
+        .collect();
     let stdout = io::stdout();
     let mut out = io::BufWriter::new(stdout.lock());
-    let _ = if cli.json {
-        serde_json::to_writer(&mut out, &resp)
-            .map_err(io::Error::other)
-            .and_then(|_| writeln!(out))
-    } else {
-        print_read_human(&resp, cli.raw, &mut out)
+    let multi = resps.len() > 1;
+    let code = |s: Status| match s {
+        Status::Complete => 0u8,
+        Status::Empty => 1,
+        _ => 2,
     };
-    let _ = out.flush();
-
-    if !cli.json && resp.truncated {
-        if let Some(next) = resp.next_line {
-            eprintln!(
-                "[lancet read] truncated at ~{} tokens (resume with --lines {next}:)",
-                resp.estimated_tokens
-            );
+    let worst = resps.iter().map(|r| code(r.status)).max().unwrap_or(0);
+    if cli.json {
+        let _ = if multi {
+            let status = resps
+                .iter()
+                .max_by_key(|r| code(r.status))
+                .map(|r| r.status);
+            serde_json::to_writer(
+                &mut out,
+                &serde_json::json!({"status": status, "results": resps}),
+            )
+        } else {
+            serde_json::to_writer(&mut out, &resps[0])
+        }
+        .map_err(io::Error::other)
+        .and_then(|_| writeln!(out));
+    } else {
+        for (i, resp) in resps.iter().enumerate() {
+            if multi && i > 0 {
+                let _ = writeln!(out);
+            }
+            let _ = print_read_human(resp, cli.raw, &mut out);
         }
     }
-    match resp.status {
-        Status::Complete => ExitCode::SUCCESS,
-        Status::Empty => ExitCode::from(1),
-        _ => ExitCode::from(2),
+    let _ = out.flush();
+
+    if !cli.json {
+        for resp in resps.iter().filter(|r| r.truncated) {
+            if let Some(next) = resp.next_line {
+                let which = if multi {
+                    format!("{}: ", resp.path)
+                } else {
+                    String::new()
+                };
+                eprintln!(
+                    "[lancet read] {which}truncated at ~{} tokens (resume with --lines {next}:)",
+                    resp.estimated_tokens
+                );
+            }
+        }
     }
+    ExitCode::from(worst)
 }
 
 fn run_outline(cli: OutlineCli) -> ExitCode {

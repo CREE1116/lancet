@@ -13,7 +13,7 @@ Check it is installed with `lancet --version`. Searches are always fresh; on lar
 
 | To… | Run |
 |---|---|
-| See the layout | `lancet fd --tree --dirs -d 2 .` (folders only) · `lancet fd --tree -d 2 src` |
+| See the layout | `lancet fd --tree --dirs -d 2 .` (folders only) · `lancet fd --tree -d 2 src docs` (several paths) |
 | Find files by name | `lancet fd config src` (substring) · `lancet fd -e proto` · `lancet fd '*_test.go'` (glob) |
 | Grep (same flags and output as ripgrep) | `lancet rg -w spin_lock src` · `lancet rg -t py -C2 'def \w+_test'` |
 | Boolean / proximity / fuzzy / in-function search | `lancet '"OOM" AND "batch" NOT "CPU" in line' src` · `lancet 'near("retry", "timeout", 20) in function' src` |
@@ -21,7 +21,7 @@ Check it is installed with `lancet --version`. Searches are always fresh; on lar
 | Definitions + references (code only, not comments/strings) | `lancet refs SearchOptions src` |
 | The most used classes / functions | `lancet refs --rank '*Service' --kind class .` |
 | Structural search / rewrite | `lancet ast '$X.unwrap()' src --lang rs` · add `--rewrite '$X?'` |
-| Read exactly what you need | `lancet read src/x.rs --symbol handle_request` · `lancet read src/x.rs:120-180` · `lancet read report.pdf --page 3` |
+| Read exactly what you need | `lancet read src/x.rs --symbol handle_request` · `lancet read src/x.rs:120-180 src/y.rs:10-40` (several at once) · `lancet read report.pdf --page 3` |
 | Change lines, a symbol or exact text | `lancet edit src/x.rs --find 'retries = 3' --with 'retries = 5' --rev REV --apply` |
 | Apply a diff | `git diff | lancet patch --apply` · `lancet patch fix.diff` (preview) |
 | Rename a local variable safely | `lancet rename src/x.rs:42 count total --rev REV --apply` |
@@ -45,7 +45,7 @@ Add `--json` to any command when you need to parse the result.
 
 ## When a command refuses
 
-Exit `0` = done, `1` = nothing found (not an error), `2` = refused or invalid. Read the message:
+Exit `0` = done, `1` = nothing found (not an error), `2` = refused or invalid — including a path that doesn't exist. Read the message (on stderr):
 
 - **`conflict` / "file changed since rev"** — someone else wrote the file. `read` it again, redo your change on the new content, retry with the new rev. Never retry without `--rev`.
 - **`rename` refused** — it only renames locals (variables, parameters, closure and loop variables) in Rust, Python, JS/TS and Go, and stops if the name is used inside a macro, `eval`, a JSX tag, or if the new name would shadow or capture another. Fall back to `lancet refs NAME` and one `lancet edit --edits` call over the sites you checked.

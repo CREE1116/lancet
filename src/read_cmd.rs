@@ -627,7 +627,8 @@ pub fn read_file_range(opts: &ReadOptions) -> ReadResponse {
 
 pub fn print_read_human(resp: &ReadResponse, raw: bool, w: &mut impl Write) -> io::Result<()> {
     if let Some(err) = &resp.error {
-        return writeln!(w, "error: {}", err.message);
+        eprintln!("error: {}", err.message);
+        return Ok(());
     }
     if !raw {
         // The rev is what `edit` / `rename` / `patch` take as `--rev`.

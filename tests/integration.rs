@@ -2921,3 +2921,59 @@ fn refs_rank_orders_declarations_by_use() {
     // Kind filter.
     assert!(rank_symbols(&o, &["function".into()]).entries.is_empty());
 }
+
+#[test]
+fn cli_missing_paths_are_errors_and_fd_read_take_several_targets() {
+    use std::process::Command;
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    fs::create_dir_all(root.join("a")).unwrap();
+    fs::create_dir_all(root.join("b")).unwrap();
+    fs::write(root.join("a/x.rs"), "fn x() {}\n// two\n").unwrap();
+    fs::write(root.join("b/y.rs"), "fn y() {}\n").unwrap();
+    let run = |args: &[&str]| {
+        let o = Command::new(env!("CARGO_BIN_EXE_lancet"))
+            .args(args)
+            .current_dir(root)
+            .output()
+            .unwrap();
+        (
+            o.status.code().unwrap(),
+            String::from_utf8_lossy(&o.stdout).into_owned(),
+            String::from_utf8_lossy(&o.stderr).into_owned(),
+        )
+    };
+    // A mistyped path is an error (exit 2), not "nothing found" (exit 1).
+    for args in [
+        &["fd", ".", "nope"][..],
+        &["fd", "a/nope"],
+        &["rg", "x", "nope"],
+        &["\"x\"", "nope"],
+        &["refs", "x", "nope"],
+        &["ast", "$X", "nope", "--lang", "rs"],
+        &["outline", "nope"],
+    ] {
+        let (code, _, err) = run(args);
+        assert_eq!(code, 2, "{args:?}: {err}");
+        assert!(err.contains("nope"), "{args:?}: {err}");
+    }
+    // fd: several paths, `.` means everything.
+    let (code, out, _) = run(&["fd", ".", "a", "b"]);
+    assert_eq!(code, 0);
+    assert_eq!(out, "a/x.rs\nb/y.rs\n");
+    let (_, out, _) = run(&["fd", "-e", "rs", "a", "b"]);
+    assert_eq!(out, "a/x.rs\nb/y.rs\n");
+    // read: several targets, each with its own header and rev.
+    let (code, out, _) = run(&["read", "a/x.rs:2", "b/y.rs:1"]);
+    assert_eq!(code, 0);
+    assert!(
+        out.starts_with("# a/x.rs rev ") && out.contains("\n\n# b/y.rs rev "),
+        "{out}"
+    );
+    assert!(
+        out.contains("2 | // two") && out.contains("1 | fn y() {}"),
+        "{out}"
+    );
+    let (code, _, _) = run(&["read", "a/x.rs:1", "b/missing.rs"]);
+    assert_eq!(code, 2);
+}

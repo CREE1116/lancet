@@ -1246,6 +1246,15 @@ mod imp {
     }
 
     pub fn search_ast(opts: &AstOptions) -> AstResponse {
+        if let Some(msg) = crate::walk::missing_root(&opts.root) {
+            return AstResponse::failure(
+                Status::InvalidQuery,
+                opts.lang.clone(),
+                opts.pattern.clone(),
+                msg,
+                0.0,
+            );
+        }
         let mut r = search_ast_raw(opts);
         for m in &mut r.matches {
             m.path = crate::walk::display_path(&opts.root, &m.path);
@@ -1447,7 +1456,8 @@ mod imp {
 
     pub fn print_ast_human(resp: &AstResponse, w: &mut impl Write) -> io::Result<()> {
         if let Some(err) = &resp.error {
-            return writeln!(w, "error: {}", err.message);
+            eprintln!("error: {}", err.message);
+            return Ok(());
         }
         if !resp.diffs.is_empty() {
             for d in &resp.diffs {
@@ -1489,7 +1499,8 @@ mod imp {
 
     pub fn print_ast_human(resp: &AstResponse, w: &mut impl Write) -> io::Result<()> {
         if let Some(err) = &resp.error {
-            return writeln!(w, "error: {}", err.message);
+            eprintln!("error: {}", err.message);
+            return Ok(());
         }
         Ok(())
     }

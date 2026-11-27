@@ -395,7 +395,8 @@ fn build_outline_raw(opts: &OutlineOptions) -> OutlineResponse {
 
 pub fn print_outline_human(resp: &OutlineResponse, w: &mut impl Write) -> io::Result<()> {
     if let Some(err) = &resp.error {
-        return writeln!(w, "error: {}", err.message);
+        eprintln!("error: {}", err.message);
+        return Ok(());
     }
     for (fi, f) in resp.files.iter().enumerate() {
         if fi > 0 {

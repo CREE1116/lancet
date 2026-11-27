@@ -178,6 +178,12 @@ impl FileFilter {
     }
 }
 
+/// `Some(message)` when a search root doesn't exist: an error, not "no results"
+/// (a typo in a path must not look like an empty search).
+pub fn missing_root(root: &Path) -> Option<String> {
+    (!root.exists()).then(|| format!("{}: No such file or directory", root.display()))
+}
+
 /// How a path relative to the search root is shown to the caller: joined onto the
 /// root they gave (as `rg` and `fd` do), so every command's output can be passed
 /// straight to `read`, `edit` or `rename` from the same directory.

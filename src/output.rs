@@ -144,9 +144,10 @@ impl Response {
 
 pub fn print_human(r: &Response, w: &mut dyn Write) -> io::Result<()> {
     if let Some(e) = &r.error {
+        // Errors go to stderr, as ripgrep's do; stdout stays results-only.
         match e.pos {
-            Some(p) => writeln!(w, "error: {} (at byte {p})", e.message)?,
-            None => writeln!(w, "error: {}", e.message)?,
+            Some(p) => eprintln!("error: {} (at byte {p})", e.message),
+            None => eprintln!("error: {}", e.message),
         }
         return Ok(());
     }

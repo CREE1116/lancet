@@ -227,6 +227,9 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
 }
 
 pub fn find_refs(opts: &RefsOptions) -> RefsResponse {
+    if let Some(msg) = crate::walk::missing_root(&opts.root) {
+        return RefsResponse::failure(Status::InvalidQuery, opts.symbol.clone(), msg, 0.0);
+    }
     let mut r = find_refs_raw(opts);
     for h in r.definitions.iter_mut().chain(r.references.iter_mut()) {
         h.path = crate::walk::display_path(&opts.root, &h.path);
@@ -419,7 +422,8 @@ fn find_refs_raw(opts: &RefsOptions) -> RefsResponse {
 
 pub fn print_refs_human(resp: &RefsResponse, w: &mut impl Write) -> io::Result<()> {
     if let Some(err) = &resp.error {
-        return writeln!(w, "error: {}", err.message);
+        eprintln!("error: {}", err.message);
+        return Ok(());
     }
     if !resp.definitions.is_empty() {
         writeln!(w, "Definitions ({}):", resp.definitions.len())?;
@@ -524,6 +528,9 @@ pub fn rank_symbols(opts: &RefsOptions, kinds: &[String]) -> RankResponse {
             Status::Unsupported,
             "`--rank` requires building with `--features ast`".into(),
         );
+    }
+    if let Some(msg) = crate::walk::missing_root(&opts.root) {
+        return fail(Status::InvalidQuery, msg);
     }
     let glob = match globset::Glob::new(if pattern.is_empty() { "*" } else { &pattern }) {
         Ok(g) => g.compile_matcher(),

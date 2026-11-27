@@ -275,6 +275,9 @@ fn execute_one(
     walk_cache: Option<&[FileEntry]>,
     t0: Instant,
 ) -> Response {
+    if let Some(msg) = crate::walk::missing_root(&opts.root) {
+        return Response::failure(Status::InvalidQuery, Some(q.to_string()), msg, None, ms(t0));
+    }
     let mut r = execute_one_raw(q, opts, ix, walk_cache, t0);
     for it in &mut r.results {
         it.path = crate::walk::display_path(&opts.root, &it.path);
