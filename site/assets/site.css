@@ -59,9 +59,8 @@ nav .wrap { display: flex; align-items: center; gap: 28px; height: 58px; }
 nav .links { display: flex; gap: 22px; margin-left: auto; font-size: 14px; color: var(--text-2); white-space: nowrap; }
 nav .links a { text-decoration: none; }
 nav .links a:hover { color: var(--text); }
-.nav-actions { display: inline-flex; align-items: center; gap: 10px; }
-.gh { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; text-decoration: none; white-space: nowrap; }
-.gh:hover { border-color: var(--text-3); background: var(--bg-2); }
+.gh { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; text-decoration: none; white-space: nowrap; }
+.gh:hover { border-color: var(--text-3); }
 
 /* hero */
 .hero { padding: 72px 0 80px; border-top: 0; }
@@ -71,6 +70,10 @@ nav .links a:hover { color: var(--text); }
 .hero .lede { font-size: 19px; }
 .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 22px; }
 .badge { font: 12px/1 var(--mono); color: var(--text-2); border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; }
+.badge-star { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; transition: border-color .15s, color .15s; }
+.badge-star:hover { border-color: var(--text-3); color: var(--text); }
+.badge-star svg { color: var(--warn); flex: none; }
+.badge-star[hidden] { display: none; }
 
 .install { margin-top: 30px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-2); overflow: hidden; }
 .tabs { display: flex; border-bottom: 1px solid var(--line); overflow-x: auto; }
