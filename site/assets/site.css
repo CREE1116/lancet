@@ -39,7 +39,7 @@
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased; overflow-x: clip; }
 a { color: inherit; }
 html[lang="ko"] body { word-break: keep-all; overflow-wrap: anywhere; }
 html[lang="ko"] pre, html[lang="ko"] code { word-break: normal; overflow-wrap: normal; }
@@ -81,7 +81,7 @@ nav .links a:hover { color: var(--text); }
 .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
 .tabs button:focus-visible, .copy:focus-visible, .scene-tab:focus-visible, .play:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .cmd { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
-.cmd code { flex: 1; font-size: 14px; white-space: pre; overflow-x: auto; }
+.cmd code { flex: 1; min-width: 0; font-size: 14px; white-space: pre; overflow-x: auto; }
 .cmd code::before { content: "$ "; color: var(--text-3); }
 .cmd.is-prompt code { white-space: pre-wrap; word-break: break-word; font-family: var(--sans); line-height: 1.5; }
 .cmd.is-prompt code::before { content: none; }
@@ -227,21 +227,32 @@ footer a:hover { color: var(--text); }
 
 @media (max-width: 900px) {
   .hero .wrap, .qs { grid-template-columns: minmax(0, 1fr); }
-  .grid3 { grid-template-columns: 1fr 1fr; }
-  .s-index { grid-template-columns: 1fr; gap: 16px; }
-  .files { grid-template-columns: repeat(40, 1fr); }
-  .s-coord { grid-template-columns: 1fr; }
-  .stage { height: 720px; }
+  .grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .s-index { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .files { grid-template-columns: repeat(32, 1fr); }
+  .s-coord { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .stage { height: auto; min-height: 520px; }
+  .scene { position: relative; display: none; padding: 24px; }
+  .scene.on { display: block; }
+  .caption { position: static; padding: 12px 24px 0; min-height: 0; }
+  .play { position: static; margin: 12px 24px 20px; }
   nav .links a.opt { display: none; }
 }
 @media (max-width: 600px) {
-  .grid3 { grid-template-columns: 1fr; }
+  .grid3 { grid-template-columns: minmax(0, 1fr); }
   .scene-tab span { display: none; }
   nav .links a:not(.keep) { display: none; }
   nav .wrap { gap: 14px; }
-  .scene { padding: 20px; }
-  .stage { height: 760px; }
-  .versus { grid-template-columns: 1fr; }
+  .scene { padding: 16px; }
+  .stage { height: auto; min-height: 0; }
+  .caption { padding: 4px 16px 0; font-size: 13px; }
+  .play { margin: 10px 16px 16px; }
+  .files { grid-template-columns: repeat(28, 1fr); }
+  .panel pre { overflow-x: auto; font-size: 11.5px; line-height: 1.55; }
+  .s-agents { height: auto; }
+  .track { height: auto; min-height: 40px; padding: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .step { position: static; height: auto; padding: 5px 8px; font-size: 11px; }
+  .versus { grid-template-columns: minmax(0, 1fr); }
   table.fail, details.table table { display: block; overflow-x: auto; }
   /* Mobile: keep the headline of each section, drop supporting detail. */
   section { padding: 56px 0; }
@@ -249,15 +260,14 @@ footer a:hover { color: var(--text); }
   .hero { padding: 40px 0 48px; }
   .hero .badges, .hero .term { display: none; }
   .grams, .legend-row, .s-coord .panel:first-child, .vs small { display: none; }
-  .stage { height: 560px; }
-  .s-index { height: auto; align-content: start; gap: 22px; }
+  .s-index { height: auto; align-content: start; gap: 18px; }
   .card { padding: 16px 18px; }
   .card p { display: none; }
   .card h3 { margin: 10px 0 0; font-size: 16px; }
   #bench .lede, #why .lede, details.table { display: none; }
   table.fail tbody tr:nth-child(n+4) { display: none; }
   .qs .code:last-child { display: none; }
-  .lane { grid-template-columns: 1fr; gap: 6px; }
+  .lane { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
