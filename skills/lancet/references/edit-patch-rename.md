@@ -53,7 +53,7 @@ Rules: each element requires **exactly one** of `lines`, `symbol`, or `find` (`a
 
 ### Several Files in One Call
 
-Hunks may carry `"path"` (and that file's `"rev"`); then PATH is optional, and hunks without `"path"` go to PATH:
+Hunks may carry `"path"` (and, optionally, that file's `"rev"`); then PATH is optional, and hunks without `"path"` go to PATH:
 
 ```json
 [

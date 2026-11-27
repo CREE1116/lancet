@@ -610,7 +610,8 @@ pub fn read_file_range(opts: &ReadOptions) -> ReadResponse {
     // Extracted text (PDF, HWP, archive entries…) can't be written back, so no rev.
     let rev = (effective_entry.is_none() && !crate::adapters::is_adapted_path(&path, opts.ocr))
         .then(|| crate::edit::rev(&data));
-    let effective_lines = opts.lines.or(inline_lines);
+    // `PATH:120-180` names its own range; --lines/--offset apply to the other targets.
+    let effective_lines = inline_lines.or(opts.lines);
 
     let mut section: Option<String> = None;
     let mut selected: Vec<(usize, String)> = if let Some(sym) = &opts.symbol {

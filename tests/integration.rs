@@ -2828,16 +2828,59 @@ fn rename_local_bindings_exactly_or_refuses() {
     let (r, out) = run("a.rs", src, 1, None, "c", "t");
     assert_eq!(r.status, Status::Conflict);
     assert_eq!(out, src);
-    // Macros are opaque; module-level items need a compiler.
-    let (r, _) = run(
+    // std formatting macros: arguments and `{name}` captures are plain uses.
+    let (r, out) = run(
         "m.rs",
-        "fn h() { let x = 1; println!(\"{x}\"); }\n",
+        "fn h() { let x = 1; println!(\"{x} {:>x$} {{x}} x\", x + 1, s.x); }\n",
         1,
         None,
         "x",
         "y",
     );
-    assert_eq!(r.status, Status::Unsupported);
+    assert!(r.applied, "{:?}", r.error);
+    assert_eq!(
+        out,
+        "fn h() { let y = 1; println!(\"{y} {:>y$} {{x}} x\", y + 1, s.x); }\n"
+    );
+    let (r, out) = run(
+        "m.rs",
+        "fn h(o: u8) { let x = 1; matches!(o + x, 1 | Some::B); }\n",
+        1,
+        None,
+        "x",
+        "y",
+    );
+    assert!(r.applied, "{:?}", r.error);
+    assert!(
+        out.contains("let y = 1; matches!(o + y, 1 | Some::B)"),
+        "{out}"
+    );
+    // A capture of the new name would change meaning; a named argument, a closure,
+    // or any other macro stays opaque.
+    for (body, want) in [
+        (
+            "fn h(y: u8) { let x = 1; println!(\"{x}{y}\"); }\n",
+            Status::Conflict,
+        ),
+        (
+            "fn h() { let x = 1; println!(\"{x}\", x = 2); }\n",
+            Status::Unsupported,
+        ),
+        (
+            "fn h(v: &[u8]) { let x = 1; println!(\"{}\", v.iter().map(|a| a + x).count()); }\n",
+            Status::Unsupported,
+        ),
+        ("fn h() { let x = 1; my!(x); }\n", Status::Unsupported),
+        (
+            "fn h(o: Option<u8>) { let x = 1; matches!(o, Some(x)); }\n",
+            Status::Unsupported,
+        ),
+    ] {
+        let (r, out) = run("m.rs", body, 1, None, "x", "y");
+        assert_eq!(r.status, want, "{body}");
+        assert_eq!(out, body);
+    }
+    // Module-level items need a compiler.
     let (r, _) = run(
         "s.rs",
         "fn lim() -> u32 { 1 }\nfn k() -> u32 { lim() }\n",
@@ -3112,6 +3155,23 @@ fn builtin_tool_syntax_write_and_codex_patches() {
     // Read's offset / limit (1-based).
     let (_, out, _) = run(&["read", "src/a.py", "--offset", "4", "--limit", "1"], None);
     assert!(out.ends_with("   4 | def b():\n"), "{out}");
+    // A target's own `:range` wins over --offset / --limit.
+    let (_, out, _) = run(
+        &[
+            "read",
+            "src/a.py",
+            "--offset",
+            "4",
+            "--limit",
+            "1",
+            "src/a.py:1",
+        ],
+        None,
+    );
+    assert!(
+        out.contains("   4 | def b():\n") && out.ends_with("   1 | def a():\n"),
+        "{out}"
+    );
 
     // write: creates; an existing file needs the rev it was read at.
     let (code, _, _) = run(

@@ -160,14 +160,25 @@ fn line_diff(rel: &str, old: &str, new: &str) -> String {
     let n = old_lines.len();
     let m = new_lines.len();
 
-    // LCS DP when size is reasonable; fallback to single coarse hunk for huge files.
+    // Common prefix and suffix first, so the LCS only runs over the changed middle.
     let mut ops: Vec<(char, usize, usize)> = Vec::new();
-    if n.saturating_mul(m) <= 2_000_000 {
-        let mut dp = vec![0u32; (n + 1) * (m + 1)];
-        let stride = m + 1;
-        for i in (0..n).rev() {
-            for j in (0..m).rev() {
-                dp[i * stride + j] = if old_lines[i] == new_lines[j] {
+    let mut pref = 0;
+    while pref < n && pref < m && old_lines[pref] == new_lines[pref] {
+        ops.push((' ', pref, pref));
+        pref += 1;
+    }
+    let mut suff = 0;
+    while suff + pref < n && suff + pref < m && old_lines[n - 1 - suff] == new_lines[m - 1 - suff] {
+        suff += 1;
+    }
+    let (a, b) = (&old_lines[pref..n - suff], &new_lines[pref..m - suff]);
+    let (an, bm) = (a.len(), b.len());
+    if an.saturating_mul(bm) <= 2_000_000 {
+        let mut dp = vec![0u32; (an + 1) * (bm + 1)];
+        let stride = bm + 1;
+        for i in (0..an).rev() {
+            for j in (0..bm).rev() {
+                dp[i * stride + j] = if a[i] == b[j] {
                     dp[(i + 1) * stride + (j + 1)] + 1
                 } else {
                     dp[(i + 1) * stride + j].max(dp[i * stride + (j + 1)])
@@ -175,49 +186,46 @@ fn line_diff(rel: &str, old: &str, new: &str) -> String {
             }
         }
         let (mut i, mut j) = (0, 0);
-        while i < n && j < m {
-            if old_lines[i] == new_lines[j] {
-                ops.push((' ', i, j));
+        while i < an && j < bm {
+            if a[i] == b[j] {
+                ops.push((' ', pref + i, pref + j));
                 i += 1;
                 j += 1;
             } else if dp[(i + 1) * stride + j] >= dp[i * stride + (j + 1)] {
-                ops.push(('-', i, j));
+                ops.push(('-', pref + i, pref + j));
                 i += 1;
             } else {
-                ops.push(('+', i, j));
+                ops.push(('+', pref + i, pref + j));
                 j += 1;
             }
         }
-        while i < n {
-            ops.push(('-', i, j));
-            i += 1;
+        for i in i..an {
+            ops.push(('-', pref + i, pref + j));
         }
-        while j < m {
-            ops.push(('+', i, j));
-            j += 1;
+        for j in j..bm {
+            ops.push(('+', pref + an, pref + j));
+        }
+    } else if an == bm {
+        // Too big for the LCS, same line count (a rename, an in-place replace):
+        // pair lines up so only the changed ones show.
+        for i in 0..an {
+            if a[i] == b[i] {
+                ops.push((' ', pref + i, pref + i));
+            } else {
+                ops.push(('-', pref + i, pref + i));
+                ops.push(('+', pref + i + 1, pref + i));
+            }
         }
     } else {
-        let mut pref = 0;
-        while pref < n && pref < m && old_lines[pref] == new_lines[pref] {
-            ops.push((' ', pref, pref));
-            pref += 1;
+        for i in 0..an {
+            ops.push(('-', pref + i, pref));
         }
-        let mut suff = 0;
-        while suff + pref < n
-            && suff + pref < m
-            && old_lines[n - 1 - suff] == new_lines[m - 1 - suff]
-        {
-            suff += 1;
+        for j in 0..bm {
+            ops.push(('+', pref + an, pref + j));
         }
-        for idx in pref..(n - suff) {
-            ops.push(('-', idx, pref));
-        }
-        for idx in pref..(m - suff) {
-            ops.push(('+', n - suff, idx));
-        }
-        for k in 0..suff {
-            ops.push((' ', n - suff + k, m - suff + k));
-        }
+    }
+    for k in 0..suff {
+        ops.push((' ', n - suff + k, m - suff + k));
     }
 
     let ctx = 3usize;
@@ -434,6 +442,31 @@ fn same_file(_: &File, _: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn big_file_diff_shows_only_changed_lines() {
+        let old: String = (0..3000).map(|i| format!("line {i}\n")).collect();
+        let new = old
+            .replace("line 10\n", "line ten\n")
+            .replace("line 2990\n", "line two-nine-nine-zero\n");
+        let d = unified_diff("f", &old, &new);
+        assert_eq!(d.matches("\n@@ ").count(), 2, "{d}");
+        assert_eq!(
+            d.lines()
+                .filter(|l| l.starts_with('-') || l.starts_with('+'))
+                .count(),
+            6
+        );
+        assert!(
+            d.contains("@@ -8,7 +8,7 @@\n line 7\n line 8\n line 9\n-line 10\n+line ten\n"),
+            "{d}"
+        );
+        assert!(d.contains("@@ -2988,7 +2988,7 @@\n"), "{d}");
+        // Line counts differ and the middle is too big for the LCS: still correct.
+        let grown = format!("{new}tail\n").replacen("line 5\n", "", 1);
+        let d = unified_diff("f", &old, &grown);
+        assert!(d.starts_with("--- a/f\n+++ b/f\n@@ -3,"), "{d}");
+    }
 
     fn e(start: usize, end: usize, r: &str) -> Edit {
         Edit {

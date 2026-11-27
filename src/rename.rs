@@ -177,6 +177,9 @@ mod imp {
         dynamic: Vec<(Span, &'static str)>,
         /// Names declared `global` / `nonlocal` somewhere in the file.
         rebound: Vec<String>,
+        /// String literals inside std formatting macros lancet resolved: plain text
+        /// (the format string's `{name}` captures are in `uses`).
+        literal: Vec<Span>,
         by_name: HashMap<String, Vec<usize>>,
     }
 
@@ -620,6 +623,8 @@ mod imp {
                     if **name == *names[0] {
                         m.comments += 1;
                     }
+                } else if a.literal.iter().any(|s| s.0 <= p && p < s.1) {
+                    // Literal text inside `format!`-style arguments.
                 } else if fam == L::Rust
                     && in_kind(&|k| k == "token_tree" || k == "macro_definition")
                 {
@@ -743,6 +748,8 @@ mod imp {
             src,
             go_scopes: HashMap::new(),
             py_locals: HashMap::new(),
+            fmt_uses: Default::default(),
+            fmt_other: Default::default(),
         };
         let mut stack = vec![tree.root_node()];
         while let Some(n) = stack.pop() {
@@ -761,6 +768,53 @@ mod imp {
         go_scopes: HashMap<(Span, String), usize>,
         /// Python: (function span, name) → the one local binding of that name.
         py_locals: HashMap<(Span, String), usize>,
+        /// Rust: identifier starts inside std formatting macros that are plain uses /
+        /// names in another namespace (`.field`, `path::`, `name =`).
+        fmt_uses: std::collections::HashSet<usize>,
+        fmt_other: std::collections::HashSet<usize>,
+    }
+
+    /// Names a Rust format string captures: `{name}`, `{name:?}`, `{:width$}`, with
+    /// their byte offsets in `s`.
+    fn format_captures(s: &str) -> Vec<(usize, &str)> {
+        let ident = |t: &str| {
+            t.chars()
+                .next()
+                .is_some_and(|c| c.is_alphabetic() || c == '_')
+                && t != "_"
+                && t.chars().all(|c| c.is_alphanumeric() || c == '_')
+        };
+        let mut out = Vec::new();
+        let mut i = 0;
+        while let Some(j) = s[i..].find(['{', '}']).map(|j| i + j) {
+            if s[j..].starts_with("{{") || s[j..].starts_with("}}") || s.as_bytes()[j] == b'}' {
+                i = j + if s.as_bytes().get(j + 1) == s.as_bytes().get(j) {
+                    2
+                } else {
+                    1
+                };
+                continue;
+            }
+            let Some(end) = s[j..].find('}').map(|e| j + e) else {
+                break;
+            };
+            let inner = &s[j + 1..end];
+            let (arg, spec) = inner.split_once(':').unwrap_or((inner, ""));
+            if ident(arg) {
+                out.push((j + 1, arg));
+            }
+            let spec_at = j + 1 + arg.len() + 1;
+            for (k, _) in spec.match_indices('$') {
+                let start = spec[..k]
+                    .rfind(|c: char| !(c.is_alphanumeric() || c == '_'))
+                    .map_or(0, |b| b + 1);
+                if ident(&spec[start..k]) {
+                    out.push((spec_at + start, &spec[start..k]));
+                }
+            }
+            i = end + 1;
+        }
+        out
     }
 
     fn span(n: Node) -> Span {
@@ -822,6 +876,10 @@ mod imp {
         // ---------------------------------------------------------------- Rust
         fn rust(&mut self, n: Node, a: &mut Analysis) {
             let k = n.kind();
+            if k == "macro_invocation" {
+                self.rust_fmt_macro(n, a);
+                return;
+            }
             if k != "identifier" && k != "shorthand_field_identifier" {
                 if matches!(k, "field_identifier" | "type_identifier") {
                     a.other.push(n.start_byte());
@@ -830,7 +888,14 @@ mod imp {
             }
             let Some(p) = n.parent() else { return };
             if ancestor(n, &["token_tree", "macro_definition"]).is_some() {
-                a.opaque.insert(n.start_byte(), "inside a macro");
+                let s = n.start_byte();
+                if self.fmt_uses.contains(&s) {
+                    self.use_(a, n, false);
+                } else if self.fmt_other.contains(&s) {
+                    a.other.push(s);
+                } else {
+                    a.opaque.insert(s, "inside a macro");
+                }
                 return;
             }
             if ancestor(n, &["use_declaration"]).is_some() {
@@ -890,6 +955,126 @@ mod imp {
             if k == "identifier" {
                 self.use_(a, n, false);
             }
+        }
+
+        /// `format!`, `println!`, `write!`, `assert_eq!`… take plain expressions that are
+        /// evaluated where the macro is called, so their names resolve like any other
+        /// code, and `{name}` in the format string uses the local `name`. Records those
+        /// uses when nothing in the call can bind or hide a name (a closure, a block, a
+        /// nested macro); otherwise the call stays opaque.
+        fn rust_fmt_macro(&mut self, m: Node, a: &mut Analysis) {
+            if ancestor(m, &["token_tree", "macro_definition"]).is_some() {
+                return;
+            }
+            let Some(name) = m.child_by_field_name("macro") else {
+                return;
+            };
+            let name = match name.kind() {
+                "identifier" => self.text(name),
+                "scoped_identifier" => match self.text(name).rsplit_once("::") {
+                    Some((p, last))
+                        if matches!(p.trim_start_matches("::"), "std" | "core" | "alloc") =>
+                    {
+                        last
+                    }
+                    _ => return,
+                },
+                _ => return,
+            };
+            // Top-level arguments before the format string.
+            let fmt_at = match name {
+                "format" | "format_args" | "print" | "println" | "eprint" | "eprintln"
+                | "panic" | "todo" | "unimplemented" | "unreachable" => Some(0),
+                "write" | "writeln" | "assert" | "debug_assert" => Some(1),
+                "assert_eq" | "assert_ne" | "debug_assert_eq" | "debug_assert_ne" => Some(2),
+                // `matches!(expr, pattern)`: the pattern may not bind (checked below).
+                "vec" | "dbg" | "matches" => None,
+                _ => return,
+            };
+            let mut c = m.walk();
+            let Some(tt) = m.children(&mut c).find(|c| c.kind() == "token_tree") else {
+                return;
+            };
+            let (mut uses, mut other, mut named, mut strings) = (vec![], vec![], vec![], vec![]);
+            let mut fmt_lit = None;
+            // (token tree, inside `matches!`'s pattern)
+            let mut stack = vec![(tt, false)];
+            while let Some((t, in_pat)) = stack.pop() {
+                let mut c = t.walk();
+                let kids: Vec<Node> = t.children(&mut c).collect();
+                if kids.first().is_some_and(|k| k.kind() == "{") {
+                    return; // a block or struct literal
+                }
+                let top = t.id() == tt.id();
+                let kind = |i: Option<usize>| i.and_then(|i| kids.get(i)).map(|k| k.kind());
+                let mut commas = 0;
+                for (i, k) in kids.iter().enumerate() {
+                    let (prev, next) = (kind(i.checked_sub(1)), kind(Some(i + 1)));
+                    let named_arg = top
+                        && matches!(kind(i.checked_sub(2)), Some(","))
+                        && prev == Some("identifier");
+                    match k.kind() {
+                        "token_tree" => stack.push((*k, in_pat || name == "matches" && commas > 0)),
+                        "," if top => commas += 1,
+                        "=" if !named_arg => return,
+                        "|" | "||" if matches!(prev, Some("(" | "[" | ",")) => return,
+                        "!" if prev == Some("identifier") && next == Some("token_tree") => return,
+                        "let" | "match" | "if" | "while" | "for" | "loop" | "fn" | "move"
+                        | "async" | "static" | "struct" | "impl" | "mod" | "use" | "const"
+                        | "$" => return,
+                        "string_literal" | "raw_string_literal" => {
+                            strings.push(span(*k));
+                            if top
+                                && fmt_lit.is_none()
+                                && Some(commas) == fmt_at
+                                && matches!(prev, Some("(" | "[" | ","))
+                                && matches!(next, Some("," | ")" | "]"))
+                            {
+                                fmt_lit = Some(*k);
+                            }
+                        }
+                        "identifier" => {
+                            let s = k.start_byte();
+                            let in_pat = in_pat || name == "matches" && top && commas > 0;
+                            if in_pat && !starts_upper(self.text(*k)) && next != Some("::") {
+                                return; // a pattern binding (or a lowercase const)
+                            }
+                            if matches!(prev, Some("." | "::")) || next == Some("::") {
+                                other.push(s);
+                            } else if top && next == Some("=") && matches!(prev, Some(",")) {
+                                named.push(self.text(*k));
+                                other.push(s);
+                            } else {
+                                uses.push(s);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            if let Some(lit) = fmt_lit {
+                let mut c = lit.walk();
+                for part in lit
+                    .children(&mut c)
+                    .filter(|p| p.kind() == "string_content")
+                {
+                    for (off, cap) in format_captures(self.text(part)) {
+                        let s = part.start_byte() + off;
+                        if named.contains(&cap) {
+                            a.opaque.insert(s, "a named format argument");
+                        } else {
+                            a.uses.push(Use {
+                                name: cap.to_string(),
+                                span: (s, s + cap.len()),
+                                shorthand: false,
+                            });
+                        }
+                    }
+                }
+            }
+            self.fmt_uses.extend(uses);
+            self.fmt_other.extend(other);
+            a.literal.extend(strings);
         }
 
         /// If `n` is bound by a pattern: the byte range that sees it.
