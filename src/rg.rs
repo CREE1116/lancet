@@ -64,6 +64,11 @@ pub struct RgOptions {
     pub iglobs: Vec<String>,
     pub types: Vec<String>,
     pub types_not: Vec<String>,
+    /// `--type-add NAME:GLOB` definitions, applied before `-t`/`-T`.
+    pub type_add: Vec<String>,
+    /// `--passthru`: print every line of every searched file (callers also set
+    /// `before`/`after` to cover the whole file).
+    pub passthru: bool,
     pub walk: WalkOpts,
     pub index: IndexMode,
     pub index_dir: Option<PathBuf>,
@@ -104,6 +109,8 @@ impl RgOptions {
             iglobs: Vec::new(),
             types: Vec::new(),
             types_not: Vec::new(),
+            type_add: Vec::new(),
+            passthru: false,
             walk: WalkOpts::default(),
             index: IndexMode::Auto,
             index_dir: None,
@@ -401,7 +408,7 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
 
     // Prefilter: no match anywhere in the buffer means no matching line.
     let any = cx.eng.buf_re.is_match(data);
-    if !any && !o.invert {
+    if !any && !o.invert && !o.passthru {
         if o.files_without_match {
             emit_path(&mut fo.out, o, &fo.display);
         }
@@ -500,11 +507,20 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
         }
         return Some(fo);
     }
-    if sel.is_empty() {
+    if sel.is_empty() && (!o.passthru || lines.is_empty()) {
         return Some(fo);
     }
     if o.json {
         render_json(&mut fo, o, cx.eng, data, &lines, &sel, matches_total);
+        return Some(fo);
+    }
+
+    if sel.is_empty() {
+        // --passthru: a file without matches is printed whole, as context.
+        for c in 0..lines.len() {
+            emit_text_line(&mut fo.out, cx, &fo.display, c, &lines, data, b'-', None);
+        }
+        fo.has_output_group = !lines.is_empty();
         return Some(fo);
     }
 
@@ -598,7 +614,8 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
             // Past `-m`, ripgrep still marks matching lines in the trailing context as matches.
             let (cs, ce) = lines[c];
             cx.eng.spans(&data[cs..ce], &mut tmp);
-            let sep = if !o.invert && !tmp.is_empty() && !o.multiline {
+            // …but not under --passthru, where everything past `-m` is plain context.
+            let sep = if !o.invert && !tmp.is_empty() && !o.multiline && !o.passthru {
                 b':'
             } else {
                 b'-'
@@ -772,22 +789,53 @@ fn render_json(
             "path": {"text": fo.display}, "lines": {"text": t},
             "line_number": i + 1, "absolute_offset": s, "submatches": submatches}})
     };
+    let ctx_ev = |c: usize| {
+        if o.invert {
+            let (cs, ce) = lines[c];
+            let mut sp = Vec::new();
+            eng.spans(&data[cs..ce], &mut sp);
+            line_ev(c, "context", &sp)
+        } else {
+            line_ev(c, "context", &[])
+        }
+    };
     let mut evs = Vec::new();
-    for (i, spans) in sel {
-        for c in i.saturating_sub(o.before)..*i {
+    if sel.is_empty() {
+        // --passthru: every line of a file without matches is context.
+        for c in 0..lines.len() {
+            evs.push(ctx_ev(c));
+        }
+    }
+    let mut next = 0; // lines before this were emitted already (keeps --passthru linear)
+    for (k, (i, spans)) in sel.iter().enumerate() {
+        for c in i.saturating_sub(o.before).max(next)..*i {
             if emitted.insert(c) {
-                evs.push(line_ev(c, "context", &[]));
+                evs.push(ctx_ev(c));
             }
         }
         emitted.insert(*i);
         evs.push(line_ev(*i, "match", spans));
-        for c in (*i + 1)..=(*i + o.after).min(lines.len().saturating_sub(1)) {
-            if sel.iter().any(|(n, _)| *n == c) {
+        next = *i + 1;
+        let next_sel = sel.get(k + 1).map(|(n, _)| *n);
+        let mut sp = Vec::new();
+        let last = (*i + o.after).min(lines.len().saturating_sub(1));
+        for (c, &(cs, ce)) in lines.iter().enumerate().take(last + 1).skip(*i + 1) {
+            if Some(c) == next_sel {
                 break;
             }
-            if emitted.insert(c) {
-                evs.push(line_ev(c, "context", &[]));
+            if !emitted.insert(c) {
+                continue;
             }
+            // Past `-m`, ripgrep reports matching lines in the trailing context as
+            // matches (as the text output does) — except under --passthru.
+            if !o.invert && !o.multiline && !o.passthru {
+                eng.spans(&data[cs..ce], &mut sp);
+                if !sp.is_empty() {
+                    evs.push(line_ev(c, "match", &sp));
+                    continue;
+                }
+            }
+            evs.push(ctx_ev(c));
         }
     }
     for e in evs {
@@ -835,7 +883,14 @@ fn targets(o: &RgOptions, req: &Req) -> Result<(TargetList, bool), String> {
             ));
         }
         any_dir = true;
-        let filter = FileFilter::rg(root, &o.globs, &o.iglobs, &o.types, &o.types_not)?;
+        let filter = FileFilter::rg(
+            root,
+            &o.globs,
+            &o.iglobs,
+            &o.type_add,
+            &o.types,
+            &o.types_not,
+        )?;
         // `.lancet` is built without following symlinks, so `--trust-index -L`
         // falls back to a live walk rather than missing symlinked targets.
         let mode = if o.text || (o.walk.follow && o.index == IndexMode::Trust) {
@@ -898,7 +953,7 @@ pub fn run(o: &RgOptions, w: &mut dyn Write) -> Result<bool, String> {
     let (eng, full) = Engine::new(o)?;
     // Inverted / files-without-match searches need every file; otherwise the regex's
     // required trigrams narrow the candidates (verified by the regex itself).
-    let req = if o.invert || o.files_without_match {
+    let req = if o.invert || o.files_without_match || o.passthru {
         Req::All
     } else {
         Req::from_expr(&Expr::Match {
@@ -931,7 +986,8 @@ pub fn run(o: &RgOptions, w: &mut dyn Write) -> Result<bool, String> {
         if r.out.is_empty() {
             continue;
         }
-        if r.has_output_group && (o.before > 0 || o.after > 0) && !o.json {
+        // --passthru prints whole files, which ripgrep never separates with `--`.
+        if r.has_output_group && (o.before > 0 || o.after > 0) && !o.json && !o.passthru {
             if !first_group {
                 let _ = w.write_all(b"--\n");
             }

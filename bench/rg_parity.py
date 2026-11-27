@@ -100,6 +100,22 @@ CASES: list[list[str]] = [
     ["--max-filesize", "20", "foo"],
     ["--max-filesize", "1K", "foo"],
     ["-L", "foo"],
+    ["--passthru", "foo"],
+    ["--passthru", "zzz_no_match"],
+    ["--passthru", "-c", "foo"],
+    ["--passthru", "-o", "foo"],
+    ["--passthru", "-v", "foo"],
+    ["--passthru", "-m", "1", "foo"],
+    ["--passthru", "-r", "X", "foo"],
+    ["--passthru", "--column", "foo"],
+    ["--passthru", "-A", "1", "foo"],
+    ["-C", "1", "--passthru", "foo"],
+    ["--passthru", "-l", "foo"],
+    ["--passthru", "-U", "foo\\nbar"],
+    ["--type-add", "notes:*.md", "-t", "notes", "foo"],
+    ["--type-add", "notes:*.md", "-T", "notes", "foo"],
+    ["--type-add", "mix:*.md", "--type-add", "mix:*.rs", "-t", "mix", "foo"],
+    ["--type-add", "notes:*.md", "--type-add", "both:include:notes,rust", "-t", "both", "foo"],
 ]
 
 FILE_ARG_CASES: list[list[str]] = [
@@ -115,6 +131,7 @@ LIST_CASES: list[list[str]] = [
     ["--files", "-g", "*.txt"],
     ["--files", "-t", "rust"],
     ["--files", "--hidden"],
+    ["--files", "--type-add", "notes:*.md", "-t", "notes"],
 ]
 
 

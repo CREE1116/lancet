@@ -2705,3 +2705,64 @@ fn edit_find_replaces_exact_text_once_or_all() {
     );
     assert!(parse_hunks(r#"[{"lines": "1", "all": true, "delete": true}]"#).is_err());
 }
+
+#[test]
+fn rg_passthru_and_type_add_match_ripgrep() {
+    use lancet::rg::{run, RgOptions};
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    fs::write(root.join("x.txt"), "a\nfoo 1\nb\nfoo 2\n").unwrap();
+    fs::write(root.join("n.txt"), "none\n").unwrap();
+    fs::write(root.join("k.weird"), "foo\n").unwrap();
+    let rg = |f: &dyn Fn(&mut RgOptions), pat: &str| -> (bool, String) {
+        let mut o = RgOptions::new(vec![pat.into()]);
+        o.paths = vec![root.to_path_buf()];
+        o.index = IndexMode::Off;
+        f(&mut o);
+        let mut out = Vec::new();
+        let any = run(&o, &mut out).unwrap();
+        let base = format!("{}/", root.display());
+        (any, String::from_utf8(out).unwrap().replace(&base, ""))
+    };
+    let passthru = |o: &mut RgOptions| {
+        (o.passthru, o.before, o.after) = (true, usize::MAX / 4, usize::MAX / 4);
+    };
+    // Every line of every file, files without a match included, no `--` separators.
+    let (any, out) = rg(&passthru, "foo");
+    assert!(any);
+    assert_eq!(
+        out,
+        "k.weird:1:foo\nn.txt-1-none\nx.txt-1-a\nx.txt:2:foo 1\nx.txt-3-b\nx.txt:4:foo 2\n"
+    );
+    // No match anywhere: still printed, but exit status 1.
+    let (any, out) = rg(&passthru, "zzz");
+    assert!(!any && out.contains("x.txt-2-foo 1"));
+    // Past -m everything is context.
+    let (_, out) = rg(
+        &|o| {
+            passthru(o);
+            o.max_count = Some(1);
+            o.paths = vec![root.join("x.txt")];
+        },
+        "foo",
+    );
+    assert!(out.ends_with("4-foo 2\n"), "{out}");
+
+    // --type-add defines a type usable with -t / -T.
+    let (_, out) = rg(
+        &|o| {
+            o.type_add = vec!["weird:*.weird".into()];
+            o.types = vec!["weird".into()];
+        },
+        "foo",
+    );
+    assert_eq!(out, "k.weird:1:foo\n");
+    let (_, out) = rg(
+        &|o| {
+            o.type_add = vec!["weird:*.weird".into()];
+            o.types_not = vec!["weird".into()];
+        },
+        "foo",
+    );
+    assert!(!out.contains("k.weird") && out.contains("x.txt:2"));
+}

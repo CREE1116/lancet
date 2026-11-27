@@ -50,7 +50,7 @@
 | `--sort <SORTBY>` | Sort output | No-op | Output is **always** sorted by path component |
 | `--no-heading` | Never print filename headings | No-op | Headings are never used |
 | `--color <WHEN>` | Colorize output (`auto`, `always`, `ansi`, `never`) | Supported | `--color auto` (default) colors on TTYs (`NO_COLOR`/`TERM=dumb` respected) and emits plain text when piped |
-| `--passthru` | Print both matching and non-matching lines | Unsupported | |
+| `--passthru` | Print both matching and non-matching lines | Supported | Files without a match are printed too; exit status still reflects matches; the last of `--passthru` / `-A` / `-B` / `-C` wins |
 
 ### File Filtering & Traversal
 
@@ -71,7 +71,8 @@
 | `--max-depth <NUM>` | Maximum traversal depth | Supported | Enforced in both live walk and `--trust-index` |
 | `--max-filesize <NUM>` | Skip files larger than `NUM` (`K`/`M`/`G` suffixes supported) | Supported | Enforced in both live walk and `--trust-index` |
 | `-z`, `--search-zip` | Search compressed files via external tools | Not needed | Lancet extracts `.zip`, `.tar`, `.gz`, `.tgz` natively in-process |
-| `--pre`, `--type-add` | Preprocessor command / custom file types | Unsupported | |
+| `--type-add <TYPESPEC>` | Define a file type (`name:glob`, repeatable; `name:include:a,b` merges types) | Supported | Applies to `-t`, `-T`, `--files` and `--type-list` |
+| `--pre <COMMAND>` | Run a preprocessor per file | Unsupported | lancet extracts documents and archives in-process (`--docs`) instead of spawning a process per file |
 
 ### Lancet Extensions on `lancet rg`
 
@@ -88,4 +89,4 @@
 
 1. **Always path-sorted:** `lancet rg` always sorts output by path component (equivalent to `rg --sort path`, where `a/b.txt` sorts before `a.txt`), making results deterministic across runs and thread counts.
 2. **Line numbers enabled by default:** `-n` is on even when stdout is piped or redirected; pass `-N` (`--no-line-number`) to omit line numbers.
-3. **Plain output:** `--color` and headings are never emitted; output is always machine-friendly `path:line:text`.
+3. **No headings, color only on a terminal:** output is always `path:line:text` (never ripgrep's grouped headings). `--color auto` (the default) colors output on a TTY and prints plain text when piped or redirected.

@@ -47,6 +47,16 @@ fn has_glob_meta(s: &str) -> bool {
     s.contains(['*', '?', '[', '{'])
 }
 
+/// ripgrep's default file types plus `--type-add NAME:GLOB` (or `NAME:include:A,B`) definitions.
+pub fn types_builder(type_add: &[String]) -> Result<ignore::types::TypesBuilder, String> {
+    let mut b = ignore::types::TypesBuilder::new();
+    b.add_defaults();
+    for d in type_add {
+        b.add_def(d).map_err(|e| e.to_string())?;
+    }
+    Ok(b)
+}
+
 impl FileFilter {
     pub fn all() -> Self {
         FileFilter {
@@ -64,6 +74,7 @@ impl FileFilter {
         root: &Path,
         globs: &[String],
         iglobs: &[String],
+        type_add: &[String],
         select: &[String],
         negate: &[String],
     ) -> Result<Self, String> {
@@ -83,8 +94,7 @@ impl FileFilter {
         let rg_types = if select.is_empty() && negate.is_empty() {
             None
         } else {
-            let mut b = ignore::types::TypesBuilder::new();
-            b.add_defaults();
+            let mut b = types_builder(type_add)?;
             for t in select {
                 b.select(t);
             }

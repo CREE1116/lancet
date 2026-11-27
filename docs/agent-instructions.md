@@ -23,9 +23,9 @@ Use `lancet` as your unified, deterministic CLI replacement for `rg`, `fd`, `ast
   - `lancet 'fuzzy("transmte", 1) | limit 10 | budget tokens:1500'`
 - Need familiar `ripgrep` flags or output (`-w`, `-i`/`-S`, `-A`/`-B`/`-C`, `-g`, `-t`, `--json`, `--vimgrep`, `--files`)? Use `lancet rg` as a drop-in entrypoint:
   - `lancet rg -w -t rs 'execute_one' src`
-  - Uses `.lancet` automatically (always fresh), always sorts output by path, and enables line numbers (`-n`) by default. See [ripgrep parity](./rg-parity.md) for the flag table and differences (`-L`, `--max-depth`, `--max-filesize` are unsupported).
+  - Uses `.lancet` automatically (always fresh), always sorts output by path, and enables line numbers (`-n`) by default. See [ripgrep parity](./rg-parity.md) for the flag table and differences (unsupported: `-P`/`--pcre2` and `--pre`).
 - Searches source code, `.pdf`, `.docx`, `.pptx`, `.odt`, `.hwp` (5.0 OLE), `.hwpx`, `.epub`, `.xlsx/.xls/.ods`, and `.zip/.tar.gz` natively in-process.
-- Run `lancet index .` once on large repositories (`>5k` files); `Auto` mode verifies `mtime + size` automatically so results are **never stale** (`Scan == Auto`).
+- Run `lancet index .` once on large repositories (`>5k` files); `Auto` mode re-checks every indexed file's `(mtime, size, ctime, inode)`, plus a check for timestamps too recent to trust, so results are **never stale** (`Scan == Auto`).
 
 ## 3. Read Surgically (`lancet read` — replaces `cat`/`sed`/PDF extractors)
 

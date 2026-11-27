@@ -1051,14 +1051,18 @@ struct RgCli {
     #[arg(short = 'm', long)]
     max_count: Option<u64>,
     /// Lines of context after each match
-    #[arg(short = 'A', long)]
+    #[arg(short = 'A', long, overrides_with = "passthru")]
     after_context: Option<usize>,
     /// Lines of context before each match
-    #[arg(short = 'B', long)]
+    #[arg(short = 'B', long, overrides_with = "passthru")]
     before_context: Option<usize>,
     /// Lines of context before and after each match
-    #[arg(short = 'C', long)]
+    #[arg(short = 'C', long, overrides_with = "passthru")]
     context: Option<usize>,
+    /// Print every line of every searched file, matches and non-matches alike
+    /// (the last of --passthru / -A / -B / -C wins, as in ripgrep)
+    #[arg(long, alias = "passthrough", overrides_with_all = ["after_context", "before_context", "context"])]
+    passthru: bool,
     /// Show line numbers (default)
     #[arg(short = 'n', long, overrides_with = "no_line_number")]
     line_number: bool,
@@ -1105,6 +1109,9 @@ struct RgCli {
     /// Skip files of TYPE
     #[arg(short = 'T', long)]
     type_not: Vec<String>,
+    /// Add a file type: `NAME:GLOB` (repeatable; `NAME:include:A,B` merges types)
+    #[arg(long, value_name = "TYPESPEC")]
+    type_add: Vec<String>,
     /// Print the known file types
     #[arg(long)]
     type_list: bool,
@@ -1159,8 +1166,10 @@ fn run_rg(cli: RgCli) -> ExitCode {
         ExitCode::from(2)
     };
     if cli.type_list {
-        let mut b = ignore::types::TypesBuilder::new();
-        b.add_defaults();
+        let b = match lancet::walk::types_builder(&cli.type_add) {
+            Ok(b) => b,
+            Err(e) => return fail(&e),
+        };
         for d in b.definitions() {
             println!("{}: {}", d.name(), d.globs().join(", "));
         }
@@ -1205,6 +1214,10 @@ fn run_rg(cli: RgCli) -> ExitCode {
     o.max_count = cli.max_count;
     o.before = cli.before_context.or(cli.context).unwrap_or(0);
     o.after = cli.after_context.or(cli.context).unwrap_or(0);
+    if cli.passthru {
+        // Whole files as context; `usize::MAX / 4` leaves room for `line + after`.
+        (o.passthru, o.before, o.after) = (true, usize::MAX / 4, usize::MAX / 4);
+    }
     o.line_number = !cli.no_line_number;
     o.with_filename = if cli.with_filename {
         Some(true)
@@ -1246,6 +1259,7 @@ fn run_rg(cli: RgCli) -> ExitCode {
     o.iglobs = cli.iglob;
     o.types = cli.type_;
     o.types_not = cli.type_not;
+    o.type_add = cli.type_add;
     o.walk = WalkOpts {
         hidden: cli.hidden || cli.unrestricted >= 2,
         no_ignore: cli.no_ignore || cli.unrestricted >= 1,

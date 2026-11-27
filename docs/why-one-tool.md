@@ -179,5 +179,5 @@ query times are in the same range.
 | "Daemonless means a full stat walk per query." | Measured (~100 ms / 87k files); a history-based shortcut was built and rejected for correctness; `--trust-index` is the explicit fast path. |
 | "Literal-free AST patterns aren't benchmarked." | Now in every corpus (section 7 has the losses); worst-case `$$$` backtracking bounded by memoisation and a step budget. |
 | "Syntax-only `refs` will mislead refactors." | Documented as lexical; rename-by-refs was deliberately not shipped. |
-| "Heavy to build and install." | Open: prebuilt binaries are the next step. |
-| "No agent-level benchmark." | Open: turns, tokens and patch success with real models are the step after that. |
+| "Heavy to build and install." | Done: prebuilt binaries for macOS, Linux (glibc and static musl) and Windows on every release, via Homebrew, `install.sh`, `install.ps1` and `cargo binstall`; `--no-default-features` builds a ~4 MB text/code-only binary. |
+| "No agent-level benchmark." | Open: turns, tokens and patch success with real models are the next step. |
