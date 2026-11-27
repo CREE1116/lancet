@@ -159,7 +159,7 @@ Reproducible via [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_com
 | Medium literal (`unwrap_or_else`, 590 files) | 439.9 ms | 492.8 ms | **89.2 ms (4.9×)** | **19.4 ms (22.7×)** |
 | Anchored regex (`pub unsafe fn \w+\(`, 1,452 files) | 438.9 ms | 491.3 ms | **105.2 ms (4.2×)** | **38.2 ms (11.5×)** |
 
-Without the index, case-insensitive literals are currently ~12% slower than ripgrep (tracked in `bench/results/baseline-step0.md`); every mode prints the same files as ripgrep.
+Without the index, `lancet rg` runs within a few percent of ripgrep (-1%..+5% when the two are run interleaved; `bench/results/baseline-step1.md`); every mode prints the same files as ripgrep.
 
 
 **File discovery** (`lancet fd` vs `fd 10.5.2`, `rg --files`, `find`)

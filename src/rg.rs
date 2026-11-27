@@ -7,11 +7,10 @@
 //! so it is deterministic.
 
 use crate::content;
-use crate::index::{self, Req};
-use crate::output::Stats;
+use crate::index::Req;
 use crate::query::{Expr, Matcher};
-use crate::scope::{plan_targets_with_req, IndexMode, Target};
-use crate::walk::{walk, FileFilter, WalkOpts};
+use crate::scope::IndexMode;
+use crate::walk::{FileFilter, WalkOpts};
 use rayon::prelude::*;
 use regex::bytes::{Captures, Regex, RegexBuilder};
 use serde_json::json;
@@ -1141,49 +1140,16 @@ type TargetList = Vec<(PathBuf, String, bool)>;
 
 /// Files to search, whether file names are shown, and the paths that don't exist
 /// (reported, like ripgrep, without stopping the search of the others).
+/// The files `rg` would search, in output order: path order (ripgrep's
+/// `--sort path`), then `--sort`/`--sortr` by time. Warnings go to stderr.
 fn targets(o: &RgOptions, req: &Req) -> Result<(TargetList, bool, Vec<String>), String> {
-    let roots: Vec<PathBuf> = if o.paths.is_empty() {
-        vec![PathBuf::from(".")]
+    let (globs, iglobs) = if o.glob_case_insensitive {
+        (Vec::new(), [o.globs.clone(), o.iglobs.clone()].concat())
     } else {
-        o.paths.clone()
+        (o.globs.clone(), o.iglobs.clone())
     };
-    let implicit = o.paths.is_empty();
-    let mut out = Vec::new();
-    let mut any_dir = false;
-    let mut missing = Vec::new();
-    // ripgrep keeps the order of the paths given and sorts within each one.
-    let mut group_start = 0;
-    let sort_group = |out: &mut TargetList, from: &mut usize| {
-        out[*from..].sort_by(|a, b| a.1.split('/').cmp(b.1.split('/')));
-        *from = out.len();
-    };
-    for root in &roots {
-        sort_group(&mut out, &mut group_start);
-        if root.is_file() {
-            if o.walk
-                .max_filesize
-                .is_some_and(|max| root.metadata().is_ok_and(|m| m.len() > max))
-            {
-                continue;
-            }
-            // Explicitly named files are searched as given, like ripgrep.
-            out.push((root.clone(), root.to_string_lossy().into_owned(), true));
-            continue;
-        }
-        if !root.is_dir() {
-            missing.push(format!(
-                "{}: No such file or directory (os error 2)",
-                root.display()
-            ));
-            continue;
-        }
-        any_dir = true;
-        let (globs, iglobs) = if o.glob_case_insensitive {
-            (Vec::new(), [o.globs.clone(), o.iglobs.clone()].concat())
-        } else {
-            (o.globs.clone(), o.iglobs.clone())
-        };
-        let filter = FileFilter::rg(
+    let filter = |root: &Path| {
+        FileFilter::rg(
             root,
             &globs,
             &iglobs,
@@ -1191,66 +1157,38 @@ fn targets(o: &RgOptions, req: &Req) -> Result<(TargetList, bool, Vec<String>), 
             &o.type_add,
             &o.types,
             &o.types_not,
-        )?;
-        // `.lancet` is built without following symlinks, so `--trust-index -L`
-        // falls back to a live walk rather than missing symlinked targets.
-        // The index follows the default ignore rules; other rules need a live walk.
-        let mode = if o.text
-            || (o.walk.follow && o.index == IndexMode::Trust)
-            || !o.walk.ignore.is_default()
-            || o.walk.one_file_system
-        {
-            IndexMode::Off
-        } else {
-            o.index
-        };
-        let mut planned: Option<Vec<Target>> = None;
-        if mode != IndexMode::Off {
-            match index::discover(root, o.index_dir.as_deref()) {
-                Ok(Some((ix, prefix))) => {
-                    let mut stats = Stats::default();
-                    planned = Some(plan_targets_with_req(
-                        &ix, req, &filter, root, &prefix, &o.walk, mode, None, &mut stats, None,
-                    ));
-                }
-                Ok(None) => {}
-                Err(e) => eprintln!("lancet rg: index unusable ({e:#}); searching without it"),
-            }
-        }
-        let ts = planned.unwrap_or_else(|| {
-            walk(root, &o.walk, &filter, false)
-                .into_iter()
-                .map(|e| Target {
-                    path: e.path,
-                    rel: e.rel,
-                })
-                .collect()
-        });
-        let base = root.to_string_lossy();
-        let base = base.trim_end_matches('/');
-        for t in ts {
-            let display = if implicit {
-                t.rel.clone()
-            } else {
-                format!("{base}/{}", t.rel)
-            };
-            out.push((t.path, display, false));
-        }
+        )
+    };
+    let p = crate::scope::plan(
+        &crate::scope::Request {
+            roots: &o.paths,
+            walk: &o.walk,
+            // -a searches binary files, which the index leaves out.
+            index: if o.text { IndexMode::Off } else { o.index },
+            index_dir: o.index_dir.as_deref(),
+            shown: crate::scope::Shown::AsGiven,
+        },
+        req,
+        &filter,
+    )?;
+    for w in &p.summary.warnings {
+        eprintln!("lancet rg: {w}");
     }
-    // Component-wise within each path, like ripgrep's `--sort path` (`a/b.txt` before `a.txt`).
-    sort_group(&mut out, &mut group_start);
-    let mut seen = std::collections::HashSet::new();
-    out.retain(|t| seen.insert(t.1.clone()));
+    let mut out: TargetList = p
+        .files
+        .into_iter()
+        .map(|c| (c.path, c.shown, c.explicit))
+        .collect();
     if let Some((by, reverse)) = o.sort {
-        let time = |p: &Path| {
-            std::fs::metadata(p).ok().and_then(|m| match by {
-                SortBy::Modified => m.modified().ok(),
-                SortBy::Accessed => m.accessed().ok(),
-                SortBy::Created => m.created().ok(),
-                SortBy::Path | SortBy::None => None,
-            })
-        };
         if matches!(by, SortBy::Modified | SortBy::Accessed | SortBy::Created) {
+            let time = |p: &Path| {
+                std::fs::metadata(p).ok().and_then(|m| match by {
+                    SortBy::Modified => m.modified().ok(),
+                    SortBy::Accessed => m.accessed().ok(),
+                    SortBy::Created => m.created().ok(),
+                    SortBy::Path | SortBy::None => None,
+                })
+            };
             // Stable: equal times keep path order.
             out.sort_by_cached_key(|t| time(&t.0));
         }
@@ -1258,8 +1196,11 @@ fn targets(o: &RgOptions, req: &Req) -> Result<(TargetList, bool, Vec<String>), 
             out.reverse();
         }
     }
-    let show_name = roots.len() > 1 || any_dir;
-    Ok((out, show_name, missing))
+    Ok((
+        out,
+        o.paths.len() > 1 || p.summary.any_dir,
+        p.summary.missing,
+    ))
 }
 
 fn report_missing(o: &RgOptions, missing: &[String]) {
@@ -1318,6 +1259,9 @@ pub fn run(o: &RgOptions, w: &mut dyn Write) -> Result<bool, String> {
         eng: &eng,
         show_name: show_name && !heading,
     };
+    // Walking first and then searching on every core measured faster than searching
+    // on the walker's threads or streaming into rayon (bench/results/baseline-step1.md).
+    let searched = ts.len();
     let results: Vec<FileOut> = ts
         .par_iter()
         .filter_map(|(p, d, explicit)| search_file(&cx, p, d.clone(), *explicit))
@@ -1386,7 +1330,7 @@ pub fn run(o: &RgOptions, w: &mut dyn Write) -> Result<bool, String> {
         let total = t0.elapsed();
         let text = format!(
             "\n{matches} matches\n{matched_lines} matched lines\n{searches_with_match} files contained matches\n{} files searched\n{} bytes printed\n{bytes} bytes searched\n{:.6} seconds spent searching\n{:.6} seconds total\n",
-            ts.len(),
+            searched,
             printed,
             searched_at.as_secs_f64(),
             total.as_secs_f64()

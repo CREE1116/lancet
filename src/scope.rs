@@ -25,6 +25,188 @@ pub(crate) struct Target {
     pub rel: String,
 }
 
+/// How a file's path is shown: joined onto the path given, as ripgrep does
+/// (`.` gives `./x`), or cleaned of a leading `./` (`x`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shown {
+    AsGiven,
+    Clean,
+}
+
+/// What to plan: the paths a command was given and how to walk and index them.
+pub struct Request<'a> {
+    /// Directories or files; empty means the current directory, shown without a prefix.
+    pub roots: &'a [PathBuf],
+    pub walk: &'a WalkOpts,
+    pub index: IndexMode,
+    pub index_dir: Option<&'a Path>,
+    pub shown: Shown,
+}
+
+/// A file to look at.
+pub struct Candidate {
+    pub path: PathBuf,
+    /// The path as output shows it (see [`Shown`]).
+    pub shown: String,
+    /// Named on the command line (not found by walking a directory).
+    pub explicit: bool,
+}
+
+/// The files for a request, in output order: each given path in turn, its files
+/// sorted component-wise (`a/b.txt` before `a.txt`), a file shown twice kept once.
+pub struct Plan {
+    pub files: Vec<Candidate>,
+    pub summary: Summary,
+}
+
+/// What planning found besides the files.
+pub struct Summary {
+    /// "No such file or directory" messages for paths that don't exist.
+    pub missing: Vec<String>,
+    /// A directory was among the paths (so output names files).
+    pub any_dir: bool,
+    /// `scan`, `index`, `index_trusted`, or `mixed` across several paths.
+    pub mode: String,
+    pub warnings: Vec<String>,
+    pub stats: Stats,
+}
+
+/// Plans the files every searching command reads. `filter` builds the name filter
+/// for one directory (its globs are relative to it); `req` is what a file's content
+/// must contain, which the index uses to skip files that can't match. A file named
+/// on the command line is taken as it is.
+///
+/// Walking first and searching afterwards measured faster than overlapping the two
+/// (searching on the walker's threads, or streaming files into rayon): see
+/// `bench/results/baseline-step1.md`.
+pub fn plan(
+    r: &Request,
+    req: &Req,
+    filter: &dyn Fn(&Path) -> Result<FileFilter, String>,
+) -> Result<Plan, String> {
+    let dot = [PathBuf::from(".")];
+    let implicit = r.roots.is_empty();
+    let roots = if implicit { &dot[..] } else { r.roots };
+    // The index holds the default walk; these rules need a live one.
+    let index = if (r.walk.follow && r.index == IndexMode::Trust)
+        || !r.walk.ignore.is_default()
+        || r.walk.one_file_system
+    {
+        IndexMode::Off
+    } else {
+        r.index
+    };
+    let mut files: Vec<Candidate> = Vec::new();
+    let mut p = Summary {
+        missing: Vec::new(),
+        any_dir: false,
+        mode: String::new(),
+        warnings: Vec::new(),
+        stats: Stats::default(),
+    };
+    let note_mode = |p: &mut Summary, m: &str| {
+        p.mode = match p.mode.as_str() {
+            "" => m.to_string(),
+            same if same == m => m.to_string(),
+            _ => "mixed".into(),
+        }
+    };
+    for root in roots {
+        let group = files.len();
+        if root.is_file() {
+            if r.walk
+                .max_filesize
+                .is_none_or(|max| root.metadata().is_ok_and(|m| m.len() <= max))
+            {
+                p.stats.files_considered += 1;
+                files.push(Candidate {
+                    path: root.clone(),
+                    shown: root.to_string_lossy().replace('\\', "/"),
+                    explicit: true,
+                });
+            }
+            continue;
+        }
+        if !root.is_dir() {
+            p.missing.push(format!(
+                "{}: No such file or directory (os error 2)",
+                root.display()
+            ));
+            continue;
+        }
+        p.any_dir = true;
+        let filt = filter(root)?;
+        let mut targets = None;
+        if index != IndexMode::Off {
+            match crate::index::discover(root, r.index_dir) {
+                Ok(Some((ix, prefix))) => {
+                    note_mode(
+                        &mut p,
+                        if index == IndexMode::Trust {
+                            "index_trusted"
+                        } else {
+                            "index"
+                        },
+                    );
+                    let mut st = Stats::default();
+                    targets = Some(plan_targets_with_req(
+                        &ix, req, &filt, root, &prefix, r.walk, index, None, &mut st, None,
+                    ));
+                    p.stats.files_considered += st.files_considered;
+                    for (dst, src) in [
+                        (&mut p.stats.index_candidates, st.index_candidates),
+                        (&mut p.stats.stale_files, st.stale_files),
+                    ] {
+                        if let Some(n) = src {
+                            *dst = Some(dst.unwrap_or(0) + n);
+                        }
+                    }
+                }
+                Ok(None) if index == IndexMode::Trust => p
+                    .warnings
+                    .push("no index found; fell back to a full scan (run `lancet index`)".into()),
+                Ok(None) => {}
+                Err(e) => p
+                    .warnings
+                    .push(format!("index unusable ({e:#}); searched without it")),
+            }
+        }
+        let targets = targets.unwrap_or_else(|| {
+            note_mode(&mut p, "scan");
+            let ts: Vec<Target> = walk(root, r.walk, &filt, false)
+                .into_iter()
+                .map(|e| Target {
+                    path: e.path,
+                    rel: e.rel,
+                })
+                .collect();
+            p.stats.files_considered += ts.len();
+            ts
+        });
+        let base = root.to_string_lossy().replace('\\', "/");
+        let base = base.trim_end_matches('/');
+        files.extend(targets.into_iter().map(|t| {
+            let shown = match (implicit, r.shown) {
+                (true, _) => t.rel,
+                (false, Shown::AsGiven) => format!("{base}/{}", t.rel),
+                (false, Shown::Clean) => crate::walk::display_path(root, &t.rel),
+            };
+            Candidate {
+                path: t.path,
+                shown,
+                explicit: false,
+            }
+        }));
+        files[group..].sort_by(|a, b| a.shown.split('/').cmp(b.shown.split('/')));
+    }
+    let mut seen = std::collections::HashSet::new();
+    files.retain(|c| seen.insert(c.shown.clone()));
+    if p.mode.is_empty() {
+        p.mode = "scan".into();
+    }
+    Ok(Plan { files, summary: p })
+}
+
 /// Whether `--trust-index` may answer from the index alone: it must hold exactly the
 /// files this walk would visit (same hidden / ignore rules, no whitelisting glob
 /// reaching past them). Otherwise the files are walked, as without `--trust-index`.
@@ -40,7 +222,7 @@ pub(crate) fn index_matches_walk(ix: &Index, walk: &WalkOpts) -> bool {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn plan_targets_with_req(
+fn plan_targets_with_req(
     ix: &Index,
     req: &Req,
     filter: &FileFilter,

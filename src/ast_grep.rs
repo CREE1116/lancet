@@ -134,11 +134,11 @@ mod imp {
     use super::{AstMatch, AstOptions, AstResponse, AstStats, FileDiff};
     use crate::code::Lang;
     use crate::edit;
-    use crate::index::{self, Req};
-    use crate::output::{Stats, Status};
+    use crate::index::Req;
+    use crate::output::Status;
     use crate::query::{Expr, Filters, Matcher};
-    use crate::scope::{plan_targets_with_req, IndexMode, Target};
-    use crate::walk::{walk, FileFilter};
+    use crate::scope::Target;
+    use crate::walk::FileFilter;
     use memchr::memmem;
     use rayon::prelude::*;
     use std::cell::RefCell;
@@ -1280,86 +1280,6 @@ mod imp {
         search_ast_raw(opts)
     }
 
-    struct Planned {
-        targets: Vec<Target>,
-        mode: String,
-        warnings: Vec<String>,
-        stats: Stats,
-    }
-
-    /// One root's files for `lang`, narrowed by `--path` and the index.
-    fn plan_root(
-        opts: &AstOptions,
-        root: &std::path::Path,
-        lang: Lang,
-        req: &Req,
-    ) -> Result<Planned, String> {
-        let mut filters = Filters::default();
-        if root.is_dir() {
-            filters.exts = lang.extensions().iter().map(|s| (*s).to_string()).collect();
-        }
-        filters.paths = opts.paths.clone();
-        let filter = FileFilter::new(&filters)?;
-
-        let mut warnings = Vec::new();
-        let mut mode = "scan".to_string();
-        let mut core_stats = Stats::default();
-        let mut targets: Option<Vec<Target>> = None;
-
-        if opts.index != IndexMode::Off {
-            match index::discover(root, opts.index_dir.as_deref()) {
-                Ok(Some((ix, rel_prefix))) => {
-                    mode = if opts.index == IndexMode::Trust {
-                        "index_trusted".into()
-                    } else {
-                        "index".into()
-                    };
-                    targets = Some(plan_targets_with_req(
-                        &ix,
-                        req,
-                        &filter,
-                        root,
-                        &rel_prefix,
-                        &opts.walk,
-                        opts.index,
-                        None,
-                        &mut core_stats,
-                        None,
-                    ));
-                }
-                Ok(None) => {
-                    if opts.index == IndexMode::Trust {
-                        warnings.push(
-                            "no index found; fell back to a full scan (run `lancet index`)".into(),
-                        );
-                    }
-                }
-                Err(e) => {
-                    warnings.push(format!("index unusable ({e:#}); fell back to a full scan"));
-                }
-            }
-        }
-
-        let targets = targets.unwrap_or_else(|| {
-            walk(root, &opts.walk, &filter, false)
-                .into_iter()
-                .map(|e| Target {
-                    path: e.path,
-                    rel: e.rel,
-                })
-                .collect()
-        });
-        if core_stats.files_considered == 0 {
-            core_stats.files_considered = targets.len();
-        }
-        Ok(Planned {
-            targets,
-            mode,
-            warnings,
-            stats: core_stats,
-        })
-    }
-
     fn search_ast_raw(opts: &AstOptions) -> AstResponse {
         let t0 = Instant::now();
         let lang = match resolve_lang(opts) {
@@ -1422,47 +1342,48 @@ mod imp {
         }
 
         let req = build_ast_req(&compiled.trigram_literals);
-        let mut warnings = Vec::new();
-        let mut mode = String::new();
-        let mut core_stats = Stats::default();
-        let mut targets: Vec<Target> = Vec::new();
-        let mut seen = HashSet::new();
-        for root in &opts.roots {
-            let p = match plan_root(opts, root, lang, &req) {
-                Ok(p) => p,
-                Err(e) => {
-                    return AstResponse::failure(
-                        Status::InvalidQuery,
-                        Some(lang_name),
-                        opts.pattern.clone(),
-                        e,
-                        super::ms(t0),
-                    )
-                }
-            };
-            mode = match mode.as_str() {
-                "" => p.mode,
-                m if m == p.mode => p.mode,
-                _ => "mixed".into(),
-            };
-            warnings.extend(p.warnings);
-            core_stats.files_considered += p.stats.files_considered;
-            for (dst, src) in [
-                (&mut core_stats.index_candidates, p.stats.index_candidates),
-                (&mut core_stats.stale_files, p.stats.stale_files),
-            ] {
-                if let Some(n) = src {
-                    *dst = Some(dst.unwrap_or(0) + n);
-                }
+        let filters = Filters {
+            exts: lang.extensions().iter().map(|s| (*s).to_string()).collect(),
+            paths: opts.paths.clone(),
+            ..Default::default()
+        };
+        let planned = crate::scope::plan(
+            &crate::scope::Request {
+                roots: &opts.roots,
+                walk: &opts.walk,
+                index: opts.index,
+                index_dir: opts.index_dir.as_deref(),
+                shown: crate::scope::Shown::Clean,
+            },
+            &req,
+            &|_| FileFilter::new(&filters),
+        );
+        let planned = match planned {
+            Ok(p) => p,
+            Err(e) => {
+                return AstResponse::failure(
+                    Status::InvalidQuery,
+                    Some(lang_name),
+                    opts.pattern.clone(),
+                    e,
+                    super::ms(t0),
+                )
             }
-            for mut t in p.targets {
-                if seen.insert(t.path.clone()) {
-                    // Matches and diff headers show the path the way it was given.
-                    t.rel = crate::walk::display_path(root, &t.rel);
-                    targets.push(t);
-                }
-            }
-        }
+        };
+        let (mut warnings, mode, core_stats) = (
+            planned.summary.warnings,
+            planned.summary.mode,
+            planned.summary.stats,
+        );
+        // Matches and diff headers show each path the way it was given.
+        let targets: Vec<Target> = planned
+            .files
+            .into_iter()
+            .map(|c| Target {
+                path: c.path,
+                rel: c.shown,
+            })
+            .collect();
 
         let file_results: Vec<Option<FileResult>> = targets
             .par_iter()

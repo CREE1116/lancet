@@ -159,7 +159,7 @@ lancet이 **이기지 못하는** 곳: 리터럴 없는 정규식(인덱스가 �
 | 일반 리터럴 (`unwrap_or_else`, 파일 590개) | 439.9 ms | 492.8 ms | **89.2 ms (4.9×)** | **19.4 ms (22.7×)** |
 | 정규식 (`pub unsafe fn \w+\(`, 파일 1,452개) | 438.9 ms | 491.3 ms | **105.2 ms (4.2×)** | **38.2 ms (11.5×)** |
 
-인덱스 없이 대소문자를 무시한 리터럴 검색은 지금 ripgrep보다 약 12% 느립니다(`bench/results/baseline-step0.md`에 기록). 모든 모드가 ripgrep과 같은 파일을 출력합니다.
+인덱스 없이는 ripgrep과 몇 퍼센트 차이로 비슷합니다(번갈아 재면 -1%~+5%, `bench/results/baseline-step1.md`). 모든 모드가 ripgrep과 같은 파일을 출력합니다.
 
 **파일 탐색** (`lancet fd` vs `fd 10.5.2`, `rg --files`, `find`)
 

@@ -18,5 +18,5 @@ End of restructuring step 0 (on top of `95f90de`), Apple M4 Pro, median of 5 run
 Known gaps against ripgrep 16.0.0 at this point (crate-source tree, 29,792 files):
 
 - Walking alone (`--files`): 0.10 s vs 0.06 s. Files are collected and sorted before searching starts (step 1, pipeline).
-- Case-insensitive literals without the index (`-i -l -F`): ~490 ms vs ~435 ms. Case-sensitive literals run at ripgrep's speed (0.52 s vs 0.51 s).
+- Case-insensitive literals without the index (`-i -l -F`): ~490 ms vs ~435 ms in separate runs. (Step 1, run interleaved: within -1%..+5% of ripgrep; see baseline-step1.md.)
 - `refs` parses every candidate file four times (symbols, function spans, identifiers, scopes); step 2 makes it one.

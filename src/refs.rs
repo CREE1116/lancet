@@ -4,18 +4,18 @@
 //! automatically excluding comments and string/char literals on AST-supported languages.
 
 use crate::code;
-use crate::index::{self, Req};
+use crate::index::Req;
 use crate::output::{ErrorInfo, Stats, Status};
 use crate::query::{Expr, FileType, Filters, Matcher};
-use crate::scope::{plan_targets_with_req, IndexMode, Target};
-use crate::walk::{walk, FileFilter, WalkOpts};
+use crate::scope::{IndexMode, Target};
+use crate::walk::{FileFilter, WalkOpts};
 use memchr::memmem;
 use rayon::prelude::*;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Instant;
 
 #[derive(Clone, Debug)]
@@ -278,52 +278,13 @@ struct Planned {
 /// Every root's files, as one list: `refs` decides what a name means across all
 /// of them at once. Paths are already joined onto the root they came from.
 fn plan_files(opts: &RefsOptions, req: &Req) -> Result<Planned, (Status, String)> {
-    let mut all = Planned {
-        targets: Vec::new(),
-        mode: String::new(),
-        warnings: Vec::new(),
-        stats: Stats::default(),
-    };
-    let mut seen = HashSet::new();
-    for root in &opts.roots {
-        let p = plan_root(opts, root, req)?;
-        all.mode = match all.mode.as_str() {
-            "" => p.mode,
-            m if m == p.mode => p.mode,
-            _ => "mixed".into(),
-        };
-        all.warnings.extend(p.warnings);
-        all.stats.files_considered += p.stats.files_considered;
-        for (dst, src) in [
-            (&mut all.stats.index_candidates, p.stats.index_candidates),
-            (&mut all.stats.stale_files, p.stats.stale_files),
-        ] {
-            if let Some(n) = src {
-                *dst = Some(dst.unwrap_or(0) + n);
-            }
-        }
-        for mut t in p.targets {
-            if seen.insert(t.path.clone()) {
-                t.rel = crate::walk::display_path(root, &t.rel);
-                all.targets.push(t);
-            }
-        }
-    }
-    Ok(all)
-}
-
-fn plan_root(opts: &RefsOptions, root: &Path, req: &Req) -> Result<Planned, (Status, String)> {
-    let mut filters = Filters::default();
+    let mut base = Filters::default();
     if let Some(lang_s) = &opts.lang {
         #[cfg(feature = "ast")]
         {
             match crate::code::Lang::parse(lang_s) {
-                Some(l) => {
-                    filters.exts = l.extensions().iter().map(|s| (*s).to_string()).collect();
-                }
-                None => {
-                    return Err((Status::InvalidQuery, format!("unknown --lang `{lang_s}`")));
-                }
+                Some(l) => base.exts = l.extensions().iter().map(|s| (*s).to_string()).collect(),
+                None => return Err((Status::InvalidQuery, format!("unknown --lang `{lang_s}`"))),
             }
         }
         #[cfg(not(feature = "ast"))]
@@ -335,78 +296,40 @@ fn plan_root(opts: &RefsOptions, root: &Path, req: &Req) -> Result<Planned, (Sta
             ));
         }
     } else if !opts.exts.is_empty() {
-        filters.exts = opts
+        base.exts = opts
             .exts
             .iter()
             .map(|e| e.trim_start_matches('.').to_ascii_lowercase())
             .filter(|e| !e.is_empty())
             .collect();
-    } else if !opts.all_files && root.is_dir() {
-        filters.types = vec![FileType::Code];
+    } else if !opts.all_files {
+        base.types = vec![FileType::Code];
     }
-    filters.paths = opts.paths.clone();
-
-    let filter = match FileFilter::new(&filters) {
-        Ok(f) => f,
-        Err(e) => return Err((Status::InvalidQuery, e)),
-    };
-
-    let mut warnings = Vec::new();
-    let mut mode = "scan".to_string();
-    let mut core_stats = Stats::default();
-    let mut targets: Option<Vec<Target>> = None;
-
-    if opts.index != IndexMode::Off {
-        match index::discover(root, opts.index_dir.as_deref()) {
-            Ok(Some((ix, rel_prefix))) => {
-                mode = if opts.index == IndexMode::Trust {
-                    "index_trusted".into()
-                } else {
-                    "index".into()
-                };
-                targets = Some(plan_targets_with_req(
-                    &ix,
-                    req,
-                    &filter,
-                    root,
-                    &rel_prefix,
-                    &opts.walk,
-                    opts.index,
-                    None,
-                    &mut core_stats,
-                    None,
-                ));
-            }
-            Ok(None) => {
-                if opts.index == IndexMode::Trust {
-                    warnings.push(
-                        "no index found; fell back to a full scan (run `lancet index`)".into(),
-                    );
-                }
-            }
-            Err(e) => {
-                warnings.push(format!("index unusable ({e:#}); fell back to a full scan"));
-            }
-        }
-    }
-
-    let targets = targets.unwrap_or_else(|| {
-        walk(root, &opts.walk, &filter, false)
-            .into_iter()
-            .map(|e| Target {
-                path: e.path,
-                rel: e.rel,
-            })
-            .collect()
-    });
-    if core_stats.files_considered == 0 {
-        core_stats.files_considered = targets.len();
-    }
+    base.paths = opts.paths.clone();
+    let p = crate::scope::plan(
+        &crate::scope::Request {
+            roots: &opts.roots,
+            walk: &opts.walk,
+            index: opts.index,
+            index_dir: opts.index_dir.as_deref(),
+            shown: crate::scope::Shown::Clean,
+        },
+        req,
+        &|_| FileFilter::new(&base),
+    )
+    .map_err(|e| (Status::InvalidQuery, e))?;
     Ok(Planned {
-        targets,
-        mode,
-        warnings,
-        stats: core_stats,
+        targets: p
+            .files
+            .into_iter()
+            .map(|c| Target {
+                path: c.path,
+                rel: c.shown,
+            })
+            .collect(),
+        mode: p.summary.mode,
+        warnings: p.summary.warnings,
+        stats: p.summary.stats,
     })
 }
 
