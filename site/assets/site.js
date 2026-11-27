@@ -6,17 +6,120 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+  /* analytics (community referrer + conversion events; works with GoatCounter / Plausible / Umami) */
+  const getSource = () => {
+    try {
+      const saved = sessionStorage.getItem('lancet_src');
+      if (saved) return saved;
+      const params = new URLSearchParams(location.search);
+      const utm = params.get('utm_source') || params.get('ref') || params.get('src');
+      let src = utm ? utm.toLowerCase() : '';
+      if (!src && document.referrer) {
+        const host = new URL(document.referrer).hostname.replace(/^www\./, '');
+        if (host && host !== location.hostname) src = host;
+      }
+      src = src || 'direct';
+      sessionStorage.setItem('lancet_src', src);
+      return src;
+    } catch { return 'direct'; }
+  };
+  const trafficSource = getSource();
+  const track = ev => {
+    try {
+      if (window.goatcounter && typeof window.goatcounter.count === 'function') {
+        window.goatcounter.count({ path: `ev/${ev}`, title: `${ev} (${trafficSource})`, event: true });
+      }
+      if (typeof window.plausible === 'function') {
+        window.plausible(ev, { props: { source: trafficSource } });
+      }
+      if (window.umami && typeof window.umami.track === 'function') {
+        window.umami.track(ev, { source: trafficSource });
+      }
+    } catch {}
+  };
+
   /* install tabs */
   const cmd = $('#cmd');
+  let activeMethod = 'macos';
   $$('.tabs button').forEach(b => b.addEventListener('click', () => {
     $$('.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
     cmd.textContent = b.dataset.cmd;
+    activeMethod = b.dataset.method || b.textContent.trim().toLowerCase();
+    track(`install_tab:${activeMethod}`);
   }));
   $('#copy').addEventListener('click', async e => {
-    try { await navigator.clipboard.writeText(cmd.textContent); e.target.textContent = T('Copied', '복사됨'); }
-    catch { e.target.textContent = T('Select & copy', '직접 선택해 복사'); }
+    try {
+      await navigator.clipboard.writeText(cmd.textContent);
+      e.target.textContent = T('Copied', '복사됨');
+      track(`install_copy:${activeMethod}`);
+    } catch { e.target.textContent = T('Select & copy', '직접 선택해 복사'); }
     setTimeout(() => e.target.textContent = T('Copy', '복사'), 1400);
   });
+
+  /* one-click agent instructions copy */
+  const AGENT_RULES = `# lancet — Code Search, Read & Edit Rules
+Use \`lancet\` as your unified CLI replacement for \`rg\`, \`fd\`, \`ast-grep\`, \`cat\`, and \`sed\`.
+
+1. Orient:  lancet fd --tree --max-depth 2 . | lancet outline FILE
+2. Search:  lancet rg -w SYMBOL src  |  lancet 'query in ext:rs'
+3. Read:    lancet read FILE --symbol NAME --json   # note "rev"
+4. Refs:    lancet refs SYMBOL src --lang rs
+5. AST:     lancet ast '$X.unwrap()' src --rewrite '$X?' [--apply]
+6. Edit:    lancet edit FILE --find '...' --with '...' --rev REV --apply
+   (Batch multiple hunks in one call with --edits -; line numbers match read 1:1)
+7. Patch:   git diff | lancet patch --apply
+8. On conflict (exit 2): re-run lancet read, re-apply on new content, retry with new rev.`;
+
+  const copyAgent = async (btn, resetLabel) => {
+    try {
+      await navigator.clipboard.writeText(AGENT_RULES);
+      const label = btn.querySelector('span') || btn;
+      label.textContent = T('Copied to clipboard', '클립보드에 복사됨');
+      track('agent_copy');
+      setTimeout(() => label.textContent = resetLabel, 1600);
+    } catch {
+      const label = btn.querySelector('span') || btn;
+      label.textContent = T('Copy failed', '복사 실패');
+      setTimeout(() => label.textContent = resetLabel, 1600);
+    }
+  };
+  const heroAgentBtn = $('#copy-agent-hero');
+  if (heroAgentBtn) {
+    const lbl = heroAgentBtn.querySelector('span').textContent;
+    heroAgentBtn.addEventListener('click', () => copyAgent(heroAgentBtn, lbl));
+  }
+  const startAgentBtn = $('#copy-agent-start');
+  if (startAgentBtn) {
+    const lbl = startAgentBtn.textContent;
+    startAgentBtn.addEventListener('click', () => copyAgent(startAgentBtn, lbl));
+  }
+
+  /* GitHub Star count + click tracking */
+  $$('.gh, .btn-star').forEach(el => el.addEventListener('click', () => track('github_star_click')));
+  const fmtStars = n => (n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(n));
+  const applyStars = count => {
+    if (!count || count <= 0) return;
+    const text = fmtStars(count);
+    $$('[data-gh-stars]').forEach(el => { el.textContent = text; el.hidden = false; });
+  };
+  try {
+    const cached = sessionStorage.getItem('lancet_stars');
+    if (cached) {
+      const { n, ts } = JSON.parse(cached);
+      if (Date.now() - ts < 600000) applyStars(n);
+    }
+    if (!cached || Date.now() - JSON.parse(cached).ts >= 600000) {
+      fetch('https://api.github.com/repos/CREE1116/lancet')
+        .then(r => (r.ok ? r.json() : null))
+        .then(d => {
+          if (d && typeof d.stargazers_count === 'number') {
+            sessionStorage.setItem('lancet_stars', JSON.stringify({ n: d.stargazers_count, ts: Date.now() }));
+            applyStars(d.stargazers_count);
+          }
+        })
+        .catch(() => {});
+    }
+  } catch {}
 
   /* hero terminal: real output, recorded from the lancet repository */
   const session = [

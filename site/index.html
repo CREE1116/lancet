@@ -5,9 +5,50 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>lancet — find, read and change code at index speed</title>
 <meta name="description" content="One Rust binary for AI coding agents: ripgrep-compatible search on a trigram index, Tree-sitter AST search and rewrite in 24 languages, exact reads, and rev-guarded edits that never overwrite another agent.">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://cree1116.github.io/lancet/">
+<link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/">
+<link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/">
+<link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="lancet">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="ko_KR">
+<meta property="og:url" content="https://cree1116.github.io/lancet/">
+<meta property="og:title" content="lancet — find, read and change code at index speed">
+<meta property="og:description" content="One Rust binary for AI coding agents: ripgrep-compatible search on a trigram index, Tree-sitter AST search and rewrite in 24 languages, exact reads, and rev-guarded edits.">
+<meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="lancet — Find, read and change code at index speed. Terminal preview of lancet rg, read, and rev-guarded edit.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="lancet — find, read and change code at index speed">
+<meta name="twitter:description" content="One Rust binary for AI coding agents: ripgrep-compatible search on a trigram index, Tree-sitter AST search and rewrite in 24 languages, exact reads, and rev-guarded edits.">
+<meta name="twitter:image" content="https://cree1116.github.io/lancet/assets/og-image.png">
+<meta name="twitter:image:alt" content="lancet — Find, read and change code at index speed.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/site.css">
-<link rel="alternate" hreflang="ko" href="ko/">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "lancet",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "macOS, Linux, Windows",
+  "url": "https://cree1116.github.io/lancet/",
+  "downloadUrl": "https://github.com/CREE1116/lancet/releases",
+  "license": "https://opensource.org/licenses/MIT",
+  "description": "One Rust binary for AI coding agents: ripgrep-compatible search on a trigram index, Tree-sitter AST search and rewrite in 24 languages, exact reads, and rev-guarded edits that never overwrite another agent.",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
 </head>
 <body>
 
@@ -25,9 +66,10 @@
       <a href="https://github.com/CREE1116/lancet/tree/main/docs" class="opt">Docs</a>
       <a href="ko/" class="keep" hreflang="ko" lang="ko">한국어</a>
     </div>
-    <a class="gh" href="https://github.com/CREE1116/lancet">
+    <a class="gh" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-      GitHub
+      <span>Star</span>
+      <span class="star-count" data-gh-stars hidden></span>
     </a>
   </div>
 </nav>
@@ -52,6 +94,17 @@
           <button role="tab" aria-selected="false" data-cmd="cargo binstall --git https://github.com/CREE1116/lancet lancet">cargo</button>
         </div>
         <div class="cmd"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh</code><button class="copy" id="copy">Copy</button></div>
+      </div>
+      <div class="hero-actions">
+        <a class="btn-star" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
+          <span>Star on GitHub</span>
+          <span class="star-count" data-gh-stars hidden></span>
+        </a>
+        <button type="button" class="btn-agent" id="copy-agent-hero">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span>Copy AGENTS.md / CLAUDE.md rules</span>
+        </button>
       </div>
     </div>
     <div class="term" aria-label="Terminal session using lancet (real output from the lancet repository)">
@@ -256,16 +309,17 @@ lancet edit src/net.rs --find 'retries = 3' \
 git diff | lancet patch --apply</pre>
       </div>
       <div class="code">
-        <h4>AGENTS.md / CLAUDE.md</h4>
-<pre><span class="c"># Copy docs/agent-instructions.md into your agent's</span>
-<span class="c"># instructions. The core loop it teaches:</span>
+        <div class="code-head">
+          <h4>AGENTS.md / CLAUDE.md</h4>
+          <button type="button" class="copy" id="copy-agent-start">Copy rules</button>
+        </div>
+<pre><span class="c"># Paste into AGENTS.md / CLAUDE.md (full guide: docs/agent-instructions.md)</span>
 
-1. Search:  lancet rg ... / lancet '...query...'
-2. Read:    lancet read FILE --symbol NAME --json
-            → note "rev"
-3. Change:  lancet edit FILE ... --rev REV --apply
-4. On conflict (exit 2): read again, redo the
-   change on the new content, retry with the new rev.</pre>
+1. Orient:  lancet fd --tree --max-depth 2 . | lancet outline FILE
+2. Search:  lancet rg -w SYMBOL src  |  lancet 'query in ext:rs'
+3. Read:    lancet read FILE --symbol NAME --json   <span class="c"># note "rev"</span>
+4. Edit:    lancet edit FILE --find '...' --with '...' --rev REV --apply
+5. On conflict (exit 2): read again, redo on new content, retry with new rev.</pre>
       </div>
     </div>
   </div>
@@ -285,6 +339,8 @@ git diff | lancet patch --apply</pre>
   </div>
 </footer>
 
+<!-- Optional zero-cookie analytics (GoatCounter): replace YOUR_CODE and uncomment -->
+<!-- <script data-goatcounter="https://YOUR_CODE.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script> -->
 <script src="assets/site.js"></script>
 </body>
 </html>

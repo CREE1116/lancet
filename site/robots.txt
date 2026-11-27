@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://cree1116.github.io/lancet/sitemap.xml

@@ -5,9 +5,50 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>lancet — 찾고, 읽고, 고치고. 인덱스로 훨씬 빠르게</title>
 <meta name="description" content="AI 코딩 에이전트를 위한 단일 Rust 바이너리: 트라이그램 인덱스 위의 ripgrep 호환 검색, 24개 언어 Tree-sitter AST 검색·치환, 정확한 읽기, 다른 에이전트의 작업을 덮어쓰지 않는 rev 기반 편집.">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://cree1116.github.io/lancet/ko/">
+<link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/">
+<link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/">
+<link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="lancet">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:url" content="https://cree1116.github.io/lancet/ko/">
+<meta property="og:title" content="lancet — 찾고, 읽고, 고치고. 인덱스로 훨씬 빠르게">
+<meta property="og:description" content="AI 코딩 에이전트를 위한 단일 Rust 바이너리: 트라이그램 인덱스 위의 ripgrep 호환 검색, 24개 언어 Tree-sitter AST 검색·치환, 정확한 읽기, rev 기반 편집.">
+<meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image-ko.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="lancet — 찾고, 읽고, 고치고. 인덱스로 훨씬 빠르게. 검색·읽기·rev 기반 편집 터미널 미리보기.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="lancet — 찾고, 읽고, 고치고. 인덱스로 훨씬 빠르게">
+<meta name="twitter:description" content="AI 코딩 에이전트를 위한 단일 Rust 바이너리: 트라이그램 인덱스 위의 ripgrep 호환 검색, 24개 언어 Tree-sitter AST 검색·치환, 정확한 읽기, rev 기반 편집.">
+<meta name="twitter:image" content="https://cree1116.github.io/lancet/assets/og-image-ko.png">
+<meta name="twitter:image:alt" content="lancet — 찾고, 읽고, 고치고. 인덱스로 훨씬 빠르게.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="../assets/site.css">
-<link rel="alternate" hreflang="en" href="../">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "lancet",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "macOS, Linux, Windows",
+  "url": "https://cree1116.github.io/lancet/ko/",
+  "downloadUrl": "https://github.com/CREE1116/lancet/releases",
+  "license": "https://opensource.org/licenses/MIT",
+  "description": "AI 코딩 에이전트를 위한 단일 Rust 바이너리: 트라이그램 인덱스 위의 ripgrep 호환 검색, 24개 언어 Tree-sitter AST 검색·치환, 정확한 읽기, 다른 에이전트의 작업을 덮어쓰지 않는 rev 기반 편집.",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
 </head>
 <body>
 
@@ -25,9 +66,10 @@
       <a href="https://github.com/CREE1116/lancet/tree/main/docs" class="opt">문서</a>
       <a href="../" class="keep" hreflang="en" lang="en">English</a>
     </div>
-    <a class="gh" href="https://github.com/CREE1116/lancet">
+    <a class="gh" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-      GitHub
+      <span>Star</span>
+      <span class="star-count" data-gh-stars hidden></span>
     </a>
   </div>
 </nav>
@@ -52,6 +94,17 @@
           <button role="tab" aria-selected="false" data-cmd="cargo binstall --git https://github.com/CREE1116/lancet lancet">cargo</button>
         </div>
         <div class="cmd"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh</code><button class="copy" id="copy">복사</button></div>
+      </div>
+      <div class="hero-actions">
+        <a class="btn-star" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
+          <span>GitHub Star 누르기</span>
+          <span class="star-count" data-gh-stars hidden></span>
+        </a>
+        <button type="button" class="btn-agent" id="copy-agent-hero">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span>AGENTS.md · CLAUDE.md 지침 복사</span>
+        </button>
       </div>
     </div>
     <div class="term" aria-label="lancet 터미널 세션 (lancet 저장소에서 실제로 실행한 출력)">
@@ -256,16 +309,17 @@ lancet edit src/net.rs --find 'retries = 3' \
 git diff | lancet patch --apply</pre>
       </div>
       <div class="code">
-        <h4>AGENTS.md / CLAUDE.md</h4>
-<pre><span class="c"># docs/agent-instructions.md를 에이전트 지침에 붙여 넣으면 됩니다.</span>
-<span class="c"># 흐름은 이게 전부입니다:</span>
+        <div class="code-head">
+          <h4>AGENTS.md / CLAUDE.md</h4>
+          <button type="button" class="copy" id="copy-agent-start">지침 복사</button>
+        </div>
+<pre><span class="c"># AGENTS.md / CLAUDE.md에 붙여 넣으세요 (전체: docs/agent-instructions.md)</span>
 
-1. 검색:  lancet rg ... / lancet '...쿼리...'
-2. 읽기:  lancet read FILE --symbol NAME --json
-          → "rev" 기억해 두기
-3. 수정:  lancet edit FILE ... --rev REV --apply
-4. conflict(종료 코드 2)가 나면 다시 읽고,
-   바뀐 내용 위에 수정을 다시 해서 새 rev로 재시도.</pre>
+1. 파악:  lancet fd --tree --max-depth 2 . | lancet outline FILE
+2. 검색:  lancet rg -w SYMBOL src  |  lancet 'query in ext:rs'
+3. 읽기:  lancet read FILE --symbol NAME --json   <span class="c"># "rev" 기억</span>
+4. 수정:  lancet edit FILE --find '...' --with '...' --rev REV --apply
+5. conflict(종료 코드 2): 다시 읽고 새 내용에 적용한 뒤 새 rev로 재시도.</pre>
       </div>
     </div>
   </div>
@@ -285,6 +339,8 @@ git diff | lancet patch --apply</pre>
   </div>
 </footer>
 
+<!-- 선택: 쿠키 없는 무료 방문 통계 (GoatCounter): YOUR_CODE를 바꾸고 주석 해제 -->
+<!-- <script data-goatcounter="https://YOUR_CODE.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script> -->
 <script src="../assets/site.js"></script>
 </body>
 </html>
