@@ -116,23 +116,23 @@
 
   const timelines = [
     [
-      [300, () => { caption.innerHTML = T('A query becomes the <b>trigrams</b> every match must contain.', '쿼리는 모든 결과에 반드시 들어 있어야 할 <b>트라이그램</b>으로 바뀝니다.'); }],
+      [300, () => { caption.innerHTML = T('A query becomes the <b>trigrams</b> every match must contain.', '쿼리를 "결과라면 꼭 들어 있어야 하는" <b>트라이그램</b>으로 쪼갭니다.'); }],
       ...grams.map((g, k) => [500 + k * 140, () => { const s = document.createElement('span'); s.className = 'gram fade'; s.textContent = g; gramBox.appendChild(s); requestAnimationFrame(() => requestAnimationFrame(() => s.classList.add('reveal'))); }]),
-      [2000, () => { caption.innerHTML = T('The index intersects their posting lists: <b>91% of files are never opened</b>.', '인덱스가 포스팅 리스트를 교집합해서 <b>파일의 91%는 열지도 않습니다</b>.'); cells.forEach(c => c.el.classList.add(c.cand ? 'cand' : 'dim')); countTo($('#c-cand'), 7814, 1200); }],
-      [4300, () => { caption.innerHTML = T('Files edited after <code>lancet index</code> are spotted by mtime, size, ctime and inode, and <b>scanned live</b>.', '<code>lancet index</code> 이후 수정된 파일은 mtime·size·ctime·inode로 찾아내 <b>그 자리에서 스캔</b>합니다.'); cells.forEach(c => { if (c.live) c.el.className = 'live'; }); }],
-      [6600, () => { caption.innerHTML = T('Every candidate goes through the same check a full scan uses. <b>Same answer as ripgrep</b>, a fraction of the I/O.', '후보 파일은 전체 스캔과 똑같은 검사를 거칩니다. <b>ripgrep과 같은 결과</b>를 훨씬 적은 I/O로.'); cells.forEach(c => { if (c.hit || c.live) c.el.className = c.hit ? 'hit' : 'live'; }); countTo($('#c-hit'), 7073, 1000); }],
+      [2000, () => { caption.innerHTML = T('The index intersects their posting lists: <b>91% of files are never opened</b>.', '인덱스에서 교집합을 구하면 <b>파일 91%는 아예 안 엽니다</b>.'); cells.forEach(c => c.el.classList.add(c.cand ? 'cand' : 'dim')); countTo($('#c-cand'), 7814, 1200); }],
+      [4300, () => { caption.innerHTML = T('Files edited after <code>lancet index</code> are spotted by mtime, size, ctime and inode, and <b>scanned live</b>.', '<code>lancet index</code> 뒤에 바뀐 파일은 mtime·size·ctime·inode로 잡아내서 <b>바로 스캔</b>합니다.'); cells.forEach(c => { if (c.live) c.el.className = 'live'; }); }],
+      [6600, () => { caption.innerHTML = T('Every candidate goes through the same check a full scan uses. <b>Same answer as ripgrep</b>, a fraction of the I/O.', '남은 후보는 전체 스캔과 같은 기준으로 확인합니다. 결과는 <b>ripgrep과 같고</b>, 읽는 양은 훨씬 적습니다.'); cells.forEach(c => { if (c.hit || c.live) c.el.className = c.hit ? 'hit' : 'live'; }); countTo($('#c-hit'), 7073, 1000); }],
     ],
     [
-      [300, () => { caption.innerHTML = T('A search hit is a <b>path and a line</b>…', '검색 결과는 <b>경로와 줄 번호</b>이고…'); $('[data-scene="1"] [data-at="1"]').classList.add('reveal'); }],
-      [2600, () => { caption.innerHTML = T('…that is the <b>same line</b> in <code>read</code>, which also returns the file\'s <b>rev</b>…', '…<code>read</code>에서도 <b>같은 줄</b>이며, 파일의 <b>rev</b>도 함께 돌려줍니다…'); $('[data-scene="1"] [data-at="2"]').classList.add('reveal'); }],
-      [5200, () => { caption.innerHTML = T('…and <code>edit</code> changes exactly that, only if the file is <b>still at that rev</b>.', '…<code>edit</code>는 파일이 <b>아직 그 rev일 때만</b> 정확히 그 부분을 고칩니다.'); $('[data-scene="1"] [data-at="3"]').classList.add('reveal'); }],
+      [300, () => { caption.innerHTML = T('A search hit is a <b>path and a line</b>…', '검색 결과는 <b>경로와 줄 번호</b>. 그 줄이…'); $('[data-scene="1"] [data-at="1"]').classList.add('reveal'); }],
+      [2600, () => { caption.innerHTML = T('…that is the <b>same line</b> in <code>read</code>, which also returns the file\'s <b>rev</b>…', '…<code>read</code>에서도 <b>같은 줄</b>입니다. 파일 <b>rev</b>도 같이 받고요.'); $('[data-scene="1"] [data-at="2"]').classList.add('reveal'); }],
+      [5200, () => { caption.innerHTML = T('…and <code>edit</code> changes exactly that, only if the file is <b>still at that rev</b>.', '<code>edit</code>는 파일이 <b>그 rev 그대로일 때만</b> 그 부분을 고칩니다.'); $('[data-scene="1"] [data-at="3"]').classList.add('reveal'); }],
     ],
     [
-      [300, () => { caption.innerHTML = T('Two agents read the same file at the same <b>rev</b>.', '두 에이전트가 같은 파일을 같은 <b>rev</b>에서 읽습니다.'); step('#laneA', '1%', '', 'read · rev e70d'); step('#laneB', '1%', '', 'read · rev e70d'); }],
-      [2200, () => { caption.innerHTML = T('Agent A writes first: the rev still matches, so the write lands.', 'A가 먼저 씁니다. rev가 그대로라 쓰기가 반영됩니다.'); step('#laneA', '27%', 'ok', '✓ edit --rev e70d'); setRev('1486…'); }],
-      [4300, () => { caption.innerHTML = T('Agent B\'s rev is now stale: <b>conflict, 0 bytes written</b>. Nothing is overwritten.', 'B의 rev는 이제 낡았습니다. <b>conflict, 0바이트 기록</b>. 아무것도 덮어쓰지 않습니다.'); step('#laneB', '27%', 'no', '✗ conflict · 0 bytes'); }],
-      [6400, () => { caption.innerHTML = T('B reads again, redoes its change on A\'s version, and lands it.', 'B는 다시 읽고, A가 고친 내용 위에 자기 변경을 다시 적용해 반영합니다.'); step('#laneB', '55%', '', 'read · rev 1486'); }],
-      [7800, () => { step('#laneB', '77%', 'ok', '✓ edit --rev 1486'); setRev('9c02…'); $('[data-scene="2"] [data-at="5"]').classList.add('reveal'); caption.innerHTML = T('Measured with 4 agents and 800 updates each way:', '에이전트 4개, 각 방식 800회 업데이트로 측정한 결과:'); }],
+      [300, () => { caption.innerHTML = T('Two agents read the same file at the same <b>rev</b>.', '에이전트 둘이 같은 <b>rev</b>에서 파일을 읽습니다.'); step('#laneA', '1%', '', 'read · rev e70d'); step('#laneB', '1%', '', 'read · rev e70d'); }],
+      [2200, () => { caption.innerHTML = T('Agent A writes first: the rev still matches, so the write lands.', 'A가 먼저 씁니다. rev가 그대로니까 반영.'); step('#laneA', '27%', 'ok', '✓ edit --rev e70d'); setRev('1486…'); }],
+      [4300, () => { caption.innerHTML = T('Agent B\'s rev is now stale: <b>conflict, 0 bytes written</b>. Nothing is overwritten.', 'B의 rev는 이제 옛날 것. <b>conflict가 나고 한 바이트도 안 씁니다</b>.'); step('#laneB', '27%', 'no', '✗ conflict · 0 bytes'); }],
+      [6400, () => { caption.innerHTML = T('B reads again, redoes its change on A\'s version, and lands it.', 'B는 다시 읽고, A가 고친 위에 자기 수정을 다시 얹어서 반영합니다.'); step('#laneB', '55%', '', 'read · rev 1486'); }],
+      [7800, () => { step('#laneB', '77%', 'ok', '✓ edit --rev 1486'); setRev('9c02…'); $('[data-scene="2"] [data-at="5"]').classList.add('reveal'); caption.innerHTML = T('Measured with 4 agents and 800 updates each way:', '에이전트 4개로 업데이트 800번씩 돌려 본 결과:'); }],
     ],
   ];
 
