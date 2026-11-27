@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>.lancet 트라이그램 LSM 인덱스와 최신성 보장 — lancet 문서</title>
-<meta name="description" content="건전한 트라이그램 컴파일, (mtime, size, ctime, inode)+racy 검사, LSM 컴팩션으로 Scan == Auto를 보장하는 원리.">
+<title>LANCET04 트라이그램 LSM 인덱스와 최신성 모델 — lancet 문서</title>
+<meta name="description" content="LANCET04 바이너리 포맷, 제로카피 mmap, 건전한 트라이그램 컴파일, 4종 메타데이터, racy 창, 컴팩션.">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
@@ -16,8 +16,8 @@
 <meta property="og:site_name" content="lancet">
 <meta property="og:locale" content="ko_KR">
 <meta property="og:url" content="https://cree1116.github.io/lancet/ko/docs/concepts/index-and-freshness.html">
-<meta property="og:title" content=".lancet 트라이그램 LSM 인덱스와 최신성 보장 — lancet 문서">
-<meta property="og:description" content="건전한 트라이그램 컴파일, (mtime, size, ctime, inode)+racy 검사, LSM 컴팩션으로 Scan == Auto를 보장하는 원리.">
+<meta property="og:title" content="LANCET04 트라이그램 LSM 인덱스와 최신성 모델 — lancet 문서">
+<meta property="og:description" content="LANCET04 바이너리 포맷, 제로카피 mmap, 건전한 트라이그램 컴파일, 4종 메타데이터, racy 창, 컴팩션.">
 <meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image-ko.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
@@ -55,46 +55,48 @@
 
 <div class="doc-shell">
   <aside class="doc-sidebar" aria-label="Documentation navigation">
-    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="../index.html">소개 · 설치 · 치트시트</a></li><li><a href="../migration.html">rg·fd·sg·sed에서 전환</a></li></ul></div><div class="nav-group"><div class="nav-group-title">실전 가이드</div><ul class="nav-list"><li><a href="../guides/explore.html">낯선 코드베이스 탐색</a></li><li><a href="../guides/editing.html">안전한 편집·패치·이름 변경</a></li><li><a href="../guides/documents.html">PDF·오피스·HWP·압축파일</a></li><li><a href="../guides/agents-mcp.html">AI 에이전트·MCP·공식 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">핵심 개념</div><ul class="nav-list"><li><a href="index-and-freshness.html" class="active">인덱스 & 최신성 모델</a></li><li><a href="architecture-and-benchmarks.html">아키텍처 & 벤치마크</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="../reference/cli.html">CLI & lancet rg 레퍼런스</a></li><li><a href="../reference/query-and-ast.html">LQL 문법 & AST 24개 언어</a></li><li><a href="../reference/json-and-mcp.html">JSON 스키마 · MCP · 문제 해결</a></li></ul></div>
+    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="../index.html">설치 · 빠른 시작</a></li><li><a href="../migration.html">rg·fd·sg에서 전환</a></li><li><a href="../filtering.html">무시 규칙 · 글롭 · 타입</a></li></ul></div><div class="nav-group"><div class="nav-group-title">탐색과 검색</div><ul class="nav-list"><li><a href="../guides/explore.html">파일 탐색 · 아웃라인 · 랭킹</a></li><li><a href="../guides/search.html">텍스트 검색 · LQL · 배치</a></li><li><a href="../guides/ast.html">구조적 AST 검색 · 치환</a></li><li><a href="../guides/read-and-documents.html">정밀 읽기 · PDF · HWP</a></li></ul></div><div class="nav-group"><div class="nav-group-title">편집과 에이전트</div><ul class="nav-list"><li><a href="../guides/edit.html">안전한 편집 & CAS</a></li><li><a href="../guides/patch.html">원자적 다중 파일 패치</a></li><li><a href="../guides/rename.html">로컬 스코프 이름 변경</a></li><li><a href="../guides/agents-mcp.html">AI 에이전트 · MCP · 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">아키텍처와 내부 구조</div><ul class="nav-list"><li><a href="index-and-freshness.html" class="active">인덱스(LANCET04) & 최신성</a></li><li><a href="write-safety.html">쓰기 안전성 & 파일 정체성</a></li><li><a href="benchmarks.html">벤치마크 & 경쟁 비교</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="../reference/cli.html">CLI 명령 · 종료 코드</a></li><li><a href="../reference/rg-parity.html">lancet rg 호환성 표</a></li><li><a href="../reference/lql-and-ast.html">LQL 문법 · AST 24개 언어</a></li><li><a href="../reference/json-and-mcp.html">JSON 스키마 · MCP 11개 도구</a></li><li><a href="../reference/troubleshooting.html">문제 해결 · 오류 복구</a></li></ul></div>
   </aside>
 
   <main class="doc-main">
     <article class="doc-article">
-      <div class="crumb">핵심 개념</div>
-      <h1>.lancet 트라이그램 LSM 인덱스와 최신성 보장</h1>
-      <p class="lede">상주 워처 데몬 없이도 Scan == Auto를 보장하는 이유와 --trust-index의 올바른 쓰임새.</p>
+      <div class="crumb">아키텍처와 내부 구조</div>
+      <h1>LANCET04 트라이그램 LSM 인덱스와 최신성 모델</h1>
+      <p class="lede">상주 데몬 없이도 40바이트 헤더 O(1) mmap과 racy-timestamp 방어로 Scan == Auto를 보장하는 원리.</p>
       
-<p>기존 인덱스 기반 검색 도구는 백그라운드 워처가 따라잡을 때까지 낡은 결과를 내거나, 인덱스 내용만으로 근사치를 반환하곤 합니다. Lancet은 반대로 설계했습니다: <strong>인덱스는 열지 않아도 되는 파일만 거릅니다.</strong></p>
+<p>백그라운드 워처가 따라잡기를 기다리거나 인덱스 캐시만으로 근사 결과를 돌려주는 도구와 달리, Lancet은 데몬 없는 불변 <strong>LSM 트라이그램 인덱스(<code>LANCET04</code>)</strong> 위에서 단 하나의 불변식 <strong><code>Scan == Auto</code></strong>를 보장합니다.</p>
 
-<figure class="diagram-fig"><img src="../../../assets/diagrams/pipeline.ko.svg" alt="Linux v6.12에서 인덱스 쿼리가 91%의 파일을 건너뛰면서도 정확한 결과를 보장하는 흐름." loading="lazy"><figcaption>Linux v6.12(86,218개 파일)에서 <code>"spin_lock"</code> <code>auto</code> 모드 실측: 7,814개 후보만 열어 7,073개 정확히 일치.</figcaption></figure>
+<figure class="diagram-fig"><img src="../../../assets/diagrams/pipeline.ko.svg" alt="Linux v6.12에서 인덱스 쿼리가 91%를 건너뛰며 정확한 결과를 내는 과정." loading="lazy"><figcaption>Linux v6.12(86,218개 파일)에서 <code>"spin_lock"</code> <code>auto</code> 모드 실측: 7,814개만 열어(9.1%) 7,073개(8.2%) 정확히 일치.</figcaption></figure>
 
-<h2 id="sound-lowering">건전한 트라이그램 컴파일 &amp; 동일 평가기 검증<a class="heading-anchor" href="#sound-lowering" aria-label="Link to section">#</a></h2>
-<p>LQL, <code>lancet rg</code> 정규식 HIR, 리터럴이 있는 <code>lancet ast</code> 패턴, <code>lancet refs</code>까지 모두 필수 <strong>바이트 트라이그램</strong> 논리식(및 <code>fuzzy()</code>용 건전한 q-gram 하한 <code>AtLeast(k)</code>)으로 낮춰집니다. 필수 트라이그램이 없는 파일은 <em>수학적으로</em> 매치할 수 없으므로 건너뛰어도 누락이 발생하지 않습니다.</p>
-<p>인덱스에서 걸러진 후보와 수정된 파일은 <strong>인덱스 없는 풀스캔과 완전히 동일한 평가기</strong>로 검증합니다. 따라서 구조적으로 <strong><code>Scan == Auto</code></strong>가 성립합니다.</p>
+<h2 id="trigram-lowering">건전한 트라이그램 컴파일<a class="heading-anchor" href="#trigram-lowering" aria-label="Link to section">#</a></h2>
+<p>리터럴, 정규식 HIR 분기, AST 리터럴, <code>refs --rank</code> 글롭 리터럴은 필수 바이트 트라이그램 논리식으로, <code>fuzzy()</code>는 건전한 q-gram 하한 <code>AtLeast(k)</code>로 컴파일됩니다. 필수 트라이그램이 없는 파일은 논리적으로 매치할 수 없으므로 건너뛰어도 <strong>누락이 0건</strong>이며, 남은 모든 후보는 풀스캔과 완전히 동일한 평가기로 검증됩니다.</p>
 
-<h2 id="freshness">데몬 없이 auto 모드가 수정을 즉시 감지하는 법<a class="heading-anchor" href="#freshness" aria-label="Link to section">#</a></h2>
-<figure class="diagram-fig"><img src="../../../assets/diagrams/index-lifecycle.ko.svg" alt="인덱스 수명주기: 초기 빌드, 매 쿼리 메타데이터 검사, 증분 세그먼트, 컴팩션." loading="lazy"><figcaption>auto 모드는 상주 데몬 없이도 방금 수정되거나 새로 생긴 파일을 즉시 감지합니다.</figcaption></figure>
-<p>기본 <code>auto</code> 모드는 파일 메타데이터를 한 번 순회하며 인덱스된 파일마다 다음 4가지 속성을 대조합니다:</p>
+<h2 id="segment-format">디스크 LANCET04 바이너리 구조 &amp; 제로카피 mmap<a class="heading-anchor" href="#segment-format" aria-label="Link to section">#</a></h2>
+<p><code>PATH/.lancet</code>(또는 상위 디렉터리 자동 탐색, <code>--index-dir</code>로 변경 가능) 안에 <code>manifest.json</code>과 불변 세그먼트(<code>seg-NNNNNN.wseg</code>)가 저장됩니다:</p>
+<div class="doc-code"><div class="doc-code-head"><span>LANCET04 바이너리 레이아웃 (src/index/segment.rs)</span><button class="copy-btn" type="button">복사</button></div><pre><code>header (40 B):  &quot;LANCET04&quot; | ndocs:u32 | nkeys:u32 | doc_offs_off:u64 | keys_off:u64 | post_off:u64
+doc_offs:       (ndocs + 1) * u32 오프셋 (docs_off 기준)
+docs:           문서별(상대 UTF-8 순): mtime_ns:u64 | size:u64 | ctime_ns:u64 | ino:u64 | flags:u8 | rel_utf8
+keys:           nkeys * (key:u32 | off:u32) + sentinel_end_off:u32 (트라이그램 키 순 정렬)
+postings:       varint(count) + delta-varint 문서 ID</code></pre></div>
+<p><code>Segment::open</code>은 40바이트 헤더만 검사하므로 파일 수와 무관하게 <strong>힙 할당 0, O(1)</strong>으로 열립니다. 문서별 플래그는 <code>FLAG_BINARY(1)</code>, <code>FLAG_ERROR(2)</code>, <code>FLAG_OVERSIZE(4, &gt; 64 MiB — 쿼리 시 mmap 스트리밍)</code>, <code>FLAG_RACY(8)</code>를 기록합니다.</p>
+
+<h2 id="freshness">4종 메타데이터 + Racy-Timestamp 방어<a class="heading-anchor" href="#freshness" aria-label="Link to section">#</a></h2>
+<figure class="diagram-fig"><img src="../../../assets/diagrams/index-lifecycle.ko.svg" alt="인덱스 수명주기: 초기 빌드, 매 쿼리 stat 대조, 증분 세그먼트, 컴팩션." loading="lazy"><figcaption>auto 모드는 데몬 없이도 방금 수정되거나 새로 생긴 파일을 즉시 감지합니다.</figcaption></figure>
+<p>왜 <code>(mtime, size)</code>만으로는 불충분할까요? <code>cp -p</code>, <code>tar</code>, 같은 길이 수정은 둘 다 그대로 둘 수 있습니다. Unix/macOS에서 Lancet은 <strong><code>(mtime_ns, size, ctime_ns, ino)</code></strong> 4가지를 모두 기록하고 Git의 <strong>racy-timestamp 창</strong>을 적용합니다:</p>
 <ul>
-  <li><code>mtime</code> + <code>size</code> + <code>ctime</code> + <code>inode</code> (Unix/macOS)</li>
-  <li>더해 <strong>racy-timestamp 검사</strong>: 인덱스 기록 시각과 같은 타임스탬프 구간에서 바뀐 파일은 무조건 stale로 보고 실시간 스캔합니다.</li>
+  <li><strong>적응형 racy 창:</strong> 최대 4,096개 파일의 나노초 타임스탬프를 표본 검사해, 세밀한 파일시스템(APFS, ext4, NTFS)에서는 <code>100 ms</code>, 거친 타임스탬프(HFS+, ext3, FAT)에서는 <code>2 s</code> 창 안에 들어온 파일에 <code>FLAG_RACY</code>를 찍어 캐시를 믿지 않고 항상 라이브 검증합니다.</li>
 </ul>
-<p>덕분에 길이가 같은 수정(<code>size</code> 동일), <code>mtime</code>을 되돌린 트릭(<code>ctime</code>/<code>inode</code>로 포착), 밀리초 미만 연속 수정도 놓치지 않습니다.</p>
+<div class="callout warn"><div class="callout-title">Windows 플랫폼의 정직한 한계</div><p>Windows에서 Rust 표준 라이브러리는 <code>mtime</code>과 <code>size</code>만 안정적으로 노출합니다(<code>ctime_ns</code>, <code>ino</code>는 <code>0</code>). 따라서 Windows에서 파일 크기와 <code>mtime</code>을 함께 유지한 채 덮어쓰는 경우 <code>lancet index</code> 또는 <code>--no-index</code>를 실행해야 합니다.</p></div>
 
-<div class="callout warn"><div class="callout-title">Windows 플랫폼의 정직한 한계</div><p>Rust 표준 라이브러리는 Windows에서 <code>ctime</code>과 <code>inode</code>를 안정적으로 노출하지 않고 <code>mtime</code>과 <code>size</code>만 제공합니다. 따라서 Windows에서 파일 크기와 <code>mtime</code>을 동시에 유지한 채 덮어쓰는 특수한 경우에는 <code>lancet index</code> 또는 <code>--no-index</code>가 필요합니다.</p></div>
-
-<h2 id="modes">auto vs --trust-index vs --no-index<a class="heading-anchor" href="#modes" aria-label="Link to section">#</a></h2>
-<div class="table-wrap"><table><thead><tr><th>모드</th><th>디스크 stat 순회</th><th>수정 파일 실시간 스캔</th><th>지연 (Linux 8.6만 파일)</th><th>추천 용도</th></tr></thead><tbody><tr><td><code>auto</code> (기본값)</td><td>예 (~100 ms)</td><td>예</td><td>~148 ms (희귀 리터럴)</td><td>실제 개발 &amp; AI 에이전트 작업(항상 최신)</td></tr><tr><td><code>--trust-index</code></td><td>아니오</td><td>아니오</td><td>~40 ms (0건 시 3 ms)</td><td>인덱스가 최신임이 확실한 초대형 저장소 읽기 전용 탐색</td></tr><tr><td><code>--no-index</code></td><td>전체 스캔</td><td>예 (모든 파일)</td><td>~1,113 ms</td><td>디버깅, 기준선 비교, 쓰기 불가 환경</td></tr></tbody></table></div>
-
-<h2 id="lsm-ops">LSM 세그먼트, 상위 인덱스 탐색 &amp; 컴팩션<a class="heading-anchor" href="#lsm-ops" aria-label="Link to section">#</a></h2>
+<h2 id="compaction">동작 모드, 증분 동기화 &amp; 자동 컴팩션<a class="heading-anchor" href="#compaction" aria-label="Link to section">#</a></h2>
 <ul>
-  <li><strong>디스크 구조:</strong> <code>PATH/.lancet</code> 안에 불변 LSM 세그먼트(<code>LANCET04</code>), 삭제 툼스톤, mmap 포스팅 리스트로 저장됩니다.</li>
-  <li><strong>상위 디렉터리 자동 탐색:</strong> <code>src/query/</code> 안에서 실행해도 상위 저장소 루트의 <code>.lancet</code>를 자동으로 찾아 사용합니다(<code>--index-dir</code>로 재지정 가능).</li>
-  <li><strong>증분 갱신 및 유지보수:</strong> <code>lancet index .</code>는 바뀐 파일만 새 세그먼트로 추가하고, <code>lancet index --compact</code>는 세그먼트를 병합하고 툼스톤을 정리하며, <code>--rebuild</code>는 처음부터 다시 만듭니다.</li>
-  <li><strong>선택도 진단:</strong> <code>lancet status</code>로 인덱스·stale 파일 수를 확인하고, <code>lancet explain '&lt;QUERY&gt;'</code>로 추출된 트라이그램과 후보 비율을 볼 수 있습니다.</li>
+  <li><strong><code>auto</code> (기본값):</strong> 메타데이터 stat 순회(8.7만 파일 약 100 ms) + 바뀐 파일만 라이브 스캔.</li>
+  <li><strong><code>--trust-index</code>:</strong> stat 순회를 생략하고 <code>.lancet</code>만 신뢰(Linux 커널 약 40 ms, 0건 시 2~3 ms); <code>lancet index</code> 전의 미반영 수정은 누락될 수 있습니다.</li>
+  <li><strong><code>--no-index</code>:</strong> 인덱스를 무시하고 디스크 전체를 직접 스캔합니다.</li>
+  <li><strong>LSM 컴팩션:</strong> 증분 <code>lancet index</code>는 새 세그먼트와 삭제 툼스톤을 <code>manifest.json.tmp</code> 원자적 rename으로 반영합니다. 세그먼트가 <code>COMPACT_MAX_SEGMENTS = 6</code>을 넘거나 죽은 문서가 <code>COMPACT_MIN_DEAD = 32</code> 이상이면 자동 병합하며 <code>--compact</code> / <code>--rebuild</code>로 수동 실행도 가능합니다.</li>
 </ul>
 
-      <div class="pager"><a class="pager-card prev" href="../guides/agents-mcp.html"><small>← 이전</small><b>AI 에이전트·MCP·공식 스킬</b></a><a class="pager-card next" href="architecture-and-benchmarks.html"><small>다음 →</small><b>아키텍처 & 벤치마크</b></a></div>
+      <div class="pager"><a class="pager-card prev" href="../guides/agents-mcp.html"><small>← 이전</small><b>AI 에이전트 · MCP · 스킬</b></a><a class="pager-card next" href="write-safety.html"><small>다음 →</small><b>쓰기 안전성 & 파일 정체성</b></a></div>
       <div class="meta-foot">
         <span>MIT OR Apache-2.0 · Rust 단일 바이너리</span>
         <a href="https://github.com/CREE1116/lancet/blob/main/docs/why-one-tool.ko.md" target="_blank" rel="noopener">GitHub에서 소스 보기 →</a>

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lancet Documentation — Introduction & Cheat Sheet — lancet Docs</title>
-<meta name="description" content="Install Lancet, run a 60-second walkthrough, and keep the one-screen CLI cheat sheet handy.">
+<title>Lancet Documentation — Installation & Cheat Sheet — lancet Docs</title>
+<meta name="description" content="Install Lancet on macOS, Linux, or Windows, run a 60-second walkthrough, and reference all 15 subcommands.">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
@@ -16,8 +16,8 @@
 <meta property="og:site_name" content="lancet">
 <meta property="og:locale" content="en_US">
 <meta property="og:url" content="https://cree1116.github.io/lancet/docs/">
-<meta property="og:title" content="Lancet Documentation — Introduction & Cheat Sheet — lancet Docs">
-<meta property="og:description" content="Install Lancet, run a 60-second walkthrough, and keep the one-screen CLI cheat sheet handy.">
+<meta property="og:title" content="Lancet Documentation — Installation & Cheat Sheet — lancet Docs">
+<meta property="og:description" content="Install Lancet on macOS, Linux, or Windows, run a 60-second walkthrough, and reference all 15 subcommands.">
 <meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
@@ -55,58 +55,62 @@
 
 <div class="doc-shell">
   <aside class="doc-sidebar" aria-label="Documentation navigation">
-    <div class="nav-group"><div class="nav-group-title">Getting Started</div><ul class="nav-list"><li><a href="index.html" class="active">Introduction & Cheat Sheet</a></li><li><a href="migration.html">Migration from rg, fd, sg, sed</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Guides & Recipes</div><ul class="nav-list"><li><a href="guides/explore.html">Exploring Codebases</a></li><li><a href="guides/editing.html">Safe Editing, Patch & Rename</a></li><li><a href="guides/documents.html">PDFs, Office, HWP & Archives</a></li><li><a href="guides/agents-mcp.html">AI Agents, MCP & Skill</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Concepts & Design</div><ul class="nav-list"><li><a href="concepts/index-and-freshness.html">Index & Freshness Model</a></li><li><a href="concepts/architecture-and-benchmarks.html">Architecture & Benchmarks</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul class="nav-list"><li><a href="reference/cli.html">CLI & lancet rg Reference</a></li><li><a href="reference/query-and-ast.html">LQL & 24 AST Languages</a></li><li><a href="reference/json-and-mcp.html">JSON Schemas, MCP & Recovery</a></li></ul></div>
+    <div class="nav-group"><div class="nav-group-title">Getting Started</div><ul class="nav-list"><li><a href="index.html" class="active">Installation & Quickstart</a></li><li><a href="migration.html">Migration from rg, fd, sg</a></li><li><a href="filtering.html">Ignore Rules, Globs & Types</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Search & Discovery</div><ul class="nav-list"><li><a href="guides/explore.html">Files, Outlines & Ranking</a></li><li><a href="guides/search.html">Text Search, LQL & Batch</a></li><li><a href="guides/ast.html">AST Search & Rewrite</a></li><li><a href="guides/read-and-documents.html">Reads, PDF, Office & HWP</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Editing & Agents</div><ul class="nav-list"><li><a href="guides/edit.html">Safe Editing & CAS</a></li><li><a href="guides/patch.html">Atomic Multi-File Patch</a></li><li><a href="guides/rename.html">Local Scope Rename</a></li><li><a href="guides/agents-mcp.html">AI Agents, MCP & Skill</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Architecture & Internals</div><ul class="nav-list"><li><a href="concepts/index-and-freshness.html">Index (LANCET04) & Freshness</a></li><li><a href="concepts/write-safety.html">Write Safety & File Identity</a></li><li><a href="concepts/benchmarks.html">Benchmarks & Competitors</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul class="nav-list"><li><a href="reference/cli.html">CLI Commands & Exit Codes</a></li><li><a href="reference/rg-parity.html">lancet rg Parity Matrix</a></li><li><a href="reference/lql-and-ast.html">LQL & 24 AST Languages</a></li><li><a href="reference/json-and-mcp.html">JSON Schemas & MCP Tools</a></li><li><a href="reference/troubleshooting.html">Troubleshooting & Recovery</a></li></ul></div>
   </aside>
 
   <main class="doc-main">
     <article class="doc-article">
       <div class="crumb">Getting Started</div>
-      <h1>Lancet Documentation — Introduction & Cheat Sheet</h1>
-      <p class="lede">Find, read, and change code and documents on one coordinate system, at index speed.</p>
+      <h1>Lancet Documentation — Installation & Cheat Sheet</h1>
+      <p class="lede">One Rust binary for discovery, trigram-indexed search, 24-language AST rewrites, exact reads, and CAS edits.</p>
       
-<p><strong>Lancet</strong> is a single Rust binary that unifies discovery (<code>fd</code>), trigram-indexed search (<code>rg</code> / LQL), structural AST search &amp; rewrite (<code>ast</code>), exact range/document reading (<code>read</code> / <code>outline</code>), compare-and-swap editing (<code>edit</code> / <code>patch</code> / <code>rename</code>), and an embedded stdio MCP server (<code>mcp</code>).</p>
+<p><strong>Lancet</strong> replaces the <code>rg</code> + <code>fd</code> + <code>ast-grep</code> + <code>cat</code> + <code>sed</code> + <code>patch</code> + <code>pdftotext</code> chain with one dependency-free Rust binary. Every command shares the same <code>.lancet</code> trigram index, traversal filter rules, <strong>1-based line coordinates</strong>, and <strong>XXH3-64 <code>rev</code></strong> file revisions.</p>
 
-<div class="callout tip"><div class="callout-title">One rule before you start</div><p>Every search hit, AST match, read slice, and edit hunk agrees on exact <strong>1-based line numbers</strong> and <strong>XXH3-64 <code>rev</code> hashes</strong>. Even PDFs, Office files, HWP/HWPX, and archive entries share the exact same line numbering between search and <code>read</code>.</p></div>
+<div class="callout tip"><div class="callout-title">Design contract in one sentence</div><p>The trigram index only decides which files <em>not</em> to open; candidates and live-changed files go through the exact same evaluator as a full scan, and every write runs through locked compare-and-swap.</p></div>
 
-<h2 id="install">Installation<a class="heading-anchor" href="#install" aria-label="Link to section">#</a></h2>
-<p>Install a prebuilt binary on macOS, Linux (glibc and static musl), or Windows — no Rust toolchain needed:</p>
+<h2 id="install">Installation &amp; Build Variants<a class="heading-anchor" href="#install" aria-label="Link to section">#</a></h2>
+<p>Prebuilt binaries are published on every release for macOS (Apple Silicon &amp; Intel), Linux (x86_64/arm64 glibc and static musl), and Windows.</p>
 
 <div class="doc-code"><div class="doc-code-head"><span>macOS / Linux (Homebrew)</span><button class="copy-btn" type="button">Copy</button></div><pre><code>brew tap CREE1116/lancet https://github.com/CREE1116/lancet
 brew install CREE1116/lancet/lancet</code></pre></div>
-<div class="doc-code"><div class="doc-code-head"><span>macOS / Linux (Release Installer)</span><button class="copy-btn" type="button">Copy</button></div><pre><code>curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh</code></pre></div>
+<div class="doc-code"><div class="doc-code-head"><span>macOS / Linux (Prebuilt Release Script)</span><button class="copy-btn" type="button">Copy</button></div><pre><code>curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh</code></pre></div>
 <div class="doc-code"><div class="doc-code-head"><span>Windows (PowerShell)</span><button class="copy-btn" type="button">Copy</button></div><pre><code>irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex</code></pre></div>
-<div class="doc-code"><div class="doc-code-head"><span>From source (Cargo)</span><button class="copy-btn" type="button">Copy</button></div><pre><code># Full binary (~40 MB, 24 Tree-sitter grammars + PDF/Office/HWP adapters)
+<div class="doc-code"><div class="doc-code-head"><span>Cargo (Full vs Lean Code-Only Build)</span><button class="copy-btn" type="button">Copy</button></div><pre><code># Prebuilt binary via cargo-binstall
 cargo binstall --git https://github.com/CREE1116/lancet lancet
 
-# Lean text/code-only binary (~4 MB, no document adapters)
-cargo install --git https://github.com/CREE1116/lancet --no-default-features</code></pre></div>
+# Compile full build (~40 MB: 24 Tree-sitter grammars + PDF/Office/HWP/archive adapters)
+cargo install --git https://github.com/CREE1116/lancet lancet
 
-<h2 id="walkthrough">60-Second Walkthrough<a class="heading-anchor" href="#walkthrough" aria-label="Link to section">#</a></h2>
-<p>Run this loop in any repository. Building <code>.lancet</code> is optional — commands work identically with or without an index, and <code>auto</code> mode checks disk freshness on every query.</p>
+# Lean build (~4 MB: pure source/text/code, strips document &amp; archive adapters)
+cargo install --git https://github.com/CREE1116/lancet lancet --no-default-features</code></pre></div>
+
+<h2 id="walkthrough">60-Second End-to-End Walkthrough<a class="heading-anchor" href="#walkthrough" aria-label="Link to section">#</a></h2>
+<p>Building <code>.lancet</code> is optional. Every command falls back seamlessly when no index exists, and default <code>auto</code> mode checks file metadata on disk on every query so edited files are never missed.</p>
 <div class="doc-code"><div class="doc-code-head"><span>Terminal</span><button class="copy-btn" type="button">Copy</button></div><pre><code># 1. Optional: build the local trigram index once
 lancet index .
 
-# 2. Map folders first, then rank core symbols by lexical usage
+# 2. Orient with folder-only tree + usage-ranked core symbols
 lancet fd --tree --dirs -d 2 .
 lancet refs --rank &#x27;*Service&#x27; --kind class src --limit 8
 
-# 3. Search with ripgrep syntax or LQL boolean/proximity queries
+# 3. Search with ripgrep flags or LQL boolean/proximity queries
 lancet rg -w execute_one src
 lancet &#x27;near(&quot;gradient&quot;, &quot;clip&quot;, 30) in function | expand parent&#x27;
 
-# 4. Read exact lines or symbols and capture `rev`
+# 4. Read exact symbol or lines and capture its XXH3-64 `rev`
 lancet read src/search.rs --symbol execute_one --json
 
-# 5. Preview a dry-run diff, then commit atomically with --rev and --apply
-lancet edit src/search.rs --find &#x27;let limit = 20;&#x27; --with &#x27;let limit = 50;&#x27; --rev &lt;REV&gt; --apply</code></pre></div>
+# 5. Preview dry-run diff, then commit atomically with --rev and --apply
+lancet edit src/search.rs --find &#x27;let limit = 20;&#x27; \
+  --with &#x27;let limit = 50;&#x27; --rev &lt;REV&gt; --apply</code></pre></div>
 
-<h2 id="cheat-sheet">One-Screen Cheat Sheet<a class="heading-anchor" href="#cheat-sheet" aria-label="Link to section">#</a></h2>
-<div class="table-wrap"><table><thead><tr><th>Job</th><th>Command</th><th>Key Guarantee</th></tr></thead><tbody><tr><td>Folder layout</td><td><code>lancet fd --tree --dirs -d 2 .</code></td><td>Respects <code>.gitignore</code></td></tr><tr><td>Recent/typed files</td><td><code>lancet fd -t f -e rs --changed-within 7d</code></td><td>Index-accelerated</td></tr><tr><td>Drop-in grep</td><td><code>lancet rg -w -t rs 'pat' src</code></td><td>Byte-identical to <code>rg</code> + <code>--docs</code></td></tr><tr><td>Boolean/fuzzy search</td><td><code>lancet '("a" OR "b") NOT "c" in function'</code></td><td><code>Scan == Auto</code></td></tr><tr><td>File skeleton</td><td><code>lancet outline src/main.rs</code></td><td>Functions, Markdown headings, sheets, ZIPs</td></tr><tr><td>Exact slice</td><td><code>lancet read f.rs --lines 10:50 --budget-tokens 800</code></td><td>Returns <code>rev</code> + <code>next_line</code></td></tr><tr><td>Symbol read</td><td><code>lancet read f.rs --symbol my_fn</code></td><td>Includes doc comments &amp; attributes</td></tr><tr><td>Document / ZIP</td><td><code>lancet read r.pdf -p 2:3</code> · <code>a.zip!app.log</code></td><td>Shared coordinates with search</td></tr><tr><td>Usage ranking</td><td><code>lancet refs --rank '*Service' --kind class src</code></td><td>Sorted by lexical reference count</td></tr><tr><td>AST search/rewrite</td><td><code>lancet ast '$X.unwrap()' src -l rs -r '$X?'</code></td><td>24 languages; dry-run until <code>--apply</code></td></tr><tr><td>CAS edit</td><td><code>lancet edit f.rs --edits - --rev REV --apply</code></td><td>Original coordinates, all-or-nothing</td></tr><tr><td>Unified diff</td><td><code>git diff | lancet patch --apply</code></td><td>Pre-verified + race rollback</td></tr><tr><td>Local scope rename</td><td><code>lancet rename f.rs:42 old new --rev REV --apply</code></td><td>Re-resolves scope to prevent capture</td></tr><tr><td>MCP server</td><td><code>lancet mcp --root .</code></td><td>11 tools over stdio JSON-RPC</td></tr><tr><td>Index inspection</td><td><code>lancet explain 'pat'</code> · <code>lancet status</code></td><td>Shows trigrams &amp; candidate %</td></tr></tbody></table></div>
+<h2 id="cheat-sheet">One-Screen Command Cheat Sheet<a class="heading-anchor" href="#cheat-sheet" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Workflow Step</th><th>Command</th><th>Safety / Performance Guarantee</th></tr></thead><tbody><tr><td>Folder layout</td><td><code>lancet fd --tree --dirs -d 2 .</code></td><td>Respects <code>.gitignore</code> / <code>.ignore</code></td></tr><tr><td>Recent / typed files</td><td><code>lancet fd -t f -e rs --changed-within 7d</code></td><td>Units: <code>s</code>, <code>m</code>, <code>h</code>, <code>d</code>, <code>w</code></td></tr><tr><td>Drop-in ripgrep</td><td><code>lancet rg -w -t rs 'pat' src</code></td><td>Byte-identical to <code>rg</code> + opt-in <code>--docs</code></td></tr><tr><td>Boolean / fuzzy LQL</td><td><code>lancet '("a" OR "b") NOT "c" in function'</code></td><td><code>Scan == Auto</code></td></tr><tr><td>Multi-query batch</td><td><code>lancet batch src -q 'Q1' -q 'Q2'</code></td><td>One index open &amp; directory walk</td></tr><tr><td>Skeleton outline</td><td><code>lancet outline src/main.rs</code></td><td>Functions, MD headings, sheets, ZIP entries</td></tr><tr><td>Budgeted read</td><td><code>lancet read f.rs --lines 10:50 --budget-tokens 800</code></td><td>Returns <code>rev</code> + <code>next_line</code> cursor</td></tr><tr><td>Symbol read</td><td><code>lancet read f.rs --symbol my_fn</code></td><td>Includes doc comments &amp; attributes</td></tr><tr><td>Document / archive</td><td><code>lancet read r.pdf -p 2:3</code> · <code>a.zip!app.log</code></td><td>1-to-1 line numbers with search; read-only</td></tr><tr><td>Ranked declarations</td><td><code>lancet refs --rank '*Service' --kind class src</code></td><td>Sorted by lexical AST reference count</td></tr><tr><td>AST search/rewrite</td><td><code>lancet ast '$X.unwrap()' src -l rs -r '$X?'</code></td><td>24 languages; dry-run until <code>--apply</code></td></tr><tr><td>Atomic multi-edit</td><td><code>lancet edit f.rs --edits - --rev REV --apply</code></td><td>Original coordinates, overlap-checked CAS</td></tr><tr><td>Unified diff patch</td><td><code>git diff | lancet patch --apply</code></td><td>All-file pre-check + CAS rollback</td></tr><tr><td>Local binding rename</td><td><code>lancet rename f.rs:42 old new --rev REV --apply</code></td><td>6 languages; scope re-resolution proof</td></tr><tr><td>MCP stdio server</td><td><code>lancet mcp --root .</code></td><td>11 tools, JSON-RPC 2.0, <code>--read-only</code> option</td></tr><tr><td>Index diagnostics</td><td><code>lancet explain 'pat'</code> · <code>lancet status</code></td><td>Trigram requirements &amp; selectivity %</td></tr></tbody></table></div>
 
-<h2 id="explore-docs">Explore the Documentation<a class="heading-anchor" href="#explore-docs" aria-label="Link to section">#</a></h2>
-<div class="doc-cards"><a class="doc-card" href="migration.html"><small>Getting Started</small><b>Migration Guide</b><span>Coming from rg, fd, ast-grep, sed, patch, or rga — side-by-side equivalents and exact differences.</span></a><a class="doc-card" href="guides/explore.html"><small>Guides</small><b>Exploring &amp; Budgeted Reads</b><span>Map repos with fd --dirs, rank symbols, inspect outlines, batch queries, and paginate by token budget.</span></a><a class="doc-card" href="guides/editing.html"><small>Guides</small><b>Safe Editing &amp; Concurrency</b><span>Avoid line drift with --edits, guard races with --rev, apply unified diffs, and use local rename.</span></a><a class="doc-card" href="reference/cli.html"><small>Reference</small><b>CLI, LQL &amp; JSON/MCP Schemas</b><span>Complete flag tables, LQL formal grammar, 24 AST aliases, all 11 MCP tools, and error recovery.</span></a></div>
+<h2 id="next-steps">Where to Go Next<a class="heading-anchor" href="#next-steps" aria-label="Link to section">#</a></h2>
+<div class="doc-cards"><a class="doc-card" href="migration.html"><small>Getting Started</small><b>Migration &amp; Filtering Rules</b><span>Exact Rosetta Stone from rg/fd/sg/sed/patch plus how .gitignore, globs, and file types evaluate.</span></a><a class="doc-card" href="guides/explore.html"><small>Search &amp; Discovery</small><b>Explore, LQL, AST &amp; Documents</b><span>Low-context exploration funnel, boolean/proximity DSL, 24-language AST rewrites, PDF/HWP/ZIP reading.</span></a><a class="doc-card" href="guides/edit.html"><small>Editing &amp; Agents</small><b>Edit, Patch, Rename &amp; MCP</b><span>Locked --rev CAS editing, multi-file patch rollback, tier-1 scope-proven rename, MCP setup.</span></a><a class="doc-card" href="reference/cli.html"><small>Internals &amp; Reference</small><b>LANCET04, Write Safety &amp; Schemas</b><span>Index segment format, racy-timestamp rules, OS locking, CLI flags, JSON structs, and troubleshooting.</span></a></div>
 
-      <div class="pager"><div></div><a class="pager-card next" href="migration.html"><small>Next →</small><b>Migration from rg, fd, sg, sed</b></a></div>
+      <div class="pager"><div></div><a class="pager-card next" href="migration.html"><small>Next →</small><b>Migration from rg, fd, sg</b></a></div>
       <div class="meta-foot">
         <span>MIT OR Apache-2.0 · Single Rust binary</span>
         <a href="https://github.com/CREE1116/lancet/blob/main/README.md" target="_blank" rel="noopener">View source on GitHub →</a>

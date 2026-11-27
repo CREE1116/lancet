@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>전체 CLI & lancet rg 호환성 레퍼런스 — lancet 문서</title>
-<meta name="description" content="모든 하위 명령, 플래그, 종료 코드, ripgrep 15.2 기능 대조표.">
+<title>CLI 하위 명령, 플래그 & 종료 코드 레퍼런스 — lancet 문서</title>
+<meta name="description" content="src/main.rs 기준으로 검증된 15개 진입점별 플래그 테이블, 기본값, 종료 코드.">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
@@ -16,8 +16,8 @@
 <meta property="og:site_name" content="lancet">
 <meta property="og:locale" content="ko_KR">
 <meta property="og:url" content="https://cree1116.github.io/lancet/ko/docs/reference/cli.html">
-<meta property="og:title" content="전체 CLI & lancet rg 호환성 레퍼런스 — lancet 문서">
-<meta property="og:description" content="모든 하위 명령, 플래그, 종료 코드, ripgrep 15.2 기능 대조표.">
+<meta property="og:title" content="CLI 하위 명령, 플래그 & 종료 코드 레퍼런스 — lancet 문서">
+<meta property="og:description" content="src/main.rs 기준으로 검증된 15개 진입점별 플래그 테이블, 기본값, 종료 코드.">
 <meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image-ko.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
@@ -55,76 +55,33 @@
 
 <div class="doc-shell">
   <aside class="doc-sidebar" aria-label="Documentation navigation">
-    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="../index.html">소개 · 설치 · 치트시트</a></li><li><a href="../migration.html">rg·fd·sg·sed에서 전환</a></li></ul></div><div class="nav-group"><div class="nav-group-title">실전 가이드</div><ul class="nav-list"><li><a href="../guides/explore.html">낯선 코드베이스 탐색</a></li><li><a href="../guides/editing.html">안전한 편집·패치·이름 변경</a></li><li><a href="../guides/documents.html">PDF·오피스·HWP·압축파일</a></li><li><a href="../guides/agents-mcp.html">AI 에이전트·MCP·공식 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">핵심 개념</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">인덱스 & 최신성 모델</a></li><li><a href="../concepts/architecture-and-benchmarks.html">아키텍처 & 벤치마크</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="cli.html" class="active">CLI & lancet rg 레퍼런스</a></li><li><a href="query-and-ast.html">LQL 문법 & AST 24개 언어</a></li><li><a href="json-and-mcp.html">JSON 스키마 · MCP · 문제 해결</a></li></ul></div>
+    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="../index.html">설치 · 빠른 시작</a></li><li><a href="../migration.html">rg·fd·sg에서 전환</a></li><li><a href="../filtering.html">무시 규칙 · 글롭 · 타입</a></li></ul></div><div class="nav-group"><div class="nav-group-title">탐색과 검색</div><ul class="nav-list"><li><a href="../guides/explore.html">파일 탐색 · 아웃라인 · 랭킹</a></li><li><a href="../guides/search.html">텍스트 검색 · LQL · 배치</a></li><li><a href="../guides/ast.html">구조적 AST 검색 · 치환</a></li><li><a href="../guides/read-and-documents.html">정밀 읽기 · PDF · HWP</a></li></ul></div><div class="nav-group"><div class="nav-group-title">편집과 에이전트</div><ul class="nav-list"><li><a href="../guides/edit.html">안전한 편집 & CAS</a></li><li><a href="../guides/patch.html">원자적 다중 파일 패치</a></li><li><a href="../guides/rename.html">로컬 스코프 이름 변경</a></li><li><a href="../guides/agents-mcp.html">AI 에이전트 · MCP · 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">아키텍처와 내부 구조</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">인덱스(LANCET04) & 최신성</a></li><li><a href="../concepts/write-safety.html">쓰기 안전성 & 파일 정체성</a></li><li><a href="../concepts/benchmarks.html">벤치마크 & 경쟁 비교</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="cli.html" class="active">CLI 명령 · 종료 코드</a></li><li><a href="rg-parity.html">lancet rg 호환성 표</a></li><li><a href="lql-and-ast.html">LQL 문법 · AST 24개 언어</a></li><li><a href="json-and-mcp.html">JSON 스키마 · MCP 11개 도구</a></li><li><a href="troubleshooting.html">문제 해결 · 오류 복구</a></li></ul></div>
   </aside>
 
   <main class="doc-main">
     <article class="doc-article">
       <div class="crumb">레퍼런스</div>
-      <h1>전체 CLI & lancet rg 호환성 레퍼런스</h1>
-      <p class="lede">전체 하위 명령 구문, 종료 코드, ripgrep 호환성 매트릭스.</p>
+      <h1>CLI 하위 명령, 플래그 & 종료 코드 레퍼런스</h1>
+      <p class="lede">15개 모든 하위 명령의 정확한 구문, 플래그 기본값, 종료 코드 명세.</p>
       
-<p>모든 하위 명령은 <code>.gitignore</code> / <code>.ignore</code> / <code>.rgignore</code> 순회 규칙, 결정적 정렬, 구조화된 종료 코드를 공유합니다.</p>
+<p>모든 하위 명령은 결정적 종료 코드, <code>.gitignore</code> 순회, <code>--json</code> 구조화 출력을 공유합니다. <code>lancet rg</code>의 40여 개 플래그는 <a href="rg-parity.html"><code>lancet rg</code> 호환성 표</a>를 참고하세요.</p>
 
 <h2 id="exit-codes">종료 코드<a class="heading-anchor" href="#exit-codes" aria-label="Link to section">#</a></h2>
-<div class="table-wrap"><table><thead><tr><th>코드</th><th>의미</th><th>상태 값 (JSON <code>status</code>)</th></tr></thead><tbody><tr><td class="num"><code>0</code></td><td>성공 / 결과 있음</td><td><code>complete</code></td></tr><tr><td class="num"><code>1</code></td><td>결과 없음 (또는 <code>status</code>에서 인덱스 없음)</td><td><code>empty</code></td></tr><tr><td class="num"><code>2</code></td><td>잘못된 쿼리·인자, 미지원 동작, 수정 충돌, I/O 오류</td><td><code>invalid_query</code>, <code>unsupported</code>, <code>conflict</code></td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>코드</th><th>의미</th><th>JSON <code>status</code> 값</th></tr></thead><tbody><tr><td class="num"><code>0</code></td><td>성공 / 1건 이상 매치 / 편집·패치 검증 및 적용 완료</td><td><code>complete</code></td></tr><tr><td class="num"><code>1</code></td><td>0건 매치 (또는 <code>lancet status</code>에서 인덱스 없음)</td><td><code>empty</code></td></tr><tr><td class="num"><code>2</code></td><td>잘못된 쿼리·플래그, 미지원 대상/이름 변경, CAS 충돌, I/O 오류</td><td><code>invalid_query</code>, <code>unsupported</code>, <code>conflict</code></td></tr></tbody></table></div>
 
-<h2 id="subcommands">전체 하위 명령 &amp; 플래그<a class="heading-anchor" href="#subcommands" aria-label="Link to section">#</a></h2>
-<div class="doc-code"><div class="doc-code-head"><span>CLI 전체 목록</span><button class="copy-btn" type="button">복사</button></div><pre><code>lancet &lt;QUERY&gt; [PATH] [--json] [--no-index | --trust-index] [--index-dir DIR] [--ocr]
-                      [--hidden] [--no-ignore] [-j THREADS] [--max-lines N] [--max-cols N] [--stats]
+<h2 id="cmd-search">lancet &lt;QUERY&gt; · batch · parse · explain<a class="heading-anchor" href="#cmd-search" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>명령 / 플래그</th><th>기본값 / 값</th><th>설명</th></tr></thead><tbody><tr><td><code>lancet &lt;QUERY&gt; [PATH]</code></td><td><code>PATH = .</code></td><td>디렉터리 또는 파일에서 LQL 쿼리 평가</td></tr><tr><td><code>--json</code> · <code>--stats</code></td><td><code>false</code></td><td>기계 판독용 JSON · stderr 실행 통계</td></tr><tr><td><code>--no-index</code> | <code>--trust-index</code> | <code>--index-dir DIR</code></td><td><code>auto</code>, <code>PATH/.lancet</code></td><td>인덱스 최신성 전략 또는 위치 지정</td></tr><tr><td><code>--hidden</code> · <code>--no-ignore</code> · <code>-j THREADS</code> · <code>--ocr</code></td><td><code>false</code>, 코어 수, <code>false</code></td><td>숨김/무시 파일 및 OCR 토글</td></tr><tr><td><code>--max-lines N</code> · <code>--max-cols N</code></td><td><code>20</code>, <code>240</code></td><td>결과 단위당 표시 줄/열 상한</td></tr><tr><td><code>lancet batch [PATH] -q Q... [--name N...] [--queries-json JSON]</code></td><td>—</td><td>인덱스 열기·워크 1회 공유로 다수 LQL 실행</td></tr><tr><td><code>lancet parse &lt;QUERY&gt;</code></td><td>—</td><td>정규화된 쿼리 및 JSON IR 출력</td></tr><tr><td><code>lancet explain &lt;QUERY&gt; [PATH]</code></td><td>—</td><td>필수 트라이그램, 후보 수, 선택도 % 출력</td></tr></tbody></table></div>
 
-lancet rg [FLAGS] [PATTERN] [PATH...] [--docs] [--passthru] [--type-add TYPESPEC]
-                      [--no-index | --trust-index] [--index-dir DIR]
+<h2 id="cmd-discover">lancet fd · outline · refs · read<a class="heading-anchor" href="#cmd-discover" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>하위 명령</th><th>플래그 및 인자</th></tr></thead><tbody><tr><td><code>lancet fd [PATTERN] [PATH]</code></td><td><code>-p/--pattern</code>, <code>-t f|d</code>, <code>-e/--ext</code> (쉼표/반복), <code>--type-class</code>, <code>-g</code> (글롭), <code>-r</code> (정규식), <code>-s</code> (대소문자 구분), <code>-d/--max-depth</code>, <code>--changed-within DUR</code>, <code>--min-size</code>, <code>--max-size</code>, <code>--tree</code>, <code>--dirs</code>, <code>--limit N</code>, <code>--meta</code>, <code>--no-index</code>, <code>--trust-index</code>, <code>--index-dir</code>, <code>--hidden</code>, <code>--no-ignore</code>, <code>-j</code>, <code>--json</code>, <code>--stats</code></td></tr><tr><td><code>lancet outline [PATH]</code></td><td><code>-d/--max-depth</code>, <code>-e/--ext</code>, <code>--limit N</code>, <code>--hidden</code>, <code>--no-ignore</code>, <code>-j</code>, <code>--ocr</code>, <code>--json</code></td></tr><tr><td><code>lancet refs &lt;SYMBOL&gt; [PATH]</code></td><td><code>--rank</code>, <code>--kind KIND,...</code> (<code>--rank</code> 필요), <code>-l/--lang</code>, <code>-e/--ext</code>, <code>--path GLOB</code>, <code>--all-files</code>, <code>--limit N</code>, <code>--no-index</code>, <code>--trust-index</code>, <code>--index-dir</code>, <code>--hidden</code>, <code>--no-ignore</code>, <code>-j</code>, <code>--json</code>, <code>--stats</code></td></tr><tr><td><code>lancet read &lt;TARGET&gt;</code></td><td>인라인 <code>file:10-50</code> / <code>zip!entry</code>, <code>-l/--lines</code>, <code>-s/--symbol</code>, <code>-p/--page</code>, <code>--sheet</code>, <code>--rows</code>, <code>--cols</code>, <code>-e/--entry</code>, <code>--budget-tokens</code>, <code>--raw</code>, <code>--ocr</code>, <code>--json</code></td></tr></tbody></table></div>
 
-lancet fd [PATTERN] [PATH] [-p PATTERN] [-t f|d] [-e EXT] [--type-class CLASS] [-g | -r] [-s]
-                           [-d DEPTH] [--changed-within DUR] [--min-size S] [--max-size S]
-                           [--tree] [--dirs] [--limit N] [--meta]
-                           [--no-index | --trust-index] [--index-dir DIR] [--json] [--stats]
+<h2 id="cmd-mutate">lancet ast · edit · patch · rename · index · mcp<a class="heading-anchor" href="#cmd-mutate" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>하위 명령</th><th>플래그 및 인자</th></tr></thead><tbody><tr><td><code>lancet ast &lt;PATTERN&gt; [PATH]</code></td><td><code>-l/--lang</code>, <code>-r/--rewrite TEMPLATE</code>, <code>--apply</code>, <code>--path GLOB</code> (반복), <code>--limit N</code>, <code>--no-index</code>, <code>--trust-index</code>, <code>--index-dir</code>, <code>--hidden</code>, <code>--no-ignore</code>, <code>-j</code>, <code>--json</code>, <code>--stats</code></td></tr><tr><td><code>lancet edit &lt;PATH&gt;</code></td><td>대상 (택1): <code>--lines</code>, <code>--symbol</code>, <code>--find [--all]</code>, 또는 <code>--edits FILE|-</code> · 연산 (택1): <code>--with</code>, <code>--with-file FILE|-</code>, <code>--delete</code>, <code>--insert-before</code>, <code>--insert-after</code> · 안전: <code>--rev REV</code>, <code>--apply</code>, <code>--allow-syntax-errors</code>, <code>--json</code></td></tr><tr><td><code>lancet patch [DIFF|-]</code></td><td><code>--root DIR</code> (<code>.</code>), <code>-p/--strip N</code> (<code>1</code>), <code>--apply</code>, <code>--allow-syntax-errors</code>, <code>--json</code></td></tr><tr><td><code>lancet rename &lt;FILE:LINE[:COL]&gt; &lt;OLD&gt; &lt;NEW&gt;</code></td><td><code>--rev REV</code>, <code>--apply</code>, <code>--json</code></td></tr><tr><td><code>lancet index [PATH]</code> · <code>status [PATH]</code></td><td><code>--rebuild</code> | <code>--compact</code>, <code>--index-dir</code>, <code>--ocr</code>, <code>--hidden</code>, <code>--no-ignore</code>, <code>-j</code></td></tr><tr><td><code>lancet mcp</code></td><td><code>--root DIR</code> (<code>.</code>), <code>--read-only</code>, <code>--trust-index</code>, <code>-j/--threads</code></td></tr></tbody></table></div>
 
-lancet ast &lt;PATTERN&gt; [PATH] [-l LANG] [-r TEMPLATE [--apply]] [--path GLOB] [--limit N]
-                            [--no-index | --trust-index] [--index-dir DIR] [--json] [--stats]
-
-lancet read &lt;TARGET&gt; [-l START:END] [-s SYMBOL] [-p PAGE] [--sheet S] [--rows R] [--cols C]
-                     [-e ENTRY] [--budget-tokens N] [--raw] [--ocr] [--json]
-
-lancet outline [PATH] [-d DEPTH] [-e EXT] [--limit N] [--hidden] [--no-ignore] [--ocr] [--json]
-
-lancet refs &lt;SYMBOL&gt; [PATH] [--rank [--kind KIND,...]] [-l LANG] [-e EXT] [--path GLOB]
-                            [--all-files] [--limit N] [--no-index | --trust-index] [--json] [--stats]
-
-lancet edit &lt;PATH&gt; (--lines RANGE | --symbol SYM | --find TEXT [--all] | --edits FILE)
-                   (--with TEXT | --with-file FILE | --delete | --insert-before TEXT | --insert-after TEXT)
-                   [--rev REV] [--apply] [--allow-syntax-errors] [--json]
-
-lancet patch [DIFF|-] [--root DIR] [-p N] [--apply] [--allow-syntax-errors] [--json]
-
-lancet rename &lt;FILE:LINE[:COL]&gt; &lt;OLD&gt; &lt;NEW&gt; [--rev REV] [--apply] [--json]
-
-lancet mcp [--root DIR] [--read-only] [--trust-index] [-j THREADS]
-
-lancet index [PATH] [--rebuild | --compact] [--index-dir DIR] [--ocr] [--hidden] [--no-ignore] [-j THREADS]
-lancet status [PATH] [--index-dir DIR]
-lancet parse &lt;QUERY&gt;
-lancet explain &lt;QUERY&gt; [PATH] [--index-dir DIR] [--no-index | --trust-index] [--hidden] [--no-ignore]
-lancet batch [PATH] (-q &lt;QUERY&gt;... [--name &lt;NAME&gt;...] | --queries-json &lt;JSON&gt;)
-                    [--no-index | --trust-index] [--index-dir DIR] [--ocr] [--json]</code></pre></div>
-
-<h2 id="rg-parity">lancet rg — ripgrep 호환성 표<a class="heading-anchor" href="#rg-parity" aria-label="Link to section">#</a></h2>
-<p><code>bench/rg_parity.py</code>의 68개 엣지 케이스 픽스처와 Linux 커널 전체 쿼리를 <code>ripgrep 15.2</code>와 바이트 단위로 대조했습니다.</p>
-
-<h3 id="rg-matching">패턴 &amp; 매칭<a class="heading-anchor" href="#rg-matching" aria-label="Link to section">#</a></h3>
-<div class="table-wrap"><table><thead><tr><th>플래그</th><th>의미</th><th>상태</th><th>비고</th></tr></thead><tbody><tr><td><code>-e</code>, <code>--regexp &lt;PAT&gt;</code></td><td>검색 패턴 (중복 지정 가능)</td><td><span class='tag-yes'>지원</span></td><td>선택(alternation)으로 결합</td></tr><tr><td><code>-f</code>, <code>--file &lt;FILE&gt;</code></td><td>파일에서 줄당 하나씩 패턴 읽기 (<code>-</code> stdin)</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>-F</code>, <code>--fixed-strings</code></td><td>리터럴 문자열로 취급</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>-i</code> / <code>-s</code> / <code>-S</code></td><td>대소문자 무시 / 구분 / 스마트</td><td><span class='tag-yes'>지원</span></td><td>마지막 플래그 우선; AST 기반 <code>-S</code>(<code>\W</code> 등은 무시 유지)</td></tr><tr><td><code>-w</code> / <code>-x</code> / <code>-v</code></td><td>단어 경계 / 줄 전체 / 반전 매치</td><td><span class='tag-yes'>지원</span></td><td><code>rg</code> 단어 경계 규칙과 동일</td></tr><tr><td><code>-U</code>, <code>--multiline-dotall</code></td><td>여러 줄 매치 및 <code>.</code>에 개행 허용</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>-P</code>, <code>--pcre2</code></td><td>PCRE2 전후방 탐색·역참조</td><td><span class='tag-no'>미지원</span></td><td>선형 시간과 건전한 트라이그램 컴파일 보장을 위해 Rust <code>regex</code>만 사용</td></tr></tbody></table></div>
-
-<h3 id="rg-output">출력 &amp; 형식<a class="heading-anchor" href="#rg-output" aria-label="Link to section">#</a></h3>
-<div class="table-wrap"><table><thead><tr><th>플래그</th><th>의미</th><th>상태</th><th>비고</th></tr></thead><tbody><tr><td><code>-o</code>, <code>-c</code>, <code>--count-matches</code></td><td>매치 부분만 / 매치 줄 수 / 총 매치 수</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>-l</code>, <code>--files-without-match</code>, <code>-q</code></td><td>일치/미일치 파일 경로, 무출력</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>-m &lt;N&gt;</code>, <code>-A</code>/<code>-B</code>/<code>-C</code></td><td>파일당 최대 개수 및 전후 문맥</td><td><span class='tag-yes'>지원</span></td><td><code>--</code> 구분선 포함</td></tr><tr><td><code>--passthru</code></td><td>일치·비일치 줄 모두 출력</td><td><span class='tag-yes'>지원</span></td><td><code>--passthru</code>/<code>-A</code>/<code>-B</code>/<code>-C</code> 중 마지막 옵션 우선</td></tr><tr><td><code>-n</code> / <code>-N</code></td><td>줄 번호 표시 / 숨기기</td><td><span class='tag-yes'>지원</span></td><td>파이프 시에도 <strong>기본 ON</strong></td></tr><tr><td><code>-H</code> / <code>-I</code>, <code>--column</code>, <code>--vimgrep</code></td><td>파일명 제어, 열 번호, vimgrep</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>--json</code>, <code>-0</code>, <code>-r &lt;TEXT&gt;</code></td><td>rg JSON Lines, NUL 구분, <code>$1</code> 치환</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>--color &lt;WHEN&gt;</code></td><td><code>auto</code>, <code>always</code>, <code>ansi</code>, <code>never</code></td><td><span class='tag-yes'>지원</span></td><td>기본 <code>auto</code>는 TTY와 <code>NO_COLOR</code>/<code>TERM=dumb</code> 준수</td></tr><tr><td><code>--sort</code>, <code>--no-heading</code></td><td>정렬, 헤더 끄기</td><td>No-op</td><td>항상 경로순 정렬; 헤더 사용 안 함</td></tr></tbody></table></div>
-
-<h3 id="rg-files">파일 순회 &amp; Lancet 확장<a class="heading-anchor" href="#rg-files" aria-label="Link to section">#</a></h3>
-<div class="table-wrap"><table><thead><tr><th>플래그</th><th>의미</th><th>상태</th><th>비고</th></tr></thead><tbody><tr><td><code>-g</code>, <code>--iglob</code>, <code>-t</code>, <code>-T</code>, <code>--type-list</code></td><td>글롭 및 파일 타입 필터</td><td><span class='tag-yes'>지원</span></td><td>긍정 글롭은 ignore/hidden을 덮어씀</td></tr><tr><td><code>--type-add &lt;SPEC&gt;</code></td><td>사용자 타입 정의 (<code>name:glob</code> / <code>include:</code>)</td><td><span class='tag-yes'>지원</span></td><td><code>-t</code>, <code>-T</code>, <code>--files</code>, <code>--type-list</code> 반영</td></tr><tr><td><code>-u</code> / <code>-uu</code> / <code>-uuu</code>, <code>-.</code>, <code>--no-ignore</code></td><td>제한 해제 및 숨김·ignore 옵션</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>-L</code>, <code>--max-depth</code>, <code>--max-filesize</code></td><td>심볼릭 링크 추적, 깊이, 크기 (K/M/G)</td><td><span class='tag-yes'>지원</span></td><td><code>--trust-index -L</code>은 라이브 순회로 폴백</td></tr><tr><td><code>--files</code>, <code>-j</code></td><td>검색 대상 파일 나열, 스레드 수</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>--docs</code></td><td>PDF·오피스·HWP·압축파일 인프로세스 검색</td><td><span class='tag-ext'>확장</span></td><td>기본 OFF(<code>rg</code> 호환 출력 유지)</td></tr><tr><td><code>--no-index</code>, <code>--trust-index</code>, <code>--index-dir</code></td><td><code>.lancet</code> 인덱스 동작 제어</td><td><span class='tag-ext'>확장</span></td><td>기본값은 항상 최신인 <code>auto</code> 모드</td></tr><tr><td><code>--pre &lt;CMD&gt;</code></td><td>외부 전처리기</td><td><span class='tag-no'>미지원</span></td><td>인프로세스 <code>--docs</code>로 대체</td></tr></tbody></table></div>
-
-      <div class="pager"><a class="pager-card prev" href="../concepts/architecture-and-benchmarks.html"><small>← 이전</small><b>아키텍처 & 벤치마크</b></a><a class="pager-card next" href="query-and-ast.html"><small>다음 →</small><b>LQL 문법 & AST 24개 언어</b></a></div>
+      <div class="pager"><a class="pager-card prev" href="../concepts/benchmarks.html"><small>← 이전</small><b>벤치마크 & 경쟁 비교</b></a><a class="pager-card next" href="rg-parity.html"><small>다음 →</small><b>lancet rg 호환성 표</b></a></div>
       <div class="meta-foot">
         <span>MIT OR Apache-2.0 · Rust 단일 바이너리</span>
-        <a href="https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md" target="_blank" rel="noopener">GitHub에서 소스 보기 →</a>
+        <a href="https://github.com/CREE1116/lancet/blob/main/src/main.rs" target="_blank" rel="noopener">GitHub에서 소스 보기 →</a>
       </div>
     </article>
   </main>

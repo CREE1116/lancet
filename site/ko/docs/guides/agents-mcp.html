@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI 에이전트 연동: 내장 MCP 서버 & 공식 스킬 — lancet 문서</title>
-<meta name="description" content="Claude Code, Cursor, Claude Desktop, Antigravity, Codex용 lancet mcp 설정과 skills/lancet 설치.">
+<title>AI 에이전트, 내장 MCP 서버 & 공식 스킬 — lancet 문서</title>
+<meta name="description" content="Claude Code, Cursor, Codex, Antigravity, Claude Desktop용 lancet mcp 설정과 skills/lancet 설치.">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
@@ -16,8 +16,8 @@
 <meta property="og:site_name" content="lancet">
 <meta property="og:locale" content="ko_KR">
 <meta property="og:url" content="https://cree1116.github.io/lancet/ko/docs/guides/agents-mcp.html">
-<meta property="og:title" content="AI 에이전트 연동: 내장 MCP 서버 & 공식 스킬 — lancet 문서">
-<meta property="og:description" content="Claude Code, Cursor, Claude Desktop, Antigravity, Codex용 lancet mcp 설정과 skills/lancet 설치.">
+<meta property="og:title" content="AI 에이전트, 내장 MCP 서버 & 공식 스킬 — lancet 문서">
+<meta property="og:description" content="Claude Code, Cursor, Codex, Antigravity, Claude Desktop용 lancet mcp 설정과 skills/lancet 설치.">
 <meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image-ko.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
@@ -55,32 +55,30 @@
 
 <div class="doc-shell">
   <aside class="doc-sidebar" aria-label="Documentation navigation">
-    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="../index.html">소개 · 설치 · 치트시트</a></li><li><a href="../migration.html">rg·fd·sg·sed에서 전환</a></li></ul></div><div class="nav-group"><div class="nav-group-title">실전 가이드</div><ul class="nav-list"><li><a href="explore.html">낯선 코드베이스 탐색</a></li><li><a href="editing.html">안전한 편집·패치·이름 변경</a></li><li><a href="documents.html">PDF·오피스·HWP·압축파일</a></li><li><a href="agents-mcp.html" class="active">AI 에이전트·MCP·공식 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">핵심 개념</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">인덱스 & 최신성 모델</a></li><li><a href="../concepts/architecture-and-benchmarks.html">아키텍처 & 벤치마크</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="../reference/cli.html">CLI & lancet rg 레퍼런스</a></li><li><a href="../reference/query-and-ast.html">LQL 문법 & AST 24개 언어</a></li><li><a href="../reference/json-and-mcp.html">JSON 스키마 · MCP · 문제 해결</a></li></ul></div>
+    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="../index.html">설치 · 빠른 시작</a></li><li><a href="../migration.html">rg·fd·sg에서 전환</a></li><li><a href="../filtering.html">무시 규칙 · 글롭 · 타입</a></li></ul></div><div class="nav-group"><div class="nav-group-title">탐색과 검색</div><ul class="nav-list"><li><a href="explore.html">파일 탐색 · 아웃라인 · 랭킹</a></li><li><a href="search.html">텍스트 검색 · LQL · 배치</a></li><li><a href="ast.html">구조적 AST 검색 · 치환</a></li><li><a href="read-and-documents.html">정밀 읽기 · PDF · HWP</a></li></ul></div><div class="nav-group"><div class="nav-group-title">편집과 에이전트</div><ul class="nav-list"><li><a href="edit.html">안전한 편집 & CAS</a></li><li><a href="patch.html">원자적 다중 파일 패치</a></li><li><a href="rename.html">로컬 스코프 이름 변경</a></li><li><a href="agents-mcp.html" class="active">AI 에이전트 · MCP · 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">아키텍처와 내부 구조</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">인덱스(LANCET04) & 최신성</a></li><li><a href="../concepts/write-safety.html">쓰기 안전성 & 파일 정체성</a></li><li><a href="../concepts/benchmarks.html">벤치마크 & 경쟁 비교</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="../reference/cli.html">CLI 명령 · 종료 코드</a></li><li><a href="../reference/rg-parity.html">lancet rg 호환성 표</a></li><li><a href="../reference/lql-and-ast.html">LQL 문법 · AST 24개 언어</a></li><li><a href="../reference/json-and-mcp.html">JSON 스키마 · MCP 11개 도구</a></li><li><a href="../reference/troubleshooting.html">문제 해결 · 오류 복구</a></li></ul></div>
   </aside>
 
   <main class="doc-main">
     <article class="doc-article">
-      <div class="crumb">실전 가이드</div>
-      <h1>AI 에이전트 연동: 내장 MCP 서버 & 공식 스킬</h1>
-      <p class="lede">줄바꿈 구분 stdio JSON-RPC 서버로 11개 도구를 연결하거나 공식 스킬을 두 줄로 설치하세요.</p>
+      <div class="crumb">편집과 에이전트</div>
+      <h1>AI 에이전트, 내장 MCP 서버 & 공식 스킬</h1>
+      <p class="lede">--read-only, --root 지원 줄바꿈 JSON-RPC stdio 서버로 11개 도구를 연결하고 공식 스킬을 설치합니다.</p>
       
-<p>AI 코딩 에이전트는 셸 CLI로 직접 쓰거나, 의존성 없는 내장 <strong>Model Context Protocol (MCP)</strong> stdio 서버와 <a href="https://github.com/CREE1116/lancet/tree/main/skills/lancet"><code>skills/lancet/</code></a> 공식 스킬 패키지로 연동해 쓸 수 있습니다.</p>
+<p>AI 코딩 에이전트는 셸 CLI는 물론 의존성 없는 내장 stdio <strong>Model Context Protocol(MCP)</strong> 서버(<code>lancet mcp</code>)와 크로스 에이전트 <strong>공식 스킬</strong>(<code>skills/lancet/</code>)로 Lancet의 11개 엔진을 직접 호출할 수 있습니다.</p>
 
-<h2 id="mcp-server">내장 MCP 서버 실행 (lancet mcp)<a class="heading-anchor" href="#mcp-server" aria-label="Link to section">#</a></h2>
-<p><code>lancet mcp</code>는 <code>stdin</code>/<code>stdout</code> 위에서 줄바꿈 구분 JSON-RPC 2.0(MCP 버전 <code>2025-03-26</code> / <code>2024-11-05</code>)을 구사하며, 별도 데몬 없이 Lancet의 Rust 엔진을 인프로세스로 즉시 호출합니다.</p>
-<div class="table-wrap"><table><thead><tr><th>플래그</th><th>기본값</th><th>동작</th></tr></thead><tbody><tr><td><code>--root &lt;DIR&gt;</code></td><td><code>.</code></td><td>도구 호출의 상대 경로 해석 기준 디렉터리 (chroot/샌드박스가 <strong>아님</strong>; CLI처럼 절대 경로나 <code>..</code>도 허용됨)</td></tr><tr><td><code>--read-only</code></td><td><code>false</code></td><td><code>tools/list</code>에서 <code>lancet_edit</code>, <code>lancet_patch</code>, <code>lancet_rename</code>을 숨기고 쓰기(<code>lancet_ast</code> <code>apply</code>, 인덱스 변경)를 거부</td></tr><tr><td><code>--trust-index</code></td><td><code>false</code></td><td>개별 호출에서 덮어쓰지 않는 한 기본 <code>index_mode</code>를 <code>trust</code>로 설정</td></tr><tr><td><code>-j, --threads &lt;NUM&gt;</code></td><td>CPU 코어 수</td><td>Rayon 워커 스레드 수</td></tr></tbody></table></div>
+<h2 id="mcp-flags">lancet mcp 실행 플래그<a class="heading-anchor" href="#mcp-flags" aria-label="Link to section">#</a></h2>
+<p><code>lancet mcp</code>는 <code>stdin</code>/<code>stdout</code> 위에서 줄바꿈 구분 JSON-RPC 2.0(프로토콜 <code>2025-03-26</code>, <code>2024-11-05</code>)으로 동작하며 별도 데몬 없이 인프로세스로 즉시 응답합니다.</p>
+<div class="table-wrap"><table><thead><tr><th>플래그</th><th>기본값</th><th>정확한 동작</th></tr></thead><tbody><tr><td><code>--root &lt;DIR&gt;</code></td><td><code>.</code></td><td>도구 호출의 상대 경로 기준 디렉터리 (chroot/샌드박스가 <strong>아님</strong>; CLI처럼 절대 경로나 <code>..</code> 경로도 허용됨)</td></tr><tr><td><code>--read-only</code></td><td><code>false</code></td><td><code>tools/list</code>에서 <code>lancet_edit</code>, <code>lancet_patch</code>, <code>lancet_rename</code>을 제거하고 쓰기(<code>lancet_ast</code> <code>apply</code>, 인덱스 변경)를 거부</td></tr><tr><td><code>--trust-index</code></td><td><code>false</code></td><td>개별 호출에서 지정하지 않는 한 기본 <code>index_mode</code>를 <code>trust</code>로 설정</td></tr><tr><td><code>-j, --threads &lt;NUM&gt;</code></td><td>CPU 코어 수</td><td>Rayon 워커 스레드 수</td></tr></tbody></table></div>
 
-<h2 id="client-configs">클라이언트별 설정 예시<a class="heading-anchor" href="#client-configs" aria-label="Link to section">#</a></h2>
-<p>복사해서 바로 쓸 수 있는 JSON 템플릿은 <a href="https://github.com/CREE1116/lancet/blob/main/skills/lancet/references/mcp-config.json"><code>skills/lancet/references/mcp-config.json</code></a>에도 있습니다.</p>
-
-<h3 id="cfg-claude">Claude Code<a class="heading-anchor" href="#cfg-claude" aria-label="Link to section">#</a></h3>
-<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code># 기본 읽기·쓰기 모드
+<h2 id="client-configs">클라이언트별 설정<a class="heading-anchor" href="#client-configs" aria-label="Link to section">#</a></h2>
+<p>전체 템플릿: <a href="https://github.com/CREE1116/lancet/blob/main/skills/lancet/references/mcp-config.json"><code>skills/lancet/references/mcp-config.json</code></a>.</p>
+<h3 id="claude-code">Claude Code<a class="heading-anchor" href="#claude-code" aria-label="Link to section">#</a></h3>
+<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code># 읽기 + 잠금 CAS 쓰기
 claude mcp add --transport stdio lancet -- lancet mcp --root .
 
-# 읽기 전용 탐색 모드
+# 읽기 전용 탐색 서버
 claude mcp add --transport stdio lancet -- lancet mcp --root . --read-only</code></pre></div>
-
-<h3 id="cfg-cursor">Cursor (.cursor/mcp.json 또는 ~/.cursor/mcp.json)<a class="heading-anchor" href="#cfg-cursor" aria-label="Link to section">#</a></h3>
+<h3 id="cursor">Cursor (.cursor/mcp.json 또는 ~/.cursor/mcp.json)<a class="heading-anchor" href="#cursor" aria-label="Link to section">#</a></h3>
 <div class="doc-code"><div class="doc-code-head"><span>JSON</span><button class="copy-btn" type="button">복사</button></div><pre><code>{
   &quot;mcpServers&quot;: {
     &quot;lancet&quot;: {
@@ -89,9 +87,8 @@ claude mcp add --transport stdio lancet -- lancet mcp --root . --read-only</code
     }
   }
 }</code></pre></div>
-
-<h3 id="cfg-desktop">Claude Desktop / Windsurf / Antigravity<a class="heading-anchor" href="#cfg-desktop" aria-label="Link to section">#</a></h3>
-<p>데스크톱 앱이 저장소 밖에서 실행되는 경우 절대 경로로 <code>--root</code>를 지정하세요.</p>
+<h3 id="desktop-agy">Claude Desktop / Windsurf / Antigravity<a class="heading-anchor" href="#desktop-agy" aria-label="Link to section">#</a></h3>
+<p>데스크톱 클라이언트가 저장소 루트를 CWD로 두지 않고 실행한다면 <code>--root</code>에 절대 경로를 넘기세요:</p>
 <div class="doc-code"><div class="doc-code-head"><span>JSON</span><button class="copy-btn" type="button">복사</button></div><pre><code>{
   &quot;mcpServers&quot;: {
     &quot;lancet&quot;: {
@@ -100,33 +97,31 @@ claude mcp add --transport stdio lancet -- lancet mcp --root . --read-only</code
     }
   }
 }</code></pre></div>
-
-<h3 id="cfg-codex">OpenAI Codex (~/.codex/config.toml)<a class="heading-anchor" href="#cfg-codex" aria-label="Link to section">#</a></h3>
+<h3 id="codex">OpenAI Codex (~/.codex/config.toml)<a class="heading-anchor" href="#codex" aria-label="Link to section">#</a></h3>
 <div class="doc-code"><div class="doc-code-head"><span>TOML</span><button class="copy-btn" type="button">복사</button></div><pre><code>[mcp_servers.lancet]
 command = &quot;lancet&quot;
 args = [&quot;mcp&quot;, &quot;--root&quot;, &quot;.&quot;]</code></pre></div>
 
-<h2 id="official-skill">공식 에이전트 스킬 설치<a class="heading-anchor" href="#official-skill" aria-label="Link to section">#</a></h2>
-<p><a href="https://github.com/CREE1116/lancet/tree/main/skills/lancet"><code>skills/lancet/</code></a> 패키지는 에이전트에게 LQL 문법, 24개 AST 언어 별칭, <code>rev</code> 기반 CAS 편집 흐름, 기존 도구 대비 선택 기준을 알려 줍니다.</p>
+<h2 id="skill-install">공식 에이전트 스킬 설치<a class="heading-anchor" href="#skill-install" aria-label="Link to section">#</a></h2>
+<p><a href="https://github.com/CREE1116/lancet/tree/main/skills/lancet"><code>skills/lancet/</code></a>는 <code>SKILL.md</code>와 LQL·24개 AST 언어·edit/patch/rename CAS 규칙·MCP 설정용 <code>references/</code> 문서를 포함합니다.</p>
 <div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code># 프로젝트 로컬 (.agents 공통 규약)
 mkdir -p .agents/skills &amp;&amp; ln -s &quot;$(pwd)/skills/lancet&quot; .agents/skills/lancet
 
-# Claude Code / Codex / Antigravity 개인 설정
+# 개인 전역 설치 (Claude Code / Codex / Antigravity)
 mkdir -p ~/.claude/skills &amp;&amp; cp -R skills/lancet ~/.claude/skills/lancet
 mkdir -p ~/.codex/skills  &amp;&amp; cp -R skills/lancet ~/.codex/skills/lancet
 mkdir -p ~/.gemini/config/skills &amp;&amp; cp -R skills/lancet ~/.gemini/config/skills/lancet</code></pre></div>
 
-<h2 id="tools-overview">11개 도구 &amp; 내장 프롬프트 2종<a class="heading-anchor" href="#tools-overview" aria-label="Link to section">#</a></h2>
-<p>모든 조회·검색 도구는 결과 0건을 정상적인 <code>empty</code>(<code>isError: false</code>)로 처리하며, 쓰기 도구는 기본값이 <code>apply: false</code>(dry-run unified diff)입니다. 전체 파라미터와 스키마는 <a href="../reference/json-and-mcp.html#mcp-tools">JSON · MCP 명세</a>를 참고하세요.</p>
+<h2 id="prompts-notes">내장 프롬프트 &amp; AGENTS.md 규칙<a class="heading-anchor" href="#prompts-notes" aria-label="Link to section">#</a></h2>
 <ul>
-  <li><strong>탐색·검색:</strong> <code>lancet_fd</code>, <code>lancet_outline</code>, <code>lancet_search</code>, <code>lancet_rg</code>, <code>lancet_refs</code>(<code>rank: true</code> 포함), <code>lancet_ast</code>, <code>lancet_read</code>.</li>
-  <li><strong>안전한 수정:</strong> <code>lancet_edit</code>, <code>lancet_patch</code>, <code>lancet_rename</code>, 그리고 <code>apply: true</code>를 준 <code>lancet_ast</code>.</li>
-  <li><strong>인덱스 관리:</strong> <code>lancet_index</code>(<code>status</code>, <code>sync</code>, <code>rebuild</code>, <code>compact</code>).</li>
-  <li><strong>내장 프롬프트:</strong> <code>prompts/list</code>의 <code>lancet-explore</code>, <code>lancet-safe-edit</code>.</li>
+  <li><strong><code>prompts/list</code>:</strong> <code>lancet-explore</code>(<code>goal</code> 인자)와 <code>lancet-safe-edit</code>(<code>target</code> 인자) 제공.</li>
+  <li><strong>0건 매치 규칙:</strong> 조회·검색 도구는 <code>status: "empty"</code>일 때도 <code>isError: false</code>를 반환합니다.</li>
+  <li><strong>줄 경계 바이트 상한:</strong> <code>lancet_rg</code>는 <code>max_output_bytes</code>(기본 <code>131072</code> B = 128 KiB, 허용 범위 <code>256..=4194304</code>)에 맞춰 줄 경계에서 깔끔히 자릅니다.</li>
 </ul>
-<div class="callout tip"><div class="callout-title">AGENTS.md / CLAUDE.md 한 줄 규칙</div><pre style='margin:6px 0 0;white-space:pre-wrap;font-size:12.5px'>탐색·검색·범위 읽기·CAS 편집(read --rev -&gt; edit --apply)에는 rg/fd/ast-grep/cat/sed 대신 lancet(lancet_* MCP 또는 CLI)을 우선 사용한다.</pre></div>
+<div class="doc-code"><div class="doc-code-head"><span>AGENTS.md / CLAUDE.md 규칙 예시</span><button class="copy-btn" type="button">복사</button></div><pre><code>rg/fd/ast-grep/cat/sed 대신 lancet(lancet_* MCP 또는 lancet CLI)을 우선 사용합니다.
+fd/outline으로 구조를 잡고 rg/search/refs/ast로 찾은 뒤, read로 rev를 확보해 edit/patch/rename --rev --apply로 수정합니다.</code></pre></div>
 
-      <div class="pager"><a class="pager-card prev" href="documents.html"><small>← 이전</small><b>PDF·오피스·HWP·압축파일</b></a><a class="pager-card next" href="../concepts/index-and-freshness.html"><small>다음 →</small><b>인덱스 & 최신성 모델</b></a></div>
+      <div class="pager"><a class="pager-card prev" href="rename.html"><small>← 이전</small><b>로컬 스코프 이름 변경</b></a><a class="pager-card next" href="../concepts/index-and-freshness.html"><small>다음 →</small><b>인덱스(LANCET04) & 최신성</b></a></div>
       <div class="meta-foot">
         <span>MIT OR Apache-2.0 · Rust 단일 바이너리</span>
         <a href="https://github.com/CREE1116/lancet/blob/main/docs/mcp.md" target="_blank" rel="noopener">GitHub에서 소스 보기 →</a>

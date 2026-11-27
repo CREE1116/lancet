@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>텍스트 검색: lancet rg, LQL & 다중 쿼리 배치 — lancet 문서</title>
+<meta name="description" content="lancet rg vs LQL 선택 기준, near/before/fuzzy/파이프 실전 패턴, lancet batch, parse, explain.">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://cree1116.github.io/lancet/ko/docs/guides/search.html">
+<link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/guides/search.html">
+<link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/guides/search.html">
+<link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/guides/search.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="lancet">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:url" content="https://cree1116.github.io/lancet/ko/docs/guides/search.html">
+<meta property="og:title" content="텍스트 검색: lancet rg, LQL & 다중 쿼리 배치 — lancet 문서">
+<meta property="og:description" content="lancet rg vs LQL 선택 기준, near/before/fuzzy/파이프 실전 패턴, lancet batch, parse, explain.">
+<meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image-ko.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../../../assets/docs.css?v=1">
+</head>
+<body data-docs-root="../" data-search-url="../../../assets/docs-search.json">
+
+<header class="doc-header">
+  <div class="doc-header-in">
+    <button class="menu-btn" id="menu-btn" type="button" aria-label="문서 메뉴 열기" aria-expanded="false">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg>
+    </button>
+    <a class="doc-brand" href="../../index.html">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 27 L24 6 l3 3 L8 28 Z" fill="currentColor" style="color:var(--accent)"/></svg>
+      lancet
+    </a>
+    <a class="doc-badge" href="../index.html">문서</a>
+    <button class="search-trigger" id="search-trigger" type="button">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <span>문서 검색…</span>
+      <kbd>/</kbd>
+    </button>
+    <nav class="header-links" aria-label="Primary">
+      <a href="../../index.html" class="hide-sm">홈</a>
+      <a href="../../../docs/guides/search.html" hreflang="en" lang="en">English</a>
+      <a class="header-gh" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span class="hide-sm">GitHub</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+
+<div class="doc-shell">
+  <aside class="doc-sidebar" aria-label="Documentation navigation">
+    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="../index.html">설치 · 빠른 시작</a></li><li><a href="../migration.html">rg·fd·sg에서 전환</a></li><li><a href="../filtering.html">무시 규칙 · 글롭 · 타입</a></li></ul></div><div class="nav-group"><div class="nav-group-title">탐색과 검색</div><ul class="nav-list"><li><a href="explore.html">파일 탐색 · 아웃라인 · 랭킹</a></li><li><a href="search.html" class="active">텍스트 검색 · LQL · 배치</a></li><li><a href="ast.html">구조적 AST 검색 · 치환</a></li><li><a href="read-and-documents.html">정밀 읽기 · PDF · HWP</a></li></ul></div><div class="nav-group"><div class="nav-group-title">편집과 에이전트</div><ul class="nav-list"><li><a href="edit.html">안전한 편집 & CAS</a></li><li><a href="patch.html">원자적 다중 파일 패치</a></li><li><a href="rename.html">로컬 스코프 이름 변경</a></li><li><a href="agents-mcp.html">AI 에이전트 · MCP · 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">아키텍처와 내부 구조</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">인덱스(LANCET04) & 최신성</a></li><li><a href="../concepts/write-safety.html">쓰기 안전성 & 파일 정체성</a></li><li><a href="../concepts/benchmarks.html">벤치마크 & 경쟁 비교</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="../reference/cli.html">CLI 명령 · 종료 코드</a></li><li><a href="../reference/rg-parity.html">lancet rg 호환성 표</a></li><li><a href="../reference/lql-and-ast.html">LQL 문법 · AST 24개 언어</a></li><li><a href="../reference/json-and-mcp.html">JSON 스키마 · MCP 11개 도구</a></li><li><a href="../reference/troubleshooting.html">문제 해결 · 오류 복구</a></li></ul></div>
+  </aside>
+
+  <main class="doc-main">
+    <article class="doc-article">
+      <div class="crumb">탐색과 검색</div>
+      <h1>텍스트 검색: lancet rg, LQL & 다중 쿼리 배치</h1>
+      <p class="lede">논리·근접·퍼지·AST 스코프 질의와 한 번의 워크를 공유하는 다중 쿼리 배치 실행.</p>
+      
+<p>Lancet은 같은 트라이그램 인덱스와 평가기 위에서 두 가지 검색 문법을 제공합니다: 익숙한 정규식·UNIX 플래그를 쓰는 <code>lancet rg</code>와 논리·근접·퍼지·AST 스코프·파이프를 조합하는 <strong>LQL</strong>입니다.</p>
+
+<h2 id="rg-vs-lql">lancet rg vs LQL vs lancet batch 선택 기준<a class="heading-anchor" href="#rg-vs-lql" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>목적</th><th>선택</th><th>이유</th></tr></thead><tbody><tr><td>일반 정규식, 문맥 줄(<code>-A/-B/-C</code>), <code>--vimgrep</code>, <code>-c</code>, <code>-r</code></td><td><code>lancet rg</code></td><td>ripgrep 플래그 그대로, 학습 비용 0</td></tr><tr><td>다중 항 <code>AND</code>/<code>OR</code>/<code>NOT</code>, <code>near()</code>, <code>fuzzy()</code>, <code>in function</code>, <code>| budget</code></td><td><code>lancet '&lt;LQL&gt;'</code></td><td>복합 질의를 1패스로 처리 + 토큰 예산 제어</td></tr><tr><td>같은 저장소에 LQL 쿼리 여러 개 연속 실행</td><td><code>lancet batch</code></td><td>인덱스 열기 및 디렉터리 순회를 1회로 공유</td></tr></tbody></table></div>
+
+<h2 id="lql-recipes">실전 LQL 쿼리 레시피<a class="heading-anchor" href="#lql-recipes" aria-label="Link to section">#</a></h2>
+<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code># 1. 한 줄 안에서의 불리언 논리 (공백은 암묵적 AND, OR/NOT 명시)
+lancet &#x27;(&quot;OOM&quot; OR &quot;out of memory&quot;) NOT &quot;CPU&quot; in line&#x27; src/
+
+# 2. Tree-sitter 함수 내부에서의 토큰 근접성 + 부모 함수 전체 펼치기
+lancet &#x27;near(&quot;retry&quot;, &quot;backoff&quot;, 25) in function | expand parent | limit 8&#x27; src/
+
+# 3. 순서 있는 근접 (A 뒤에 15토큰 이내 B 등장)
+lancet &#x27;before(&quot;lock&quot;, &quot;write_atomic&quot;, 15) in function&#x27; src/
+
+# 4. 오타 허용 검색 (레벤슈타인 거리 k &lt;= 3, q-gram 인덱스 가속)
+lancet &#x27;fuzzy(&quot;idempotnt&quot;, 2) | limit 10&#x27; src/
+
+# 5. 검색 결과에 함께 많이 나온 키워드 상위 15개 추출 (쿼리 구체화용)
+lancet &#x27;&quot;trigram&quot; in ext:rs | terms top:15&#x27; src/
+
+# 6. 추정 토큰 예산으로 출력 크기 하드 캡
+lancet &#x27;&quot;SearchOptions&quot; in ext:rs | expand context:3 | budget tokens:1500&#x27; src/</code></pre></div>
+
+<h2 id="batch-queries">한 번의 워크로 여러 쿼리 실행 (lancet batch)<a class="heading-anchor" href="#batch-queries" aria-label="Link to section">#</a></h2>
+<p>에이전트가 관련 검색을 3~5회 연달아 돌릴 때는 <code>lancet batch</code>로 인덱스와 디렉터리 목록을 메모리에 공유하세요:</p>
+<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code># 반복 가능한 -q / --name 플래그
+lancet batch src \
+  -q &#x27;&quot;Conflict&quot; in function&#x27; --name conflicts \
+  -q &#x27;near(&quot;mtime&quot;, &quot;ctime&quot;, 20)&#x27; --name freshness \
+  -q &#x27;fuzzy(&quot;compaction&quot;, 1) | files&#x27; --name compact
+
+# JSON 객체 또는 배열 직접 전달
+lancet batch src --queries-json &#x27;{&quot;errors&quot;: &quot;Status::Unsupported&quot;, &quot;locks&quot;: &quot;lock_shared OR lock()&quot;}&#x27;</code></pre></div>
+
+<h2 id="debug-query">쿼리 계획 점검 (lancet parse &amp; lancet explain)<a class="heading-anchor" href="#debug-query" aria-label="Link to section">#</a></h2>
+<p>대형 저장소에 쿼리를 날리기 전에 <code>parse</code>로 정규화된 정규식을 보고, <code>explain</code>으로 추출된 트라이그램과 인덱스 후보 비율을 확인하세요:</p>
+<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code>lancet parse &#x27;(&quot;alpha&quot; OR &quot;beta&quot;) NOT NOT &quot;gamma&quot; in line | limit 5&#x27;
+lancet explain &#x27;near(&quot;gradient&quot;, &quot;clip&quot;, 30)&#x27; ./repo</code></pre></div>
+<p><code>explain</code>은 <code>trigram_req</code>, <code>files_considered</code>, <code>index_candidates</code>, <code>stale_files</code>, <code>selectivity_pct</code>를 출력해 풀스캔 폴백 여부를 즉시 보여 줍니다.</p>
+
+      <div class="pager"><a class="pager-card prev" href="explore.html"><small>← 이전</small><b>파일 탐색 · 아웃라인 · 랭킹</b></a><a class="pager-card next" href="ast.html"><small>다음 →</small><b>구조적 AST 검색 · 치환</b></a></div>
+      <div class="meta-foot">
+        <span>MIT OR Apache-2.0 · Rust 단일 바이너리</span>
+        <a href="https://github.com/CREE1116/lancet/blob/main/docs/grammar.md" target="_blank" rel="noopener">GitHub에서 소스 보기 →</a>
+      </div>
+    </article>
+  </main>
+
+  <aside class="doc-toc" aria-label="이 페이지 목차">
+    <div class="toc-title">이 페이지 목차</div>
+    <ul class="toc-list" id="doc-toc"></ul>
+  </aside>
+</div>
+
+<div class="search-modal" id="search-modal" role="dialog" aria-modal="true" aria-label="문서 검색…" hidden>
+  <div class="search-panel">
+    <div class="search-input-row">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <input id="search-input" type="search" placeholder="문서 검색…" autocomplete="off" spellcheck="false">
+      <button class="search-esc" id="search-esc" type="button">Esc</button>
+    </div>
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../../../assets/docs-search.js?v=1"></script>
+<script src="../../../assets/docs.js?v=1"></script>
+</body>
+</html>

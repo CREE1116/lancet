@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lancet 공식 문서 — 소개 · 설치 · 치트시트 — lancet 문서</title>
-<meta name="description" content="Lancet 설치 방법, 60초 빠른 시작, 한 화면 CLI 치트시트 안내.">
+<title>Lancet 공식 문서 — 설치 · 빠른 시작 · 치트시트 — lancet 문서</title>
+<meta name="description" content="macOS, Linux, Windows 설치, 60초 워크스루, 15개 하위 명령 한 화면 치트시트.">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
@@ -16,8 +16,8 @@
 <meta property="og:site_name" content="lancet">
 <meta property="og:locale" content="ko_KR">
 <meta property="og:url" content="https://cree1116.github.io/lancet/ko/docs/">
-<meta property="og:title" content="Lancet 공식 문서 — 소개 · 설치 · 치트시트 — lancet 문서">
-<meta property="og:description" content="Lancet 설치 방법, 60초 빠른 시작, 한 화면 CLI 치트시트 안내.">
+<meta property="og:title" content="Lancet 공식 문서 — 설치 · 빠른 시작 · 치트시트 — lancet 문서">
+<meta property="og:description" content="macOS, Linux, Windows 설치, 60초 워크스루, 15개 하위 명령 한 화면 치트시트.">
 <meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image-ko.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
@@ -55,58 +55,62 @@
 
 <div class="doc-shell">
   <aside class="doc-sidebar" aria-label="Documentation navigation">
-    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="index.html" class="active">소개 · 설치 · 치트시트</a></li><li><a href="migration.html">rg·fd·sg·sed에서 전환</a></li></ul></div><div class="nav-group"><div class="nav-group-title">실전 가이드</div><ul class="nav-list"><li><a href="guides/explore.html">낯선 코드베이스 탐색</a></li><li><a href="guides/editing.html">안전한 편집·패치·이름 변경</a></li><li><a href="guides/documents.html">PDF·오피스·HWP·압축파일</a></li><li><a href="guides/agents-mcp.html">AI 에이전트·MCP·공식 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">핵심 개념</div><ul class="nav-list"><li><a href="concepts/index-and-freshness.html">인덱스 & 최신성 모델</a></li><li><a href="concepts/architecture-and-benchmarks.html">아키텍처 & 벤치마크</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="reference/cli.html">CLI & lancet rg 레퍼런스</a></li><li><a href="reference/query-and-ast.html">LQL 문법 & AST 24개 언어</a></li><li><a href="reference/json-and-mcp.html">JSON 스키마 · MCP · 문제 해결</a></li></ul></div>
+    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="index.html" class="active">설치 · 빠른 시작</a></li><li><a href="migration.html">rg·fd·sg에서 전환</a></li><li><a href="filtering.html">무시 규칙 · 글롭 · 타입</a></li></ul></div><div class="nav-group"><div class="nav-group-title">탐색과 검색</div><ul class="nav-list"><li><a href="guides/explore.html">파일 탐색 · 아웃라인 · 랭킹</a></li><li><a href="guides/search.html">텍스트 검색 · LQL · 배치</a></li><li><a href="guides/ast.html">구조적 AST 검색 · 치환</a></li><li><a href="guides/read-and-documents.html">정밀 읽기 · PDF · HWP</a></li></ul></div><div class="nav-group"><div class="nav-group-title">편집과 에이전트</div><ul class="nav-list"><li><a href="guides/edit.html">안전한 편집 & CAS</a></li><li><a href="guides/patch.html">원자적 다중 파일 패치</a></li><li><a href="guides/rename.html">로컬 스코프 이름 변경</a></li><li><a href="guides/agents-mcp.html">AI 에이전트 · MCP · 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">아키텍처와 내부 구조</div><ul class="nav-list"><li><a href="concepts/index-and-freshness.html">인덱스(LANCET04) & 최신성</a></li><li><a href="concepts/write-safety.html">쓰기 안전성 & 파일 정체성</a></li><li><a href="concepts/benchmarks.html">벤치마크 & 경쟁 비교</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="reference/cli.html">CLI 명령 · 종료 코드</a></li><li><a href="reference/rg-parity.html">lancet rg 호환성 표</a></li><li><a href="reference/lql-and-ast.html">LQL 문법 · AST 24개 언어</a></li><li><a href="reference/json-and-mcp.html">JSON 스키마 · MCP 11개 도구</a></li><li><a href="reference/troubleshooting.html">문제 해결 · 오류 복구</a></li></ul></div>
   </aside>
 
   <main class="doc-main">
     <article class="doc-article">
       <div class="crumb">시작하기</div>
-      <h1>Lancet 공식 문서 — 소개 · 설치 · 치트시트</h1>
-      <p class="lede">하나의 좌표계 위에서, 인덱스로 훨씬 빠르게 코드와 문서를 찾고 읽고 고칩니다.</p>
+      <h1>Lancet 공식 문서 — 설치 · 빠른 시작 · 치트시트</h1>
+      <p class="lede">탐색, 트라이그램 인덱스 검색, 24개 언어 AST 치환, 정밀 읽기, CAS 편집을 하나의 Rust 바이너리로 통합합니다.</p>
       
-<p><strong>Lancet</strong>은 파일 탐색(<code>fd</code>), 트라이그램 인덱스 기반 검색(<code>rg</code> / LQL), 24개 언어 구조적 AST 검색·치환(<code>ast</code>), 범위·문서 정밀 열람(<code>read</code> / <code>outline</code>), compare-and-swap 편집(<code>edit</code> / <code>patch</code> / <code>rename</code>), 내장 stdio MCP 서버(<code>mcp</code>)를 바이너리 하나에 담은 Rust 도구입니다.</p>
+<p><strong>Lancet</strong>은 <code>rg</code> + <code>fd</code> + <code>ast-grep</code> + <code>cat</code> + <code>sed</code> + <code>patch</code> + <code>pdftotext</code>를 이어 쓰던 작업을 의존성 없는 단일 Rust 바이너리로 통합합니다. 모든 명령이 같은 <code>.lancet</code> 트라이그램 인덱스, 파일 필터 규칙, <strong>1부터 시작하는 줄 번호</strong>, <strong>XXH3-64 <code>rev</code></strong> 해시를 공유합니다.</p>
 
-<div class="callout tip"><div class="callout-title">시작 전 핵심 규칙 하나</div><p>모든 검색 결과, AST 매치, 읽기 조각, 편집 구간이 <strong>1부터 시작하는 동일한 줄 번호</strong>와 <strong>XXH3-64 <code>rev</code> 해시</strong>를 공유합니다. PDF, 오피스, HWP/HWPX, 압축 파일 내부조차 검색과 <code>read</code>가 같은 줄 번호를 씁니다.</p></div>
+<div class="callout tip"><div class="callout-title">한 줄로 요약한 설계 원칙</div><p>트라이그램 인덱스는 <em>열지 않을 파일만</em> 걸러냅니다. 후보 파일과 수정된 파일은 풀스캔과 완전히 동일한 평가기로 검증되며, 모든 쓰기는 배타적 잠금 기반 compare-and-swap으로 처리됩니다.</p></div>
 
-<h2 id="install">설치<a class="heading-anchor" href="#install" aria-label="Link to section">#</a></h2>
-<p>macOS, Linux(glibc 및 정적 musl), Windows용 사전 빌드 바이너리를 제공합니다. Rust 툴체인 없이 바로 설치할 수 있습니다.</p>
+<h2 id="install">설치 및 빌드 변형<a class="heading-anchor" href="#install" aria-label="Link to section">#</a></h2>
+<p>릴리스마다 macOS(Apple Silicon·Intel), Linux(x86_64/arm64 glibc 및 정적 musl), Windows용 사전 빌드 바이너리를 제공합니다.</p>
 
 <div class="doc-code"><div class="doc-code-head"><span>macOS / Linux (Homebrew)</span><button class="copy-btn" type="button">복사</button></div><pre><code>brew tap CREE1116/lancet https://github.com/CREE1116/lancet
 brew install CREE1116/lancet/lancet</code></pre></div>
-<div class="doc-code"><div class="doc-code-head"><span>macOS / Linux (릴리스 설치 스크립트)</span><button class="copy-btn" type="button">복사</button></div><pre><code>curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh</code></pre></div>
+<div class="doc-code"><div class="doc-code-head"><span>macOS / Linux (프리빌트 설치 스크립트)</span><button class="copy-btn" type="button">복사</button></div><pre><code>curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh</code></pre></div>
 <div class="doc-code"><div class="doc-code-head"><span>Windows (PowerShell)</span><button class="copy-btn" type="button">복사</button></div><pre><code>irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex</code></pre></div>
-<div class="doc-code"><div class="doc-code-head"><span>소스 빌드 (Cargo)</span><button class="copy-btn" type="button">복사</button></div><pre><code># 전체 바이너리 (~40 MB, Tree-sitter 24개 언어 + PDF/오피스/HWP 어댑터)
+<div class="doc-code"><div class="doc-code-head"><span>Cargo (전체 빌드 vs 코드 전용 경량 빌드)</span><button class="copy-btn" type="button">복사</button></div><pre><code># cargo-binstall로 바이너리 바로 받기
 cargo binstall --git https://github.com/CREE1116/lancet lancet
 
-# 텍스트·코드 전용 경량 바이너리 (~4 MB, 문서 어댑터 제외)
-cargo install --git https://github.com/CREE1116/lancet --no-default-features</code></pre></div>
+# 전체 기능 소스 빌드 (~40 MB: Tree-sitter 24개 문법 + PDF/오피스/HWP/압축 어댑터)
+cargo install --git https://github.com/CREE1116/lancet lancet
 
-<h2 id="walkthrough">60초 빠른 시작<a class="heading-anchor" href="#walkthrough" aria-label="Link to section">#</a></h2>
-<p><code>.lancet</code> 인덱스는 선택 사항입니다. 인덱스가 없어도 동일하게 동작하며, 기본 <code>auto</code> 모드는 매 쿼리마다 파일 변경 여부를 확인합니다.</p>
+# 경량 빌드 (~4 MB: 문서/압축 어댑터 제외, 순수 코드·텍스트 전용)
+cargo install --git https://github.com/CREE1116/lancet lancet --no-default-features</code></pre></div>
+
+<h2 id="walkthrough">60초 전체 흐름 따라하기<a class="heading-anchor" href="#walkthrough" aria-label="Link to section">#</a></h2>
+<p><code>.lancet</code> 인덱스는 선택 사항입니다. 인덱스가 없어도 모든 명령이 동작하며, 기본 <code>auto</code> 모드는 매 쿼리마다 디스크 메타데이터를 확인해 수정된 파일을 놓치지 않습니다.</p>
 <div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code># 1. 선택: 로컬 트라이그램 인덱스 한 번 빌드
 lancet index .
 
-# 2. 폴더 구조 먼저 확인 후 참조 빈도순 핵심 심볼 찾기
+# 2. 폴더 구조 파악 후 참조 수 순위로 핵심 심볼 찾기
 lancet fd --tree --dirs -d 2 .
 lancet refs --rank &#x27;*Service&#x27; --kind class src --limit 8
 
-# 3. ripgrep 문법 또는 LQL 논리·근접 쿼리로 검색
+# 3. ripgrep 플래그 또는 LQL 논리·근접 쿼리로 검색
 lancet rg -w execute_one src
 lancet &#x27;near(&quot;gradient&quot;, &quot;clip&quot;, 30) in function | expand parent&#x27;
 
-# 4. 필요한 함수/범위만 읽고 `rev` 확보
+# 4. 필요한 심볼이나 줄 범위만 읽고 XXH3-64 `rev` 확보
 lancet read src/search.rs --symbol execute_one --json
 
-# 5. dry-run diff 확인 후 --rev와 --apply로 원자적 반영
-lancet edit src/search.rs --find &#x27;let limit = 20;&#x27; --with &#x27;let limit = 50;&#x27; --rev &lt;REV&gt; --apply</code></pre></div>
+# 5. dry-run diff 확인 후 --rev, --apply로 원자적 반영
+lancet edit src/search.rs --find &#x27;let limit = 20;&#x27; \
+  --with &#x27;let limit = 50;&#x27; --rev &lt;REV&gt; --apply</code></pre></div>
 
-<h2 id="cheat-sheet">한 화면 치트시트<a class="heading-anchor" href="#cheat-sheet" aria-label="Link to section">#</a></h2>
-<div class="table-wrap"><table><thead><tr><th>작업</th><th>명령어</th><th>보장</th></tr></thead><tbody><tr><td>폴더 레이아웃</td><td><code>lancet fd --tree --dirs -d 2 .</code></td><td><code>.gitignore</code> 반영</td></tr><tr><td>최근/확장자 필터</td><td><code>lancet fd -t f -e rs --changed-within 7d</code></td><td>인덱스 가속</td></tr><tr><td>rg 그대로 쓰기</td><td><code>lancet rg -w -t rs 'pat' src</code></td><td><code>rg</code>와 바이트 동일 + <code>--docs</code></td></tr><tr><td>논리·유사 검색</td><td><code>lancet '("a" OR "b") NOT "c" in function'</code></td><td><code>Scan == Auto</code></td></tr><tr><td>파일 뼈대 보기</td><td><code>lancet outline src/main.rs</code></td><td>함수·마크다운 제목·시트·압축 목록</td></tr><tr><td>토큰 제한 읽기</td><td><code>lancet read f.rs --lines 10:50 --budget-tokens 800</code></td><td><code>rev</code> + <code>next_line</code> 반환</td></tr><tr><td>심볼 단위 읽기</td><td><code>lancet read f.rs --symbol my_fn</code></td><td>문서 주석·어트리뷰트 포함</td></tr><tr><td>문서·압축파일</td><td><code>lancet read r.pdf -p 2:3</code> · <code>a.zip!app.log</code></td><td>검색과 동일한 줄 번호</td></tr><tr><td>참조 랭킹</td><td><code>lancet refs --rank '*Service' --kind class src</code></td><td>어휘 참조 횟수 내림차순</td></tr><tr><td>AST 검색·치환</td><td><code>lancet ast '$X.unwrap()' src -l rs -r '$X?'</code></td><td>24개 언어, <code>--apply</code> 전엔 dry-run</td></tr><tr><td>CAS 다중 편집</td><td><code>lancet edit f.rs --edits - --rev REV --apply</code></td><td>원본 좌표 유지, 전부 아니면 무효</td></tr><tr><td>Unified Diff</td><td><code>git diff | lancet patch --apply</code></td><td>사전 검증 + 충돌 시 롤백</td></tr><tr><td>로컬 이름 변경</td><td><code>lancet rename f.rs:42 old new --rev REV --apply</code></td><td>스코프 재해석으로 캡처 차단</td></tr><tr><td>MCP 서버</td><td><code>lancet mcp --root .</code></td><td>11개 도구 stdio JSON-RPC</td></tr><tr><td>인덱스 점검</td><td><code>lancet explain 'pat'</code> · <code>lancet status</code></td><td>필요 트라이그램·후보 비율 출력</td></tr></tbody></table></div>
+<h2 id="cheat-sheet">한 화면 명령어 치트시트<a class="heading-anchor" href="#cheat-sheet" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>작업 단계</th><th>명령어</th><th>보장 / 특징</th></tr></thead><tbody><tr><td>폴더 레이아웃</td><td><code>lancet fd --tree --dirs -d 2 .</code></td><td><code>.gitignore</code> / <code>.ignore</code> 반영</td></tr><tr><td>최근/확장자 필터</td><td><code>lancet fd -t f -e rs --changed-within 7d</code></td><td>단위: <code>s</code>, <code>m</code>, <code>h</code>, <code>d</code>, <code>w</code></td></tr><tr><td>rg 그대로 쓰기</td><td><code>lancet rg -w -t rs 'pat' src</code></td><td><code>rg</code>와 바이트 동일 + <code>--docs</code></td></tr><tr><td>논리·유사 LQL</td><td><code>lancet '("a" OR "b") NOT "c" in function'</code></td><td><code>Scan == Auto</code></td></tr><tr><td>다중 쿼리 배치</td><td><code>lancet batch src -q 'Q1' -q 'Q2'</code></td><td>인덱스·워크 1회 공유</td></tr><tr><td>뼈대 추출</td><td><code>lancet outline src/main.rs</code></td><td>함수·마크다운 제목·시트·압축 목록</td></tr><tr><td>토큰 예산 읽기</td><td><code>lancet read f.rs --lines 10:50 --budget-tokens 800</code></td><td><code>rev</code> + <code>next_line</code> 커서 반환</td></tr><tr><td>심볼 읽기</td><td><code>lancet read f.rs --symbol my_fn</code></td><td>문서 주석·어트리뷰트 포함</td></tr><tr><td>문서·압축파일</td><td><code>lancet read r.pdf -p 2:3</code> · <code>a.zip!app.log</code></td><td>검색과 1:1 동일 줄 번호; 읽기 전용</td></tr><tr><td>참조 순위</td><td><code>lancet refs --rank '*Service' --kind class src</code></td><td>어휘 AST 참조 수 내림차순</td></tr><tr><td>AST 검색·치환</td><td><code>lancet ast '$X.unwrap()' src -l rs -r '$X?'</code></td><td>24개 언어; <code>--apply</code> 전엔 dry-run</td></tr><tr><td>원자적 다중 편집</td><td><code>lancet edit f.rs --edits - --rev REV --apply</code></td><td>원본 줄 번호 유지, 겹침 검증 CAS</td></tr><tr><td>Unified Diff</td><td><code>git diff | lancet patch --apply</code></td><td>전체 파일 사전 검증 + 경합 롤백</td></tr><tr><td>로컬 이름 변경</td><td><code>lancet rename f.rs:42 old new --rev REV --apply</code></td><td>6개 언어; 스코프 재해석 증명</td></tr><tr><td>MCP 서버</td><td><code>lancet mcp --root .</code></td><td>11개 도구 stdio JSON-RPC, <code>--read-only</code></td></tr><tr><td>인덱스 진단</td><td><code>lancet explain 'pat'</code> · <code>lancet status</code></td><td>필요 트라이그램·후보 비율 출력</td></tr></tbody></table></div>
 
-<h2 id="explore-docs">문서 둘러보기<a class="heading-anchor" href="#explore-docs" aria-label="Link to section">#</a></h2>
-<div class="doc-cards"><a class="doc-card" href="migration.html"><small>시작하기</small><b>기존 도구에서 전환하기</b><span>rg, fd, ast-grep, sed, patch, rga 사용자가 바로 옮겨 탈 수 있는 대조표와 의도적 차이점.</span></a><a class="doc-card" href="guides/explore.html"><small>실전 가이드</small><b>낯선 코드베이스 탐색</b><span>fd --dirs, refs --rank, outline, batch, budget-tokens 페이지네이션으로 토큰 절약하기.</span></a><a class="doc-card" href="guides/editing.html"><small>실전 가이드</small><b>안전한 편집·패치·로컬 이름 변경</b><span>--edits로 줄 밀림 방지, --rev 동시성 제어, 다중 파일 patch 및 로컬 스코프 rename.</span></a><a class="doc-card" href="reference/cli.html"><small>레퍼런스</small><b>CLI·LQL·JSON/MCP 전체 명세</b><span>전체 플래그, LQL EBNF 문법, 24개 AST 언어, MCP 11개 도구 및 오류 복구표.</span></a></div>
+<h2 id="next-steps">어디부터 볼까요?<a class="heading-anchor" href="#next-steps" aria-label="Link to section">#</a></h2>
+<div class="doc-cards"><a class="doc-card" href="migration.html"><small>시작하기</small><b>도구 전환 가이드 &amp; 필터 규칙</b><span>rg/fd/sg/sed/patch 1:1 대조표와 .gitignore, 글롭, 파일 타입 평가 규칙.</span></a><a class="doc-card" href="guides/explore.html"><small>탐색과 검색</small><b>탐색 · LQL · AST · 문서 읽기</b><span>fd/outline/refs 랭킹, LQL 근접·퍼지, 24개 언어 AST, PDF/HWP/압축파일.</span></a><a class="doc-card" href="guides/edit.html"><small>편집과 에이전트</small><b>편집 · 패치 · 이름 변경 · MCP</b><span>--rev CAS 동시성 제어, patch 롤백, 스코프 증명 기반 rename, MCP 연동.</span></a><a class="doc-card" href="reference/cli.html"><small>내부 구조 &amp; 레퍼런스</small><b>LANCET04 · 쓰기 안전성 · 스키마</b><span>바이너리 세그먼트 포맷, racy 검사, OS 잠금, CLI/JSON/MCP 명세 및 문제 해결.</span></a></div>
 
-      <div class="pager"><div></div><a class="pager-card next" href="migration.html"><small>다음 →</small><b>rg·fd·sg·sed에서 전환</b></a></div>
+      <div class="pager"><div></div><a class="pager-card next" href="migration.html"><small>다음 →</small><b>rg·fd·sg에서 전환</b></a></div>
       <div class="meta-foot">
         <span>MIT OR Apache-2.0 · Rust 단일 바이너리</span>
         <a href="https://github.com/CREE1116/lancet/blob/main/README.ko.md" target="_blank" rel="noopener">GitHub에서 소스 보기 →</a>

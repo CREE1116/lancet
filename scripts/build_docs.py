@@ -40,14 +40,16 @@ DIAGRAM_FILES = [
 GROUPS = {
     "en": [
         ("start", "Getting Started"),
-        ("guides", "Guides & Recipes"),
-        ("concepts", "Concepts & Design"),
+        ("search", "Search & Discovery"),
+        ("edit", "Editing & Agents"),
+        ("internals", "Architecture & Internals"),
         ("reference", "Reference"),
     ],
     "ko": [
         ("start", "시작하기"),
-        ("guides", "실전 가이드"),
-        ("concepts", "핵심 개념"),
+        ("search", "탐색과 검색"),
+        ("edit", "편집과 에이전트"),
+        ("internals", "아키텍처와 내부 구조"),
         ("reference", "레퍼런스"),
     ],
 }
@@ -55,15 +57,23 @@ GROUPS = {
 NAV_ORDER = [
     ("start", "index.html"),
     ("start", "migration.html"),
-    ("guides", "guides/explore.html"),
-    ("guides", "guides/editing.html"),
-    ("guides", "guides/documents.html"),
-    ("guides", "guides/agents-mcp.html"),
-    ("concepts", "concepts/index-and-freshness.html"),
-    ("concepts", "concepts/architecture-and-benchmarks.html"),
+    ("start", "filtering.html"),
+    ("search", "guides/explore.html"),
+    ("search", "guides/search.html"),
+    ("search", "guides/ast.html"),
+    ("search", "guides/read-and-documents.html"),
+    ("edit", "guides/edit.html"),
+    ("edit", "guides/patch.html"),
+    ("edit", "guides/rename.html"),
+    ("edit", "guides/agents-mcp.html"),
+    ("internals", "concepts/index-and-freshness.html"),
+    ("internals", "concepts/write-safety.html"),
+    ("internals", "concepts/benchmarks.html"),
     ("reference", "reference/cli.html"),
-    ("reference", "reference/query-and-ast.html"),
+    ("reference", "reference/rg-parity.html"),
+    ("reference", "reference/lql-and-ast.html"),
     ("reference", "reference/json-and-mcp.html"),
+    ("reference", "reference/troubleshooting.html"),
 ]
 
 
@@ -344,7 +354,7 @@ def render_page(
         "description": page["description"],
         "keywords": page.get("keywords", ""),
         "headings": ext.headings,
-        "text": plain_text[:2800],
+        "text": plain_text[:6000],
     }
     return out_file, html_doc, search_entry
 
@@ -383,11 +393,46 @@ def validate_site(generated_files: list[Path]) -> list[str]:
     return errors
 
 
+def write_sitemap() -> int:
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
+        '        xmlns:xhtml="http://www.w3.org/1999/xhtml">',
+    ]
+    pairs = [("", "ko/")]
+    for _, p_path in NAV_ORDER:
+        suffix = "" if p_path == "index.html" else p_path
+        pairs.append((f"docs/{suffix}", f"ko/docs/{suffix}"))
+
+    for en_rel, ko_rel in pairs:
+        en_url = f"{BASE_URL}/{en_rel}"
+        ko_url = f"{BASE_URL}/{ko_rel}"
+        for loc in (en_url, ko_url):
+            lines.extend([
+                "  <url>",
+                f"    <loc>{loc}</loc>",
+                f'    <xhtml:link rel="alternate" hreflang="en" href="{en_url}"/>',
+                f'    <xhtml:link rel="alternate" hreflang="ko" href="{ko_url}"/>',
+                f'    <xhtml:link rel="alternate" hreflang="x-default" href="{en_url}"/>',
+                "  </url>",
+            ])
+    lines.append("</urlset>")
+    (SITE_DIR / "sitemap.xml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return len(pairs) * 2
+
+
+def clean_docs_dirs() -> None:
+    for d in (SITE_DIR / "docs", SITE_DIR / "ko" / "docs"):
+        if d.exists():
+            shutil.rmtree(d)
+
+
 def main() -> int:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from docs_en import PAGES_EN  # noqa: PLC0415
     from docs_ko import PAGES_KO  # noqa: PLC0415
 
+    clean_docs_dirs()
     copy_diagrams()
 
     search_index = {"en": [], "ko": []}
@@ -407,6 +452,7 @@ def main() -> int:
         f"window.__LANCET_DOCS_SEARCH__ = {json.dumps(search_index, ensure_ascii=False)};\n",
         encoding="utf-8",
     )
+    sitemap_count = write_sitemap()
 
     errors = validate_site(generated)
     if errors:
@@ -416,7 +462,7 @@ def main() -> int:
 
     print(
         f"Built {len(generated)} documentation pages, copied {len(DIAGRAM_FILES)} diagrams, "
-        f"wrote docs-search.json, 0 broken links."
+        f"wrote docs-search.json/js and {sitemap_count} sitemap URLs, 0 broken links."
     )
     return 0
 

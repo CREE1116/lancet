@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>컨텍스트를 아끼며 낯선 코드베이스 탐색하기 — lancet 문서</title>
-<meta name="description" content="fd --dirs, refs --rank, outline, batch, budget-tokens 페이지네이션을 활용한 5단계 탐색 워크플로우.">
+<title>파일 탐색, 아웃라인 & 심볼 사용 빈도 랭킹 — lancet 문서</title>
+<meta name="description" content="lancet fd --dirs --tree, outline, refs, refs --rank로 낯선 저장소의 핵심을 빠르게 파악하는 법.">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
@@ -16,8 +16,8 @@
 <meta property="og:site_name" content="lancet">
 <meta property="og:locale" content="ko_KR">
 <meta property="og:url" content="https://cree1116.github.io/lancet/ko/docs/guides/explore.html">
-<meta property="og:title" content="컨텍스트를 아끼며 낯선 코드베이스 탐색하기 — lancet 문서">
-<meta property="og:description" content="fd --dirs, refs --rank, outline, batch, budget-tokens 페이지네이션을 활용한 5단계 탐색 워크플로우.">
+<meta property="og:title" content="파일 탐색, 아웃라인 & 심볼 사용 빈도 랭킹 — lancet 문서">
+<meta property="og:description" content="lancet fd --dirs --tree, outline, refs, refs --rank로 낯선 저장소의 핵심을 빠르게 파악하는 법.">
 <meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image-ko.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
@@ -55,60 +55,64 @@
 
 <div class="doc-shell">
   <aside class="doc-sidebar" aria-label="Documentation navigation">
-    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="../index.html">소개 · 설치 · 치트시트</a></li><li><a href="../migration.html">rg·fd·sg·sed에서 전환</a></li></ul></div><div class="nav-group"><div class="nav-group-title">실전 가이드</div><ul class="nav-list"><li><a href="explore.html" class="active">낯선 코드베이스 탐색</a></li><li><a href="editing.html">안전한 편집·패치·이름 변경</a></li><li><a href="documents.html">PDF·오피스·HWP·압축파일</a></li><li><a href="agents-mcp.html">AI 에이전트·MCP·공식 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">핵심 개념</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">인덱스 & 최신성 모델</a></li><li><a href="../concepts/architecture-and-benchmarks.html">아키텍처 & 벤치마크</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="../reference/cli.html">CLI & lancet rg 레퍼런스</a></li><li><a href="../reference/query-and-ast.html">LQL 문법 & AST 24개 언어</a></li><li><a href="../reference/json-and-mcp.html">JSON 스키마 · MCP · 문제 해결</a></li></ul></div>
+    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="../index.html">설치 · 빠른 시작</a></li><li><a href="../migration.html">rg·fd·sg에서 전환</a></li><li><a href="../filtering.html">무시 규칙 · 글롭 · 타입</a></li></ul></div><div class="nav-group"><div class="nav-group-title">탐색과 검색</div><ul class="nav-list"><li><a href="explore.html" class="active">파일 탐색 · 아웃라인 · 랭킹</a></li><li><a href="search.html">텍스트 검색 · LQL · 배치</a></li><li><a href="ast.html">구조적 AST 검색 · 치환</a></li><li><a href="read-and-documents.html">정밀 읽기 · PDF · HWP</a></li></ul></div><div class="nav-group"><div class="nav-group-title">편집과 에이전트</div><ul class="nav-list"><li><a href="edit.html">안전한 편집 & CAS</a></li><li><a href="patch.html">원자적 다중 파일 패치</a></li><li><a href="rename.html">로컬 스코프 이름 변경</a></li><li><a href="agents-mcp.html">AI 에이전트 · MCP · 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">아키텍처와 내부 구조</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">인덱스(LANCET04) & 최신성</a></li><li><a href="../concepts/write-safety.html">쓰기 안전성 & 파일 정체성</a></li><li><a href="../concepts/benchmarks.html">벤치마크 & 경쟁 비교</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="../reference/cli.html">CLI 명령 · 종료 코드</a></li><li><a href="../reference/rg-parity.html">lancet rg 호환성 표</a></li><li><a href="../reference/lql-and-ast.html">LQL 문법 · AST 24개 언어</a></li><li><a href="../reference/json-and-mcp.html">JSON 스키마 · MCP 11개 도구</a></li><li><a href="../reference/troubleshooting.html">문제 해결 · 오류 복구</a></li></ul></div>
   </aside>
 
   <main class="doc-main">
     <article class="doc-article">
-      <div class="crumb">실전 가이드</div>
-      <h1>컨텍스트를 아끼며 낯선 코드베이스 탐색하기</h1>
-      <p class="lede">파일 전체를 읽어 토큰을 낭비하지 않고 다섯 단계로 핵심 코드에 정확히 도달하는 법.</p>
+      <div class="crumb">탐색과 검색</div>
+      <h1>파일 탐색, 아웃라인 & 심볼 사용 빈도 랭킹</h1>
+      <p class="lede">파일 전체를 열어 보기 전에 디렉터리, 선언 골격, 참조 빈도순 핵심 심볼 지도를 먼저 만듭니다.</p>
       
-<p>개발자나 AI 에이전트가 컨텍스트 토큰을 낭비하고 길을 잃는 가장 흔한 원인은 파일 전체를 닥치는 대로 읽는 것입니다. Lancet은 수만 개 파일에서 정확히 필요한 줄까지 좁혀 내려가는 <strong>5단계 탐색 깔때기</strong>를 제공합니다.</p>
+<p>파일 전체를 열어 보는 대신 <code>fd</code>, <code>outline</code>, <code>refs</code>로 디렉터리, 선언 골격, 사용 빈도순 핵심 심볼을 먼저 지도화하면 컨텍스트 토큰 소비를 크게 줄일 수 있습니다.</p>
 
-<h2 id="step1">1. 파일 소음 없이 폴더 구조 먼저 파악하기<a class="heading-anchor" href="#step1" aria-label="Link to section">#</a></h2>
-<p>파일 목록이나 검색을 돌리기 전에 디렉터리 골격부터 확인합니다.</p>
-<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code>lancet fd --tree --dirs --max-depth 2 .
-lancet fd --changed-within 2d -t f src</code></pre></div>
-<p><code>--tree</code>에 <code>--dirs</code>(<code>-t d</code>와 동일)를 붙이면 폴더만 계층으로 보여 주어 프로젝트 아키텍처를 수십 줄 안에 파악할 수 있습니다.</p>
+<h2 id="fd-guide">빠른 트리 &amp; 메타데이터 탐색 (lancet fd)<a class="heading-anchor" href="#fd-guide" aria-label="Link to section">#</a></h2>
+<p><code>lancet fd</code>는 디스크를 순회하거나 <code>--trust-index</code>로 mmap 된 <code>.lancet</code>에서 워크 없이 즉시 목록을 읽어 옵니다.</p>
+<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code># 파일 소음 없이 폴더 계층만 출력
+lancet fd --tree --dirs --max-depth 2 .
 
-<h2 id="step2">2. refs --rank로 핵심 선언 순위 찾기<a class="heading-anchor" href="#step2" aria-label="Link to section">#</a></h2>
-<p>낯선 저장소에서는 어떤 클래스·구조체·인터페이스·함수가 실제로 많이 쓰이는지 어휘 참조 수 순위로 바로 뽑아낼 수 있습니다.</p>
-<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code># 가장 많이 참조되는 *Service 클래스 상위 10개
+# 글롭/정규식 매칭 (패턴이 디렉터리명처럼 보이면 -p 사용)
+lancet fd -g &#x27;*_test.rs&#x27; crates/
+lancet fd -p config -r &#x27;auth|session&#x27; src
+
+# 수정 시각 + 크기 조건 (기간: s, m, h, d, w / 크기: b, k, m, g)
+lancet fd -t f --changed-within 48h --min-size 4k --max-size 2m .
+
+# size, mtime_ns 포함 JSON (반환 항목당 stat 1회 비용)
+lancet fd -e rs --meta --limit 25 --json src</code></pre></div>
+<div class="callout note"><div class="callout-title">fd에서 -e / --type-class / 크기 필터를 쓸 때</div><p><code>-t</code>를 주지 않은 채 <code>-e</code>, <code>--type-class</code>, <code>--min-size</code>, <code>--max-size</code>를 지정하면 <code>--dirs</code>나 <code>-t d</code>를 함께 주지 않는 한 자동으로 파일만 추립니다.</p></div>
+
+<h2 id="outline-guide">코드·문서·시트·압축 뼈대 추출 (lancet outline)<a class="heading-anchor" href="#outline-guide" aria-label="Link to section">#</a></h2>
+<p><code>lancet outline</code>은 AST 선언 시그니처(코드), 마크다운·PDF·PPTX·DOCX·HWP 제목, 엑셀 시트명과 크기, 압축 파일 내부 항목 목록을 줄 번호와 함께 뽑아 줍니다.</p>
+<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code># 단일 파일 AST 시그니처와 시작/끝 줄 범위
+lancet outline src/search.rs
+
+# 디렉터리 깊이·확장자 제한 요약
+lancet outline src -d 2 -e rs --limit 20 --json
+
+# 비코드 파일 뼈대: 마크다운 목차, 엑셀 시트, tar.gz 내부 파일 목록
+lancet outline docs/spec.md
+lancet outline financial_model.xlsx
+lancet outline logs/crash_bundle.tar.gz</code></pre></div>
+
+<h2 id="refs-and-rank">어휘 AST 참조 &amp; 사용 빈도 랭킹 (lancet refs)<a class="heading-anchor" href="#refs-and-rank" aria-label="Link to section">#</a></h2>
+<p><code>lancet refs</code>는 24개 Tree-sitter 문법으로 후보 파일을 파싱해 <code>[def]</code> 선언과 <code>[ref]</code> 참조 위치를 분리하고, 감싸는 함수(<code>enclosing</code>)를 기록하며, <strong>주석과 문자열 리터럴을 자동 제외</strong>합니다.</p>
+<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code># 정의와 모든 어휘 호출·참조 위치 조회
+lancet refs SearchOptions src --lang rs
+
+# 코드 외 파일(Markdown, TOML 등)까지 어휘 매칭으로 포함
+lancet refs SearchOptions . --all-files</code></pre></div>
+
+<h3 id="rank-mode">refs --rank로 핵심 선언 순위 뽑기<a class="heading-anchor" href="#rank-mode" aria-label="Link to section">#</a></h3>
+<p><code>--rank</code>를 주면 첫 인자를 선언 이름 글롭(예: <code>*Service</code>, <code>*Handler</code>)으로 해석해 어휘 참조 횟수 내림차순으로 정렬합니다. 글롭에 리터럴 구간(예: <code>Service</code>)이 있으면 트라이그램 인덱스로 후보를 먼저 좁힙니다.</p>
+<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code># src/에서 가장 많이 참조되는 *Service 클래스 상위 10개
 lancet refs --rank &#x27;*Service&#x27; --kind class src --limit 10
 
-# 디렉터리 내 가장 많이 호출되는 함수 상위 10개
-lancet refs --rank &#x27;*&#x27; --kind function --limit 10 src
+# Rust 크레이트 내 핵심 function, struct 순위
+lancet refs --rank &#x27;*&#x27; --kind function,struct src --limit 15 --json</code></pre></div>
+<p>여러 선언이 같은 이름을 공유할 때는(예: <code>new</code>, <code>run</code>) 터미널에 <code>(name shared by N declarations)</code>가, JSON에 <code>definitions: N</code>이 표시되어 어휘 참조 수가 공유됨을 알려 줍니다.</p>
 
-# 정의와 참조 위치 상세 조회 (주석·문자열 자동 제외)
-lancet refs SearchOptions src --lang rs --json</code></pre></div>
-<div class="callout note"><div class="callout-title">--rank의 중복 이름 표시 이해하기</div><p>글롭에 리터럴(예: <code>Service</code>)이 포함되면 트라이그램 인덱스로 후보를 좁힌 뒤 AST 선언을 수집합니다. 출력에 <code>(name shared by N declarations)</code> 또는 JSON의 <code>definitions &gt; 1</code>이 표시되면 여러 선언이 같은 이름을 공유한다는 뜻입니다.</p></div>
-
-<h2 id="step3">3. 본문 전에 뼈대만 보기 (outline)<a class="heading-anchor" href="#step3" aria-label="Link to section">#</a></h2>
-<p><code>lancet outline</code>으로 코드 선언 시그니처, 마크다운 제목 목차, 엑셀 시트 목록, 압축 파일 내부 경로와 정확한 줄 범위를 먼저 확인하세요.</p>
-<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code>lancet outline src/search.rs
-lancet outline docs/architecture.md
-lancet outline financial_model.xlsx
-lancet outline logs/bundle.zip</code></pre></div>
-
-<h2 id="step4">4. 여러 쿼리 한 번에 실행(batch) &amp; 파이프 정제<a class="heading-anchor" href="#step4" aria-label="Link to section">#</a></h2>
-<p>서로 관련된 여러 질문을 던져야 할 때는 <code>lancet batch</code>로 인덱스와 디렉터리 순회를 <strong>딱 1번만</strong> 열고 모든 쿼리를 평가합니다. LQL 파이프로 출력을 더 줄일 수 있습니다.</p>
-<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code># 인덱스 열기·워크 1회 공유로 쿼리 3개 동시 실행
-lancet batch src \
-  -q &#x27;near(&quot;retry&quot;, &quot;backoff&quot;, 20) in function&#x27; \
-  -q &#x27;&quot;Conflict&quot; in ext:rs&#x27; \
-  -q &#x27;fuzzy(&quot;idempotent&quot;, 1) | files&#x27;
-
-# 동시 출현 상위 키워드 추출 및 토큰 상한 적용
-lancet &#x27;&quot;trigram&quot; in ext:rs | terms top:10 | budget tokens:1200&#x27; src</code></pre></div>
-
-<h2 id="step5">5. 토큰 예산(budget-tokens) 기반 페이지네이션 읽기<a class="heading-anchor" href="#step5" aria-label="Link to section">#</a></h2>
-<p>전체 파일 대신 해당 심볼(문서 주석·어트리뷰트 포함)이나 토큰 상한을 지정해 읽으세요. 잘렸다면 반환된 <code>next_line</code>부터 이어서 읽습니다.</p>
-<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code>lancet read src/search.rs --symbol execute_one
-lancet read src/search.rs --lines 100:400 --budget-tokens 800 --json</code></pre></div>
-<div class="callout tip"><div class="callout-title">실측 컨텍스트 절감</div><p><code>why-one-tool</code> 실험에서 줄·심볼·토큰 예산을 지정해 읽은 경우 전체 파일 읽기보다 컨텍스트 사용량이 <strong>5~30배</strong> 줄었으며, 안전한 편집에 필요한 줄 번호와 <code>rev</code> 토큰도 그대로 유지했습니다.</p></div>
-
-      <div class="pager"><a class="pager-card prev" href="../migration.html"><small>← 이전</small><b>rg·fd·sg·sed에서 전환</b></a><a class="pager-card next" href="editing.html"><small>다음 →</small><b>안전한 편집·패치·이름 변경</b></a></div>
+      <div class="pager"><a class="pager-card prev" href="../filtering.html"><small>← 이전</small><b>무시 규칙 · 글롭 · 타입</b></a><a class="pager-card next" href="search.html"><small>다음 →</small><b>텍스트 검색 · LQL · 배치</b></a></div>
       <div class="meta-foot">
         <span>MIT OR Apache-2.0 · Rust 단일 바이너리</span>
         <a href="https://github.com/CREE1116/lancet/blob/main/docs/agent-instructions.md" target="_blank" rel="noopener">GitHub에서 소스 보기 →</a>

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lancet rg — ripgrep 기능 호환성 매트릭스 — lancet 문서</title>
+<meta name="description" content="매칭, 출력, 순회, --passthru, --type-add, --docs, 의도적 차이까지 전체 플래그 대조표.">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://cree1116.github.io/lancet/ko/docs/reference/rg-parity.html">
+<link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/reference/rg-parity.html">
+<link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/reference/rg-parity.html">
+<link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/reference/rg-parity.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="lancet">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:url" content="https://cree1116.github.io/lancet/ko/docs/reference/rg-parity.html">
+<meta property="og:title" content="lancet rg — ripgrep 기능 호환성 매트릭스 — lancet 문서">
+<meta property="og:description" content="매칭, 출력, 순회, --passthru, --type-add, --docs, 의도적 차이까지 전체 플래그 대조표.">
+<meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image-ko.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../../../assets/docs.css?v=1">
+</head>
+<body data-docs-root="../" data-search-url="../../../assets/docs-search.json">
+
+<header class="doc-header">
+  <div class="doc-header-in">
+    <button class="menu-btn" id="menu-btn" type="button" aria-label="문서 메뉴 열기" aria-expanded="false">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg>
+    </button>
+    <a class="doc-brand" href="../../index.html">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 27 L24 6 l3 3 L8 28 Z" fill="currentColor" style="color:var(--accent)"/></svg>
+      lancet
+    </a>
+    <a class="doc-badge" href="../index.html">문서</a>
+    <button class="search-trigger" id="search-trigger" type="button">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <span>문서 검색…</span>
+      <kbd>/</kbd>
+    </button>
+    <nav class="header-links" aria-label="Primary">
+      <a href="../../index.html" class="hide-sm">홈</a>
+      <a href="../../../docs/reference/rg-parity.html" hreflang="en" lang="en">English</a>
+      <a class="header-gh" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span class="hide-sm">GitHub</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+
+<div class="doc-shell">
+  <aside class="doc-sidebar" aria-label="Documentation navigation">
+    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="../index.html">설치 · 빠른 시작</a></li><li><a href="../migration.html">rg·fd·sg에서 전환</a></li><li><a href="../filtering.html">무시 규칙 · 글롭 · 타입</a></li></ul></div><div class="nav-group"><div class="nav-group-title">탐색과 검색</div><ul class="nav-list"><li><a href="../guides/explore.html">파일 탐색 · 아웃라인 · 랭킹</a></li><li><a href="../guides/search.html">텍스트 검색 · LQL · 배치</a></li><li><a href="../guides/ast.html">구조적 AST 검색 · 치환</a></li><li><a href="../guides/read-and-documents.html">정밀 읽기 · PDF · HWP</a></li></ul></div><div class="nav-group"><div class="nav-group-title">편집과 에이전트</div><ul class="nav-list"><li><a href="../guides/edit.html">안전한 편집 & CAS</a></li><li><a href="../guides/patch.html">원자적 다중 파일 패치</a></li><li><a href="../guides/rename.html">로컬 스코프 이름 변경</a></li><li><a href="../guides/agents-mcp.html">AI 에이전트 · MCP · 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">아키텍처와 내부 구조</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">인덱스(LANCET04) & 최신성</a></li><li><a href="../concepts/write-safety.html">쓰기 안전성 & 파일 정체성</a></li><li><a href="../concepts/benchmarks.html">벤치마크 & 경쟁 비교</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="cli.html">CLI 명령 · 종료 코드</a></li><li><a href="rg-parity.html" class="active">lancet rg 호환성 표</a></li><li><a href="lql-and-ast.html">LQL 문법 · AST 24개 언어</a></li><li><a href="json-and-mcp.html">JSON 스키마 · MCP 11개 도구</a></li><li><a href="troubleshooting.html">문제 해결 · 오류 복구</a></li></ul></div>
+  </aside>
+
+  <main class="doc-main">
+    <article class="doc-article">
+      <div class="crumb">레퍼런스</div>
+      <h1>lancet rg — ripgrep 기능 호환성 매트릭스</h1>
+      <p class="lede">ripgrep 15.2와 바이트 단위로 대조 검증한 전체 플래그 호환성 매트릭스.</p>
+      
+<p><code>bench/rg_parity.py</code>의 68개 엣지 케이스 픽스처(유니코드 케이스 폴딩, CRLF, 마지막 개행 누락, 바이너리 건너뛰기, <code>-m</code>+<code>-C</code>, <code>--vimgrep</code>, <code>-L</code>, <code>--max-depth</code>, <code>--max-filesize</code>)와 Linux v6.12 전체 쿼리를 <code>ripgrep 15.2</code>와 바이트 단위로 대조 검증했습니다.</p>
+
+<h2 id="matching">패턴 &amp; 매칭<a class="heading-anchor" href="#matching" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>플래그</th><th>의미</th><th>상태</th><th>비고</th></tr></thead><tbody><tr><td><code>-e</code>, <code>--regexp &lt;PATTERN&gt;</code></td><td>검색 패턴 (중복 지정 가능)</td><td><span class='tag-yes'>지원</span></td><td>정규식 선택(alternation)으로 결합</td></tr><tr><td><code>-f</code>, <code>--file &lt;FILE&gt;</code></td><td>파일에서 줄당 하나씩 패턴 읽기 (<code>-</code> stdin)</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>-F</code>, <code>--fixed-strings</code></td><td>리터럴 문자열로 취급</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>-i</code> / <code>-s</code> / <code>-S</code></td><td>대소문자 무시 / 구분 / 스마트</td><td><span class='tag-yes'>지원</span></td><td>마지막 플래그 우선; AST 기반 <code>-S</code>(<code>\W</code> 무시 유지)</td></tr><tr><td><code>-w</code>, <code>--word-regexp</code></td><td>단어 경계로 둘러싸인 매치만</td><td><span class='tag-yes'>지원</span></td><td><code>rg</code> 경계 규칙과 동일(<code>-w '@x'</code> 지원)</td></tr><tr><td><code>-x</code>, <code>--line-regexp</code></td><td>줄 전체에 걸친 매치만</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>-v</code>, <code>--invert-match</code></td><td>매치하지 않는 줄 출력</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>-U</code>, <code>--multiline-dotall</code></td><td>멀티라인 및 <code>.</code>에 <code>\n</code> 허용</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>-P</code>, <code>--pcre2</code></td><td>전후방 탐색 및 역참조</td><td><span class='tag-no'>미지원</span></td><td>선형 시간 Rust <code>regex</code> + 건전한 HIR 트라이그램 컴파일</td></tr></tbody></table></div>
+
+<h2 id="output">출력 &amp; 형식<a class="heading-anchor" href="#output" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>플래그</th><th>의미</th><th>상태</th><th>비고</th></tr></thead><tbody><tr><td><code>-o</code>, <code>-c</code>, <code>--count-matches</code></td><td>매치 부분만 / 줄 수 / 총 매치 수</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>-l</code>, <code>--files-without-match</code>, <code>-q</code></td><td>일치 경로 / 미일치 경로 / 무출력</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>-m &lt;N&gt;</code>, <code>-A</code>, <code>-B</code>, <code>-C</code></td><td>파일당 최대 개수 및 전후 문맥</td><td><span class='tag-yes'>지원</span></td><td>후속 문맥도 <code>-m</code> 준수; <code>--</code> 구분선 출력</td></tr><tr><td><code>--passthru</code> (별칭 <code>--passthrough</code>)</td><td>일치·비일치 줄 모두 출력</td><td><span class='tag-yes'>지원</span></td><td>비일치 파일도 출력; <code>--passthru/-A/-B/-C</code> 중 마지막 우선</td></tr><tr><td><code>-n</code> / <code>-N</code></td><td>줄 번호 표시 / 숨기기</td><td><span class='tag-yes'>지원</span></td><td>파이프 시에도 <strong>기본 ON</strong></td></tr><tr><td><code>-H</code> / <code>-I</code>, <code>--column</code>, <code>--vimgrep</code></td><td>파일명 표시, 1-based 열, vimgrep</td><td><span class='tag-yes'>지원</span></td><td><code>-H/-I</code> 중 마지막 우선</td></tr><tr><td><code>--json</code>, <code>-0</code>, <code>-r &lt;TEXT&gt;</code></td><td>rg JSON Lines, NUL 구분, <code>$1</code>/<code>${{name}}</code> 치환</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>--color &lt;WHEN&gt;</code></td><td><code>auto</code>, <code>always</code>, <code>ansi</code>, <code>never</code></td><td><span class='tag-yes'>지원</span></td><td>기본 <code>auto</code>는 TTY와 <code>NO_COLOR</code>/<code>TERM=dumb</code> 준수</td></tr><tr><td><code>--sort</code>, <code>--no-heading</code></td><td>정렬, 파일명 헤더 끄기</td><td>No-op</td><td>항상 경로순 정렬; 헤더 사용 안 함</td></tr></tbody></table></div>
+
+<h2 id="traversal">파일 순회, 필터링 &amp; Lancet 확장<a class="heading-anchor" href="#traversal" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>플래그</th><th>의미</th><th>상태</th><th>비고</th></tr></thead><tbody><tr><td><code>-g</code>, <code>--iglob</code>, <code>-t</code>, <code>-T</code>, <code>--type-list</code></td><td>글롭 및 타입 필터</td><td><span class='tag-yes'>지원</span></td><td>긍정 글롭은 ignore/hidden 덮어씀</td></tr><tr><td><code>--type-add &lt;SPEC&gt;</code></td><td><code>NAME:GLOB</code> 또는 <code>NAME:include:A,B</code></td><td><span class='tag-yes'>지원</span></td><td><code>-t</code>, <code>-T</code>, <code>--files</code>, <code>--type-list</code> 반영</td></tr><tr><td><code>-a</code>, <code>-u</code>/<code>-uu</code>/<code>-uuu</code>, <code>-.</code>, <code>--no-ignore</code></td><td>바이너리/숨김/무시 해제</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>-L</code>, <code>--max-depth</code>, <code>--max-filesize</code></td><td>심볼릭 링크 추적, 깊이, 크기 (<code>K/M/G</code>)</td><td><span class='tag-yes'>지원</span></td><td><code>--trust-index -L</code>은 라이브 순회로 폴백</td></tr><tr><td><code>--files</code>, <code>-j/--threads</code></td><td>검색 대상 파일 출력, 워커 수</td><td><span class='tag-yes'>지원</span></td><td></td></tr><tr><td><code>--docs</code></td><td>PDF/오피스/HWP/압축파일 인프로세스 검색</td><td><span class='tag-ext'>확장</span></td><td><code>rg</code> 호환성 유지를 위해 기본 OFF</td></tr><tr><td><code>--no-index</code>, <code>--trust-index</code>, <code>--index-dir</code></td><td><code>.lancet</code> 인덱스 동작 지정</td><td><span class='tag-ext'>확장</span></td><td>기본은 항상 최신인 <code>auto</code> 모드</td></tr><tr><td><code>--pre &lt;CMD&gt;</code></td><td>파일별 외부 전처리기</td><td><span class='tag-no'>미지원</span></td><td>인프로세스 <code>--docs</code>로 대체</td></tr></tbody></table></div>
+
+      <div class="pager"><a class="pager-card prev" href="cli.html"><small>← 이전</small><b>CLI 명령 · 종료 코드</b></a><a class="pager-card next" href="lql-and-ast.html"><small>다음 →</small><b>LQL 문법 · AST 24개 언어</b></a></div>
+      <div class="meta-foot">
+        <span>MIT OR Apache-2.0 · Rust 단일 바이너리</span>
+        <a href="https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md" target="_blank" rel="noopener">GitHub에서 소스 보기 →</a>
+      </div>
+    </article>
+  </main>
+
+  <aside class="doc-toc" aria-label="이 페이지 목차">
+    <div class="toc-title">이 페이지 목차</div>
+    <ul class="toc-list" id="doc-toc"></ul>
+  </aside>
+</div>
+
+<div class="search-modal" id="search-modal" role="dialog" aria-modal="true" aria-label="문서 검색…" hidden>
+  <div class="search-panel">
+    <div class="search-input-row">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <input id="search-input" type="search" placeholder="문서 검색…" autocomplete="off" spellcheck="false">
+      <button class="search-esc" id="search-esc" type="button">Esc</button>
+    </div>
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../../../assets/docs-search.js?v=1"></script>
+<script src="../../../assets/docs.js?v=1"></script>
+</body>
+</html>

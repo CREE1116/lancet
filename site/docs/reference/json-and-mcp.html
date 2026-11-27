@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>JSON Output Schemas, MCP 11-Tool Spec & Troubleshooting — lancet Docs</title>
-<meta name="description" content="Exact JSON response payloads verified against Rust structs, all 11 MCP tools, and error recovery recipes.">
+<title>JSON Response Schemas & MCP 11-Tool Reference — lancet Docs</title>
+<meta name="description" content="Exact JSON response structs and all 11 lancet mcp inputSchema parameters, defaults, and JSON-RPC codes.">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
@@ -16,8 +16,8 @@
 <meta property="og:site_name" content="lancet">
 <meta property="og:locale" content="en_US">
 <meta property="og:url" content="https://cree1116.github.io/lancet/docs/reference/json-and-mcp.html">
-<meta property="og:title" content="JSON Output Schemas, MCP 11-Tool Spec & Troubleshooting — lancet Docs">
-<meta property="og:description" content="Exact JSON response payloads verified against Rust structs, all 11 MCP tools, and error recovery recipes.">
+<meta property="og:title" content="JSON Response Schemas & MCP 11-Tool Reference — lancet Docs">
+<meta property="og:description" content="Exact JSON response structs and all 11 lancet mcp inputSchema parameters, defaults, and JSON-RPC codes.">
 <meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
@@ -55,124 +55,60 @@
 
 <div class="doc-shell">
   <aside class="doc-sidebar" aria-label="Documentation navigation">
-    <div class="nav-group"><div class="nav-group-title">Getting Started</div><ul class="nav-list"><li><a href="../index.html">Introduction & Cheat Sheet</a></li><li><a href="../migration.html">Migration from rg, fd, sg, sed</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Guides & Recipes</div><ul class="nav-list"><li><a href="../guides/explore.html">Exploring Codebases</a></li><li><a href="../guides/editing.html">Safe Editing, Patch & Rename</a></li><li><a href="../guides/documents.html">PDFs, Office, HWP & Archives</a></li><li><a href="../guides/agents-mcp.html">AI Agents, MCP & Skill</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Concepts & Design</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">Index & Freshness Model</a></li><li><a href="../concepts/architecture-and-benchmarks.html">Architecture & Benchmarks</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul class="nav-list"><li><a href="cli.html">CLI & lancet rg Reference</a></li><li><a href="query-and-ast.html">LQL & 24 AST Languages</a></li><li><a href="json-and-mcp.html" class="active">JSON Schemas, MCP & Recovery</a></li></ul></div>
+    <div class="nav-group"><div class="nav-group-title">Getting Started</div><ul class="nav-list"><li><a href="../index.html">Installation & Quickstart</a></li><li><a href="../migration.html">Migration from rg, fd, sg</a></li><li><a href="../filtering.html">Ignore Rules, Globs & Types</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Search & Discovery</div><ul class="nav-list"><li><a href="../guides/explore.html">Files, Outlines & Ranking</a></li><li><a href="../guides/search.html">Text Search, LQL & Batch</a></li><li><a href="../guides/ast.html">AST Search & Rewrite</a></li><li><a href="../guides/read-and-documents.html">Reads, PDF, Office & HWP</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Editing & Agents</div><ul class="nav-list"><li><a href="../guides/edit.html">Safe Editing & CAS</a></li><li><a href="../guides/patch.html">Atomic Multi-File Patch</a></li><li><a href="../guides/rename.html">Local Scope Rename</a></li><li><a href="../guides/agents-mcp.html">AI Agents, MCP & Skill</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Architecture & Internals</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">Index (LANCET04) & Freshness</a></li><li><a href="../concepts/write-safety.html">Write Safety & File Identity</a></li><li><a href="../concepts/benchmarks.html">Benchmarks & Competitors</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul class="nav-list"><li><a href="cli.html">CLI Commands & Exit Codes</a></li><li><a href="rg-parity.html">lancet rg Parity Matrix</a></li><li><a href="lql-and-ast.html">LQL & 24 AST Languages</a></li><li><a href="json-and-mcp.html" class="active">JSON Schemas & MCP Tools</a></li><li><a href="troubleshooting.html">Troubleshooting & Recovery</a></li></ul></div>
   </aside>
 
   <main class="doc-main">
     <article class="doc-article">
       <div class="crumb">Reference</div>
-      <h1>JSON Output Schemas, MCP 11-Tool Spec & Troubleshooting</h1>
-      <p class="lede">Machine-readable schemas, MCP tool inventory, and concrete recovery recipes for every refusal.</p>
+      <h1>JSON Response Schemas & MCP 11-Tool Reference</h1>
+      <p class="lede">Machine-readable response fields verified against Rust structs and every MCP tool parameter schema.</p>
       
-<p>When invoked with <code>--json</code> (or over <code>lancet mcp</code>), every command returns stable, snake_case JSON structs backed directly by Lancet's Rust types.</p>
+<p>Exact JSON response types serialized from Rust structs in <code>src/</code> and complete parameter schemas for all 11 tools in <code>src/mcp.rs</code>.</p>
 
-<h2 id="status-enum">Shared Status &amp; Error Envelope<a class="heading-anchor" href="#status-enum" aria-label="Link to section">#</a></h2>
-<p>Every JSON response carries a <code>status</code> field (and optional <code>error: {"message": string, "pos"?: number}</code>):</p>
+<h2 id="status">Status Enum &amp; ErrorInfo<a class="heading-anchor" href="#status" aria-label="Link to section">#</a></h2>
 <ul>
-  <li><code>"complete"</code> (exit <code>0</code>) — finished with results or applied/dry-run edit.</li>
-  <li><code>"empty"</code> (exit <code>1</code>) — finished cleanly with 0 hits.</li>
-  <li><code>"invalid_query"</code> (exit <code>2</code>) — malformed LQL, invalid range/flag, or non-unique <code>--find</code>.</li>
-  <li><code>"unsupported"</code> (exit <code>2</code>) — unsupported language, read-only document target, or disallowed rename site.</li>
-  <li><code>"conflict"</code> (exit <code>2</code>) — stale <code>--rev</code> or concurrent modification detected under OS file lock; 0 bytes written.</li>
+  <li><code>Status</code>: <code>"complete"</code> | <code>"empty"</code> | <code>"invalid_query"</code> | <code>"unsupported"</code> | <code>"conflict"</code></li>
+  <li><code>ErrorInfo</code>: <code>{"message": string, "pos"?: number}</code> (<code>pos</code> populated on LQL parse failures)</li>
 </ul>
 
-<h2 id="json-schemas">Command JSON Schemas<a class="heading-anchor" href="#json-schemas" aria-label="Link to section">#</a></h2>
-<div class="doc-code"><div class="doc-code-head"><span>Response (lancet &#x27;&lt;QUERY&gt;&#x27; --json)</span><button class="copy-btn" type="button">Copy</button></div><pre><code>{
-  &quot;status&quot;: &quot;complete&quot;,
-  &quot;query&quot;: &quot;&quot;spin_lock&quot; in file&quot;,
-  &quot;mode&quot;: &quot;auto&quot;,
-  &quot;matched&quot;: 7073,
-  &quot;matched_is_lower_bound&quot;: false,
-  &quot;returned&quot;: 20,
-  &quot;truncated&quot;: true,
-  &quot;results&quot;: [
-    {
-      &quot;id&quot;: &quot;...&quot;,
-      &quot;path&quot;: &quot;kernel/locking/spinlock.c&quot;,
-      &quot;unit&quot;: &quot;file&quot;,
-      &quot;start_line&quot;: 12,
-      &quot;end_line&quot;: 44,
-      &quot;symbol&quot;: &quot;raw_spin_lock&quot;,
-      &quot;lines&quot;: [{ &quot;line&quot;: 12, &quot;text&quot;: &quot;void __lockfunc raw_spin_lock(raw_spinlock_t *lock)&quot; }],
-      &quot;more_lines&quot;: 0
-    }
-  ],
+<h2 id="response-structs">CLI --json Response Payloads<a class="heading-anchor" href="#response-structs" aria-label="Link to section">#</a></h2>
+<div class="doc-code"><div class="doc-code-head"><span>Search / Read / Edit / Rename</span><button class="copy-btn" type="button">Copy</button></div><pre><code>// Response (lancet &#x27;&lt;QUERY&gt;&#x27; --json)
+{
+  &quot;status&quot;: &quot;complete&quot;, &quot;query&quot;: &quot;&quot;spin_lock&quot; in file&quot;, &quot;mode&quot;: &quot;auto&quot;,
+  &quot;matched&quot;: 7073, &quot;matched_is_lower_bound&quot;: false, &quot;returned&quot;: 20, &quot;truncated&quot;: true,
+  &quot;results&quot;: [{
+    &quot;id&quot;: &quot;...&quot;, &quot;path&quot;: &quot;kernel/locking/spinlock.c&quot;, &quot;unit&quot;: &quot;file&quot;,
+    &quot;start_line&quot;: 12, &quot;end_line&quot;: 44, &quot;symbol&quot;: &quot;raw_spin_lock&quot;,
+    &quot;lines&quot;: [{ &quot;line&quot;: 12, &quot;text&quot;: &quot;...&quot;, &quot;context&quot;: false }], &quot;more_lines&quot;: 0
+  }],
   &quot;terms&quot;: [{ &quot;term&quot;: &quot;spinlock&quot;, &quot;count&quot;: 42, &quot;files&quot;: 19 }],
   &quot;budget&quot;: { &quot;limit_tokens&quot;: 1500, &quot;used_tokens&quot;: 1120, &quot;estimated&quot;: true },
-  &quot;stats&quot;: {
-    &quot;files_considered&quot;: 86218,
-    &quot;files_searched&quot;: 7814,
-    &quot;files_matched&quot;: 7073,
-    &quot;binary_skipped&quot;: 0,
-    &quot;read_errors&quot;: 0,
-    &quot;index_candidates&quot;: 7814,
-    &quot;stale_files&quot;: 0,
-    &quot;elapsed_ms&quot;: 141.3
-  }
-}</code></pre></div>
-
-<div class="doc-code"><div class="doc-code-head"><span>ReadResponse &amp; EditResponse &amp; RenameResponse</span><button class="copy-btn" type="button">Copy</button></div><pre><code>// ReadResponse (rev omitted on PDFs, Office, HWP, archives)
-{
-  &quot;status&quot;: &quot;complete&quot;,
-  &quot;path&quot;: &quot;src/net.rs&quot;,
-  &quot;rev&quot;: &quot;e70d5a898f122a62&quot;,
-  &quot;section&quot;: &quot;fn retry_limit&quot;,
-  &quot;total_lines&quot;: 80,
-  &quot;start_line&quot;: 1,
-  &quot;end_line&quot;: 4,
-  &quot;returned_lines&quot;: 4,
-  &quot;truncated&quot;: false,
-  &quot;next_line&quot;: null,
-  &quot;estimated_tokens&quot;: 28,
-  &quot;lines&quot;: [{ &quot;num&quot;: 1, &quot;text&quot;: &quot;pub fn retry_limit() -&gt; u32 {&quot; }],
-  &quot;elapsed_ms&quot;: 0.4
+  &quot;stats&quot;: { &quot;files_considered&quot;: 86218, &quot;files_searched&quot;: 7814, &quot;files_matched&quot;: 7073, &quot;index_candidates&quot;: 7814, &quot;stale_files&quot;: 0, &quot;elapsed_ms&quot;: 141.3 }
 }
 
-// EditResponse (mode: &quot;dry-run&quot; | &quot;applied&quot;, hunks in original file lines)
-{
-  &quot;status&quot;: &quot;complete&quot;,
-  &quot;mode&quot;: &quot;applied&quot;,
-  &quot;path&quot;: &quot;src/net.rs&quot;,
-  &quot;rev&quot;: &quot;e70d5a898f122a62&quot;,
-  &quot;rev_after&quot;: &quot;1486bdffbc06c68f&quot;,
-  &quot;start_line&quot;: 2,
-  &quot;end_line&quot;: 2,
-  &quot;hunks&quot;: [[2, 2]],
-  &quot;applied&quot;: true,
-  &quot;diff&quot;: &quot;--- a/src/net.rs\n+++ b/src/net.rs\n...&quot;,
-  &quot;elapsed_ms&quot;: 1.1
-}
+// ReadResponse (rev omitted on binary documents &amp; archives)
+{ &quot;status&quot;: &quot;complete&quot;, &quot;path&quot;: &quot;src/net.rs&quot;, &quot;rev&quot;: &quot;e70d5a898f122a62&quot;, &quot;section&quot;: &quot;fn retry_limit&quot;, &quot;total_lines&quot;: 80, &quot;start_line&quot;: 1, &quot;end_line&quot;: 4, &quot;returned_lines&quot;: 4, &quot;truncated&quot;: false, &quot;next_line&quot;: null, &quot;estimated_tokens&quot;: 28, &quot;lines&quot;: [{ &quot;num&quot;: 1, &quot;text&quot;: &quot;...&quot; }], &quot;elapsed_ms&quot;: 0.4 }
+
+// EditResponse (mode: &quot;dry-run&quot; | &quot;applied&quot;)
+{ &quot;status&quot;: &quot;complete&quot;, &quot;mode&quot;: &quot;applied&quot;, &quot;path&quot;: &quot;src/net.rs&quot;, &quot;rev&quot;: &quot;e70d5a898f122a62&quot;, &quot;rev_after&quot;: &quot;1486bdffbc06c68f&quot;, &quot;start_line&quot;: 2, &quot;end_line&quot;: 2, &quot;hunks&quot;: [[2, 2]], &quot;applied&quot;: true, &quot;diff&quot;: &quot;...&quot;, &quot;elapsed_ms&quot;: 1.1 }
 
 // RenameResponse (tier: &quot;local-scope&quot;)
-{
-  &quot;status&quot;: &quot;complete&quot;,
-  &quot;mode&quot;: &quot;applied&quot;,
-  &quot;path&quot;: &quot;src/search.rs&quot;,
-  &quot;old&quot;: &quot;old_name&quot;,
-  &quot;new&quot;: &quot;new_name&quot;,
-  &quot;tier&quot;: &quot;local-scope&quot;,
-  &quot;rev&quot;: &quot;...&quot;,
-  &quot;rev_after&quot;: &quot;...&quot;,
-  &quot;declaration&quot;: { &quot;line&quot;: 40, &quot;col&quot;: 9 },
-  &quot;sites&quot;: [{ &quot;line&quot;: 40, &quot;col&quot;: 9 }, { &quot;line&quot;: 45, &quot;col&quot;: 14 }],
-  &quot;comment_mentions&quot;: 1,
-  &quot;applied&quot;: true,
-  &quot;elapsed_ms&quot;: 2.3
-}</code></pre></div>
+{ &quot;status&quot;: &quot;complete&quot;, &quot;mode&quot;: &quot;applied&quot;, &quot;path&quot;: &quot;src/search.rs&quot;, &quot;old&quot;: &quot;old_n&quot;, &quot;new&quot;: &quot;new_n&quot;, &quot;tier&quot;: &quot;local-scope&quot;, &quot;rev&quot;: &quot;...&quot;, &quot;rev_after&quot;: &quot;...&quot;, &quot;declaration&quot;: { &quot;line&quot;: 40, &quot;col&quot;: 9 }, &quot;sites&quot;: [{ &quot;line&quot;: 40, &quot;col&quot;: 9 }], &quot;comment_mentions&quot;: 0, &quot;applied&quot;: true, &quot;elapsed_ms&quot;: 2.3 }</code></pre></div>
 
-<div class="doc-code"><div class="doc-code-head"><span>PatchResponse &amp; RefsResponse &amp; RankResponse &amp; AstResponse</span><button class="copy-btn" type="button">Copy</button></div><pre><code>// PatchResponse: { status, mode, applied, files: [{ path, action, from?, hunks, offsets, rev?, rev_after?, diff }], elapsed_ms }
-// RefsResponse:  { status, mode, symbol, definitions: [RefHit], references: [RefHit], total_references, truncated, stats }
-// RankResponse:  { status, mode, pattern, entries: [{ name, kind, path, line, references, definitions }], total, truncated, files_parsed, elapsed_ms }
-// AstResponse:   { status, mode, lang?, pattern, matched, returned, truncated, matches: [AstMatch], diffs: [FileDiff], stats }</code></pre></div>
+<div class="doc-code"><div class="doc-code-head"><span>Fd / Outline / Refs / Rank / Ast / Patch / Explain</span><button class="copy-btn" type="button">Copy</button></div><pre><code>// FdResponse:      { status, mode, total, returned, truncated, entries: [{ path, kind, file_type?, size?, mtime_ns? }], elapsed_ms }
+// OutlineResponse: { status, files: [{ path, file_type, total_lines?, items: [{ kind, name, depth, start_line?, end_line?, signature?, detail? }] }], total_items, truncated, elapsed_ms }
+// RefsResponse:    { status, mode, symbol, definitions: [RefHit], references: [RefHit], total_references, truncated, stats }
+// RankResponse:    { status, mode, pattern, entries: [{ name, kind, path, line, references, definitions }], total, truncated, files_parsed, elapsed_ms }
+// AstResponse:     { status, mode, lang?, pattern, matched, returned, truncated, matches: [AstMatch], diffs: [FileDiff], stats }
+// PatchResponse:   { status, mode, applied, files: [{ path, action, from?, hunks, offsets, rev?, rev_after?, diff }], elapsed_ms }
+// ExplainResponse: { status, canonical?, ir?, trigram_req?, index_exists, files_considered, index_candidates?, stale_files?, selectivity_pct?, grams_available?, grams_decoded?, elapsed_ms }</code></pre></div>
 
-<h2 id="mcp-tools">MCP 11-Tool Reference (lancet mcp)<a class="heading-anchor" href="#mcp-tools" aria-label="Link to section">#</a></h2>
-<p>Protocol revisions supported: <code>2025-03-26</code>, <code>2024-11-05</code>. Under <code>lancet mcp</code>, <code>status: "empty"</code> still returns <code>isError: false</code>; <code>lancet_rg</code> output caps cleanly at line boundaries via <code>max_output_bytes</code> (default 128 KiB, hard cap 4 MiB).</p>
-<div class="table-wrap"><table><thead><tr><th>MCP Tool</th><th>Role</th><th>Key Parameters & Notes</th></tr></thead><tbody><tr><td><code>lancet_fd</code></td><td>Files/dirs discovery</td><td><code>pattern</code>, <code>path</code>, <code>dirs</code>, <code>tree</code>, <code>exts</code>, <code>type_classes</code>, <code>changed_within</code>, <code>index_mode</code></td></tr><tr><td><code>lancet_search</code></td><td>LQL query</td><td><code>query</code>, <code>path</code>, <code>max_lines</code>, <code>max_cols</code>, <code>ocr</code>, <code>index_mode</code></td></tr><tr><td><code>lancet_rg</code></td><td>ripgrep search</td><td><code>pattern</code>, <code>paths</code>, <code>docs</code>, <code>passthru</code>, <code>type_add</code>, <code>max_output_bytes</code></td></tr><tr><td><code>lancet_outline</code></td><td>Skeletons & manifests</td><td><code>path</code>, <code>max_depth</code>, <code>exts</code>, <code>limit</code>, <code>ocr</code></td></tr><tr><td><code>lancet_read</code></td><td>Exact slices & docs</td><td><code>target</code>, <code>lines</code>, <code>symbol</code>, <code>page</code>, <code>sheet</code>, <code>rows</code>, <code>cols</code>, <code>entry</code>, <code>budget_tokens</code></td></tr><tr><td><code>lancet_refs</code></td><td>Lexical AST refs & rank</td><td><code>symbol</code>, <code>path</code>, <code>rank</code>, <code>kinds</code>, <code>lang</code>, <code>limit</code></td></tr><tr><td><code>lancet_ast</code></td><td>AST search & rewrite</td><td><code>pattern</code>, <code>path</code>, <code>lang</code>, <code>rewrite</code>, <code>apply</code> (refused under <code>--read-only</code>)</td></tr><tr><td><code>lancet_edit</code></td><td>Locked CAS edit</td><td>Omitted under <code>--read-only</code>; supports <code>lines</code>, <code>symbol</code>, <code>find</code>, <code>edits</code>, <code>rev</code>, <code>apply</code></td></tr><tr><td><code>lancet_patch</code></td><td>Atomic unified diff</td><td>Omitted under <code>--read-only</code>; <code>patch</code>, <code>root</code>, <code>strip</code>, <code>apply</code>, <code>allow_syntax_errors</code></td></tr><tr><td><code>lancet_rename</code></td><td>Local binding rename</td><td>Omitted under <code>--read-only</code>; <code>path</code>, <code>line</code>, <code>col?</code>, <code>old</code>, <code>new</code>, <code>rev?</code>, <code>apply?</code></td></tr><tr><td><code>lancet_index</code></td><td>Index management</td><td><code>action</code> (<code>status</code>, <code>sync</code>, <code>rebuild</code>, <code>compact</code>); mutating actions refused under <code>--read-only</code></td></tr></tbody></table></div>
+<h2 id="mcp-tools">MCP 11-Tool Schemas (lancet mcp)<a class="heading-anchor" href="#mcp-tools" aria-label="Link to section">#</a></h2>
+<p>Protocol revisions: <code>2025-03-26</code>, <code>2024-11-05</code>. JSON-RPC errors: <code>-32700</code> (parse error), <code>-32600</code> (invalid request), <code>-32601</code> (unknown method), <code>-32602</code> (invalid params / unknown prompt). Note: <code>status: "empty"</code> yields <code>isError: false</code>.</p>
+<div class="table-wrap"><table><thead><tr><th>Tool (Required)</th><th>Parameters & Types</th><th>Read-Only / Notes</th></tr></thead><tbody><tr><td><code>lancet_fd</code></td><td><code>path</code>, <code>pattern</code>, <code>pattern_mode</code> (<code>substring|glob|regex</code>), <code>case_sensitive</code>, <code>kinds</code>, <code>dirs</code>, <code>exts</code>, <code>type_classes</code>, <code>max_depth</code>, <code>changed_within</code>, <code>min_size</code>, <code>max_size</code>, <code>tree</code>, <code>limit</code>, <code>index_mode</code> (<code>auto|off|trust</code>), <code>hidden</code>, <code>no_ignore</code>, <code>meta</code></td><td><code>readOnlyHint: true</code></td></tr><tr><td><code>lancet_search</code> (<code>query</code>)</td><td><code>query</code>*, <code>path</code>, <code>max_lines</code> (20), <code>max_cols</code> (240), <code>index_mode</code>, <code>hidden</code>, <code>no_ignore</code>, <code>ocr</code></td><td><code>readOnlyHint: true</code></td></tr><tr><td><code>lancet_rg</code> (<code>pattern</code>)</td><td><code>pattern</code>*, <code>path</code>, <code>fixed_strings</code>, <code>ignore_case</code>, <code>smart_case</code>, <code>word</code>, <code>line_regexp</code>, <code>invert</code>, <code>multiline</code>, <code>multiline_dotall</code>, <code>only_matching</code>, <code>count</code>, <code>files_with_matches</code>, <code>max_count</code>, <code>before</code>, <code>after</code>, <code>context</code>, <code>globs</code>, <code>iglobs</code>, <code>types</code>, <code>types_not</code>, <code>type_add</code>, <code>max_depth</code>, <code>max_filesize</code>, <code>follow</code>, <code>docs</code>, <code>passthru</code>, <code>index_mode</code>, <code>hidden</code>, <code>no_ignore</code>, <code>max_output_bytes</code> (128 KiB..4 MiB)</td><td><code>readOnlyHint: true</code>; line-boundary truncation</td></tr><tr><td><code>lancet_outline</code></td><td><code>path</code>, <code>max_depth</code>, <code>exts</code>, <code>limit</code>, <code>hidden</code>, <code>no_ignore</code>, <code>ocr</code></td><td><code>readOnlyHint: true</code></td></tr><tr><td><code>lancet_read</code> (<code>target</code>)</td><td><code>target</code>*, <code>lines</code>, <code>symbol</code>, <code>page</code>, <code>sheet</code>, <code>rows</code>, <code>cols</code>, <code>entry</code>, <code>budget_tokens</code>, <code>ocr</code></td><td><code>readOnlyHint: true</code>; returns <code>rev</code> on plain text</td></tr><tr><td><code>lancet_refs</code> (<code>symbol</code>)</td><td><code>symbol</code>*, <code>path</code>, <code>lang</code>, <code>exts</code>, <code>paths</code>, <code>all_files</code>, <code>rank</code>, <code>kinds</code>, <code>limit</code>, <code>index_mode</code>, <code>hidden</code>, <code>no_ignore</code></td><td><code>readOnlyHint: true</code></td></tr><tr><td><code>lancet_ast</code> (<code>pattern</code>)</td><td><code>pattern</code>*, <code>path</code>, <code>lang</code>, <code>rewrite</code>, <code>apply</code> (<code>false</code>), <code>paths</code>, <code>limit</code>, <code>index_mode</code>, <code>hidden</code>, <code>no_ignore</code></td><td><code>apply: true</code> refused under <code>--read-only</code></td></tr><tr><td><code>lancet_edit</code> (<code>path</code>)</td><td><code>path</code>*, <code>lines</code>, <code>symbol</code>, <code>find</code>, <code>all</code>, <code>with</code>, <code>delete</code>, <code>insert_before</code>, <code>insert_after</code>, <code>edits</code> (array), <code>rev</code>, <code>apply</code> (<code>false</code>), <code>allow_syntax_errors</code></td><td>Omitted under <code>--read-only</code></td></tr><tr><td><code>lancet_patch</code> (<code>patch</code>)</td><td><code>patch</code>*, <code>root</code>, <code>strip</code> (<code>1</code>), <code>apply</code> (<code>false</code>), <code>allow_syntax_errors</code></td><td>Omitted under <code>--read-only</code></td></tr><tr><td><code>lancet_rename</code> (<code>path,line,old,new</code>)</td><td><code>path</code>*, <code>line</code>*, <code>col</code>, <code>old</code>*, <code>new</code>*, <code>rev</code>, <code>apply</code> (<code>false</code>)</td><td>Omitted under <code>--read-only</code></td></tr><tr><td><code>lancet_index</code></td><td><code>action</code> (<code>status|sync|rebuild|compact</code>), <code>path</code>, <code>hidden</code>, <code>no_ignore</code>, <code>ocr</code></td><td><code>sync</code>/<code>rebuild</code>/<code>compact</code> refused under <code>--read-only</code></td></tr></tbody></table></div>
 
-<h2 id="troubleshooting">Troubleshooting &amp; Refusal Recovery<a class="heading-anchor" href="#troubleshooting" aria-label="Link to section">#</a></h2>
-<div class="table-wrap"><table><thead><tr><th>Error / Refusal</th><th>Cause</th><th>Exact Recovery</th></tr></thead><tbody><tr><td><code>status: "conflict"</code> (exit 2)</td><td>File changed on disk since <code>rev</code> was read</td><td>Run <code>lancet read</code> again, recompute your edit against the new lines, and retry with the fresh <code>rev</code>.</td></tr><tr><td><code>--find</code> refused (non-unique)</td><td>Literal appeared 0 or &gt;1 times</td><td>Inspect line numbers printed in the error; expand surrounding context in <code>--find</code> or add <code>--all</code> if intentional.</td></tr><tr><td>Syntax error increase refused</td><td>Edit or patch increased Tree-sitter error count</td><td>Check the preview diff for missing braces/quotes; pass <code>--allow-syntax-errors</code> only if intentionally staging a partial fix.</td></tr><tr><td><code>lancet rename</code> refused</td><td>Top-level/field/Python param, macro/<code>eval</code>, or shadowing</td><td>Check error message; for non-local/cross-file symbols use <code>lancet refs</code> + <code>lancet edit --edits</code> or your LSP.</td></tr><tr><td><code>ast --rewrite --apply</code> with <code>--limit</code></td><td>Partial capped rewrites cannot be applied blindly</td><td>Drop <code>--limit</code> or narrow scope with <code>--path</code> globs before <code>--apply</code>.</td></tr><tr><td><code>lancet rg -P</code> error</td><td>PCRE2 lookarounds/backreferences unsupported</td><td>Use Rust <code>regex</code> without lookarounds, or rewrite via LQL <code>before()</code> / <code>NOT</code>.</td></tr><tr><td><code>lancet fd</code> usage error on 2 paths</td><td><code>fd</code> accepts at most one <code>[PATH]</code> argument</td><td>Invoke once per directory or search from repo root with <code>-p</code> / glob filters.</td></tr></tbody></table></div>
-
-      <div class="pager"><a class="pager-card prev" href="query-and-ast.html"><small>← Previous</small><b>LQL & 24 AST Languages</b></a><div></div></div>
+      <div class="pager"><a class="pager-card prev" href="lql-and-ast.html"><small>← Previous</small><b>LQL & 24 AST Languages</b></a><a class="pager-card next" href="troubleshooting.html"><small>Next →</small><b>Troubleshooting & Recovery</b></a></div>
       <div class="meta-foot">
         <span>MIT OR Apache-2.0 · Single Rust binary</span>
         <a href="https://github.com/CREE1116/lancet/blob/main/docs/mcp.md" target="_blank" rel="noopener">View source on GitHub →</a>

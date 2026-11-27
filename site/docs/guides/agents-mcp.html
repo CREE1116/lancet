@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Integrating AI Agents: MCP Server & Official Skill — lancet Docs</title>
-<meta name="description" content="Setup lancet mcp for Claude Code, Cursor, Claude Desktop, Antigravity, and Codex, plus skills/lancet.">
+<title>AI Agents, Built-in MCP Server & Official Skill — lancet Docs</title>
+<meta name="description" content="Configure lancet mcp across Claude Code, Cursor, Codex, Antigravity, and Claude Desktop, plus install skills/lancet.">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
@@ -16,8 +16,8 @@
 <meta property="og:site_name" content="lancet">
 <meta property="og:locale" content="en_US">
 <meta property="og:url" content="https://cree1116.github.io/lancet/docs/guides/agents-mcp.html">
-<meta property="og:title" content="Integrating AI Agents: MCP Server & Official Skill — lancet Docs">
-<meta property="og:description" content="Setup lancet mcp for Claude Code, Cursor, Claude Desktop, Antigravity, and Codex, plus skills/lancet.">
+<meta property="og:title" content="AI Agents, Built-in MCP Server & Official Skill — lancet Docs">
+<meta property="og:description" content="Configure lancet mcp across Claude Code, Cursor, Codex, Antigravity, and Claude Desktop, plus install skills/lancet.">
 <meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
@@ -55,32 +55,30 @@
 
 <div class="doc-shell">
   <aside class="doc-sidebar" aria-label="Documentation navigation">
-    <div class="nav-group"><div class="nav-group-title">Getting Started</div><ul class="nav-list"><li><a href="../index.html">Introduction & Cheat Sheet</a></li><li><a href="../migration.html">Migration from rg, fd, sg, sed</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Guides & Recipes</div><ul class="nav-list"><li><a href="explore.html">Exploring Codebases</a></li><li><a href="editing.html">Safe Editing, Patch & Rename</a></li><li><a href="documents.html">PDFs, Office, HWP & Archives</a></li><li><a href="agents-mcp.html" class="active">AI Agents, MCP & Skill</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Concepts & Design</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">Index & Freshness Model</a></li><li><a href="../concepts/architecture-and-benchmarks.html">Architecture & Benchmarks</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul class="nav-list"><li><a href="../reference/cli.html">CLI & lancet rg Reference</a></li><li><a href="../reference/query-and-ast.html">LQL & 24 AST Languages</a></li><li><a href="../reference/json-and-mcp.html">JSON Schemas, MCP & Recovery</a></li></ul></div>
+    <div class="nav-group"><div class="nav-group-title">Getting Started</div><ul class="nav-list"><li><a href="../index.html">Installation & Quickstart</a></li><li><a href="../migration.html">Migration from rg, fd, sg</a></li><li><a href="../filtering.html">Ignore Rules, Globs & Types</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Search & Discovery</div><ul class="nav-list"><li><a href="explore.html">Files, Outlines & Ranking</a></li><li><a href="search.html">Text Search, LQL & Batch</a></li><li><a href="ast.html">AST Search & Rewrite</a></li><li><a href="read-and-documents.html">Reads, PDF, Office & HWP</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Editing & Agents</div><ul class="nav-list"><li><a href="edit.html">Safe Editing & CAS</a></li><li><a href="patch.html">Atomic Multi-File Patch</a></li><li><a href="rename.html">Local Scope Rename</a></li><li><a href="agents-mcp.html" class="active">AI Agents, MCP & Skill</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Architecture & Internals</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">Index (LANCET04) & Freshness</a></li><li><a href="../concepts/write-safety.html">Write Safety & File Identity</a></li><li><a href="../concepts/benchmarks.html">Benchmarks & Competitors</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul class="nav-list"><li><a href="../reference/cli.html">CLI Commands & Exit Codes</a></li><li><a href="../reference/rg-parity.html">lancet rg Parity Matrix</a></li><li><a href="../reference/lql-and-ast.html">LQL & 24 AST Languages</a></li><li><a href="../reference/json-and-mcp.html">JSON Schemas & MCP Tools</a></li><li><a href="../reference/troubleshooting.html">Troubleshooting & Recovery</a></li></ul></div>
   </aside>
 
   <main class="doc-main">
     <article class="doc-article">
-      <div class="crumb">Guides & Recipes</div>
-      <h1>Integrating AI Agents: MCP Server & Official Skill</h1>
-      <p class="lede">Expose all 11 engines over newline-delimited stdio JSON-RPC or install the cross-agent Skill in two commands.</p>
+      <div class="crumb">Editing & Agents</div>
+      <h1>AI Agents, Built-in MCP Server & Official Skill</h1>
+      <p class="lede">11 tools over newline-delimited stdio JSON-RPC with --read-only, --root, and the cross-agent Official Skill.</p>
       
-<p>AI coding agents can invoke Lancet either through shell commands or natively through its zero-dependency stdio <strong>Model Context Protocol (MCP)</strong> server — paired with the cross-agent <strong>Official Skill</strong> in <code>skills/lancet/</code>.</p>
+<p>AI coding agents can drive Lancet via shell CLI or its zero-dependency stdio <strong>Model Context Protocol (MCP)</strong> server — paired with the cross-agent <strong>Official Skill</strong> package (<code>skills/lancet/</code>).</p>
 
-<h2 id="mcp-server">Starting the Built-in MCP Server (lancet mcp)<a class="heading-anchor" href="#mcp-server" aria-label="Link to section">#</a></h2>
-<p><code>lancet mcp</code> speaks newline-delimited JSON-RPC 2.0 over <code>stdin</code>/<code>stdout</code> (supporting MCP revisions <code>2025-03-26</code> and <code>2024-11-05</code>) and executes Lancet's Rust engines directly in-process without async daemon overhead.</p>
-<div class="table-wrap"><table><thead><tr><th>Flag</th><th>Default</th><th>Behavior</th></tr></thead><tbody><tr><td><code>--root &lt;DIR&gt;</code></td><td><code>.</code></td><td>Default working directory for resolving relative paths in tool calls (<strong>not</strong> a chroot/sandbox; absolute or <code>..</code> paths work like the CLI)</td></tr><tr><td><code>--read-only</code></td><td><code>false</code></td><td>Omits <code>lancet_edit</code>, <code>lancet_patch</code>, and <code>lancet_rename</code> from <code>tools/list</code> and refuses writes (<code>lancet_ast</code> <code>apply</code>, mutating <code>lancet_index</code> actions)</td></tr><tr><td><code>--trust-index</code></td><td><code>false</code></td><td>Sets default <code>index_mode</code> to <code>trust</code> instead of <code>auto</code> unless overridden per tool call</td></tr><tr><td><code>-j, --threads &lt;NUM&gt;</code></td><td>CPU count</td><td>Rayon worker thread count</td></tr></tbody></table></div>
+<h2 id="mcp-flags">Starting lancet mcp<a class="heading-anchor" href="#mcp-flags" aria-label="Link to section">#</a></h2>
+<p><code>lancet mcp</code> speaks newline-delimited JSON-RPC 2.0 over <code>stdin</code>/<code>stdout</code> supporting protocol revisions <code>2025-03-26</code> and <code>2024-11-05</code>, invoking Lancet's Rust engines directly in-process.</p>
+<div class="table-wrap"><table><thead><tr><th>Flag</th><th>Default</th><th>Exact Behavior</th></tr></thead><tbody><tr><td><code>--root &lt;DIR&gt;</code></td><td><code>.</code></td><td>Base directory for relative paths in tool arguments (<strong>not</strong> a chroot/sandbox; absolute or <code>..</code> paths still resolve like the CLI)</td></tr><tr><td><code>--read-only</code></td><td><code>false</code></td><td>Removes <code>lancet_edit</code>, <code>lancet_patch</code>, and <code>lancet_rename</code> from <code>tools/list</code> and refuses writes (<code>lancet_ast</code> <code>apply</code>, mutating <code>lancet_index</code> actions)</td></tr><tr><td><code>--trust-index</code></td><td><code>false</code></td><td>Sets default <code>index_mode</code> to <code>trust</code> instead of <code>auto</code> unless overridden per tool call</td></tr><tr><td><code>-j, --threads &lt;NUM&gt;</code></td><td>CPU count</td><td>Rayon worker threads</td></tr></tbody></table></div>
 
-<h2 id="client-configs">Client Configurations<a class="heading-anchor" href="#client-configs" aria-label="Link to section">#</a></h2>
-<p>Ready-to-copy templates are also shipped in <a href="https://github.com/CREE1116/lancet/blob/main/skills/lancet/references/mcp-config.json"><code>skills/lancet/references/mcp-config.json</code></a>.</p>
-
-<h3 id="cfg-claude">Claude Code<a class="heading-anchor" href="#cfg-claude" aria-label="Link to section">#</a></h3>
-<div class="doc-code"><div class="doc-code-head"><span>Terminal</span><button class="copy-btn" type="button">Copy</button></div><pre><code># Standard read/write server
+<h2 id="client-configs">Ready-to-Copy Client Configurations<a class="heading-anchor" href="#client-configs" aria-label="Link to section">#</a></h2>
+<p>Full template bundle: <a href="https://github.com/CREE1116/lancet/blob/main/skills/lancet/references/mcp-config.json"><code>skills/lancet/references/mcp-config.json</code></a>.</p>
+<h3 id="claude-code">Claude Code<a class="heading-anchor" href="#claude-code" aria-label="Link to section">#</a></h3>
+<div class="doc-code"><div class="doc-code-head"><span>Terminal</span><button class="copy-btn" type="button">Copy</button></div><pre><code># Read + CAS write tools
 claude mcp add --transport stdio lancet -- lancet mcp --root .
 
-# Read-only exploration mode
+# Safe read-only research server
 claude mcp add --transport stdio lancet -- lancet mcp --root . --read-only</code></pre></div>
-
-<h3 id="cfg-cursor">Cursor (.cursor/mcp.json or ~/.cursor/mcp.json)<a class="heading-anchor" href="#cfg-cursor" aria-label="Link to section">#</a></h3>
+<h3 id="cursor">Cursor (.cursor/mcp.json or ~/.cursor/mcp.json)<a class="heading-anchor" href="#cursor" aria-label="Link to section">#</a></h3>
 <div class="doc-code"><div class="doc-code-head"><span>JSON</span><button class="copy-btn" type="button">Copy</button></div><pre><code>{
   &quot;mcpServers&quot;: {
     &quot;lancet&quot;: {
@@ -89,9 +87,8 @@ claude mcp add --transport stdio lancet -- lancet mcp --root . --read-only</code
     }
   }
 }</code></pre></div>
-
-<h3 id="cfg-desktop">Claude Desktop / Windsurf / Antigravity<a class="heading-anchor" href="#cfg-desktop" aria-label="Link to section">#</a></h3>
-<p>Pass an absolute <code>--root</code> path when the desktop host launches outside your project directory:</p>
+<h3 id="desktop-agy">Claude Desktop / Windsurf / Antigravity<a class="heading-anchor" href="#desktop-agy" aria-label="Link to section">#</a></h3>
+<p>Pass an absolute <code>--root</code> path when the desktop client launches without your project as CWD:</p>
 <div class="doc-code"><div class="doc-code-head"><span>JSON</span><button class="copy-btn" type="button">Copy</button></div><pre><code>{
   &quot;mcpServers&quot;: {
     &quot;lancet&quot;: {
@@ -100,33 +97,31 @@ claude mcp add --transport stdio lancet -- lancet mcp --root . --read-only</code
     }
   }
 }</code></pre></div>
-
-<h3 id="cfg-codex">OpenAI Codex (~/.codex/config.toml)<a class="heading-anchor" href="#cfg-codex" aria-label="Link to section">#</a></h3>
+<h3 id="codex">OpenAI Codex (~/.codex/config.toml)<a class="heading-anchor" href="#codex" aria-label="Link to section">#</a></h3>
 <div class="doc-code"><div class="doc-code-head"><span>TOML</span><button class="copy-btn" type="button">Copy</button></div><pre><code>[mcp_servers.lancet]
 command = &quot;lancet&quot;
 args = [&quot;mcp&quot;, &quot;--root&quot;, &quot;.&quot;]</code></pre></div>
 
-<h2 id="official-skill">Installing the Official Agent Skill<a class="heading-anchor" href="#official-skill" aria-label="Link to section">#</a></h2>
-<p>The cross-agent Skill package (<a href="https://github.com/CREE1116/lancet/tree/main/skills/lancet"><code>skills/lancet/</code></a>) teaches agents LQL syntax, all 24 AST language aliases, compare-and-swap <code>rev</code> workflows, and when to prefer <code>lancet</code> over legacy tools.</p>
-<div class="doc-code"><div class="doc-code-head"><span>Terminal</span><button class="copy-btn" type="button">Copy</button></div><pre><code># Project-local (.agents universal convention)
+<h2 id="skill-install">Installing the Official Agent Skill<a class="heading-anchor" href="#skill-install" aria-label="Link to section">#</a></h2>
+<p>The <a href="https://github.com/CREE1116/lancet/tree/main/skills/lancet"><code>skills/lancet/</code></a> directory bundles <code>SKILL.md</code> plus detailed <code>references/</code> for LQL, 24 AST languages, edit/patch/rename CAS rules, and MCP configs.</p>
+<div class="doc-code"><div class="doc-code-head"><span>Terminal</span><button class="copy-btn" type="button">Copy</button></div><pre><code># Project-local (.agents standard)
 mkdir -p .agents/skills &amp;&amp; ln -s &quot;$(pwd)/skills/lancet&quot; .agents/skills/lancet
 
-# Claude Code / Codex / Antigravity personal skills
+# Personal install (Claude Code / Codex / Antigravity)
 mkdir -p ~/.claude/skills &amp;&amp; cp -R skills/lancet ~/.claude/skills/lancet
 mkdir -p ~/.codex/skills  &amp;&amp; cp -R skills/lancet ~/.codex/skills/lancet
 mkdir -p ~/.gemini/config/skills &amp;&amp; cp -R skills/lancet ~/.gemini/config/skills/lancet</code></pre></div>
 
-<h2 id="tools-overview">11 Tools &amp; 2 Built-in Prompts<a class="heading-anchor" href="#tools-overview" aria-label="Link to section">#</a></h2>
-<p>Every read/search tool treats 0 matches as a normal <code>empty</code> result (<code>isError: false</code>). Write operations default to <code>apply: false</code> (dry-run unified diff). See the full parameter and response schema tables in <a href="../reference/json-and-mcp.html#mcp-tools">JSON &amp; MCP Reference</a>.</p>
+<h2 id="prompts-notes">Built-in MCP Prompts &amp; AGENTS.md Rule<a class="heading-anchor" href="#prompts-notes" aria-label="Link to section">#</a></h2>
 <ul>
-  <li><strong>Exploration &amp; search:</strong> <code>lancet_fd</code>, <code>lancet_outline</code>, <code>lancet_search</code>, <code>lancet_rg</code>, <code>lancet_refs</code> (including <code>rank: true</code>), <code>lancet_ast</code>, <code>lancet_read</code>.</li>
-  <li><strong>Safe mutations:</strong> <code>lancet_edit</code>, <code>lancet_patch</code>, <code>lancet_rename</code>, plus <code>lancet_ast</code> with <code>apply: true</code>.</li>
-  <li><strong>Index control:</strong> <code>lancet_index</code> (<code>status</code>, <code>sync</code>, <code>rebuild</code>, <code>compact</code>).</li>
-  <li><strong>Built-in prompts:</strong> <code>lancet-explore</code> and <code>lancet-safe-edit</code> via <code>prompts/list</code>.</li>
+  <li><strong><code>prompts/list</code>:</strong> ships <code>lancet-explore</code> (<code>goal</code> argument) and <code>lancet-safe-edit</code> (<code>target</code> argument).</li>
+  <li><strong>Empty-match semantics:</strong> read/search tools return <code>isError: false</code> on <code>status: "empty"</code> (0 hits is normal, not an exception).</li>
+  <li><strong>Line-boundary byte cap:</strong> <code>lancet_rg</code> caps stdout cleanly on a newline boundary via <code>max_output_bytes</code> (default <code>131072</code> B = 128 KiB, hard clamp <code>256..=4194304</code>).</li>
 </ul>
-<div class="callout tip"><div class="callout-title">Minimal AGENTS.md / CLAUDE.md snippet</div><pre style='margin:6px 0 0;white-space:pre-wrap;font-size:12.5px'>Prefer lancet (lancet_* MCP tools or lancet CLI) over rg/fd/ast-grep/cat/sed for discovery, search, bounded reads, and CAS edits (read --rev -> edit --apply).</pre></div>
+<div class="doc-code"><div class="doc-code-head"><span>AGENTS.md / CLAUDE.md snippet</span><button class="copy-btn" type="button">Copy</button></div><pre><code>Prefer lancet (lancet_* MCP tools or lancet CLI) instead of rg/fd/ast-grep/cat/sed.
+Orient with fd/outline, locate with rg/search/refs/ast, capture rev via read, apply changes via edit/patch/rename --rev --apply.</code></pre></div>
 
-      <div class="pager"><a class="pager-card prev" href="documents.html"><small>← Previous</small><b>PDFs, Office, HWP & Archives</b></a><a class="pager-card next" href="../concepts/index-and-freshness.html"><small>Next →</small><b>Index & Freshness Model</b></a></div>
+      <div class="pager"><a class="pager-card prev" href="rename.html"><small>← Previous</small><b>Local Scope Rename</b></a><a class="pager-card next" href="../concepts/index-and-freshness.html"><small>Next →</small><b>Index (LANCET04) & Freshness</b></a></div>
       <div class="meta-foot">
         <span>MIT OR Apache-2.0 · Single Rust binary</span>
         <a href="https://github.com/CREE1116/lancet/blob/main/docs/mcp.md" target="_blank" rel="noopener">View source on GitHub →</a>

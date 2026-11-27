@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>문제 해결 & 거절 사유별 복구 매트릭스 — lancet 문서</title>
+<meta name="description" content="CAS 충돌, --find 비고유, 구문 게이트, rename 거절, patch, OCR, Windows 최신성 증상별 복구표.">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://cree1116.github.io/lancet/ko/docs/reference/troubleshooting.html">
+<link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/reference/troubleshooting.html">
+<link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/reference/troubleshooting.html">
+<link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/reference/troubleshooting.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="lancet">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:url" content="https://cree1116.github.io/lancet/ko/docs/reference/troubleshooting.html">
+<meta property="og:title" content="문제 해결 & 거절 사유별 복구 매트릭스 — lancet 문서">
+<meta property="og:description" content="CAS 충돌, --find 비고유, 구문 게이트, rename 거절, patch, OCR, Windows 최신성 증상별 복구표.">
+<meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image-ko.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../../../assets/docs.css?v=1">
+</head>
+<body data-docs-root="../" data-search-url="../../../assets/docs-search.json">
+
+<header class="doc-header">
+  <div class="doc-header-in">
+    <button class="menu-btn" id="menu-btn" type="button" aria-label="문서 메뉴 열기" aria-expanded="false">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg>
+    </button>
+    <a class="doc-brand" href="../../index.html">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 27 L24 6 l3 3 L8 28 Z" fill="currentColor" style="color:var(--accent)"/></svg>
+      lancet
+    </a>
+    <a class="doc-badge" href="../index.html">문서</a>
+    <button class="search-trigger" id="search-trigger" type="button">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <span>문서 검색…</span>
+      <kbd>/</kbd>
+    </button>
+    <nav class="header-links" aria-label="Primary">
+      <a href="../../index.html" class="hide-sm">홈</a>
+      <a href="../../../docs/reference/troubleshooting.html" hreflang="en" lang="en">English</a>
+      <a class="header-gh" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span class="hide-sm">GitHub</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+
+<div class="doc-shell">
+  <aside class="doc-sidebar" aria-label="Documentation navigation">
+    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="../index.html">설치 · 빠른 시작</a></li><li><a href="../migration.html">rg·fd·sg에서 전환</a></li><li><a href="../filtering.html">무시 규칙 · 글롭 · 타입</a></li></ul></div><div class="nav-group"><div class="nav-group-title">탐색과 검색</div><ul class="nav-list"><li><a href="../guides/explore.html">파일 탐색 · 아웃라인 · 랭킹</a></li><li><a href="../guides/search.html">텍스트 검색 · LQL · 배치</a></li><li><a href="../guides/ast.html">구조적 AST 검색 · 치환</a></li><li><a href="../guides/read-and-documents.html">정밀 읽기 · PDF · HWP</a></li></ul></div><div class="nav-group"><div class="nav-group-title">편집과 에이전트</div><ul class="nav-list"><li><a href="../guides/edit.html">안전한 편집 & CAS</a></li><li><a href="../guides/patch.html">원자적 다중 파일 패치</a></li><li><a href="../guides/rename.html">로컬 스코프 이름 변경</a></li><li><a href="../guides/agents-mcp.html">AI 에이전트 · MCP · 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">아키텍처와 내부 구조</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">인덱스(LANCET04) & 최신성</a></li><li><a href="../concepts/write-safety.html">쓰기 안전성 & 파일 정체성</a></li><li><a href="../concepts/benchmarks.html">벤치마크 & 경쟁 비교</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="cli.html">CLI 명령 · 종료 코드</a></li><li><a href="rg-parity.html">lancet rg 호환성 표</a></li><li><a href="lql-and-ast.html">LQL 문법 · AST 24개 언어</a></li><li><a href="json-and-mcp.html">JSON 스키마 · MCP 11개 도구</a></li><li><a href="troubleshooting.html" class="active">문제 해결 · 오류 복구</a></li></ul></div>
+  </aside>
+
+  <main class="doc-main">
+    <article class="doc-article">
+      <div class="crumb">레퍼런스</div>
+      <h1>문제 해결 & 거절 사유별 복구 매트릭스</h1>
+      <p class="lede">모든 오류와 의도적 거절 사유에 대한 원인 진단과 즉시 복구 절차.</p>
+      
+<p>Lancet의 모든 거절은 조용히 덮어쓰지 않고 종료 코드 <code>2</code>와 구체적인 원인 메시지를 반환합니다. 증상별 해결 절차를 바로 찾으세요.</p>
+
+<h2 id="edit-patch-errors">편집 · 패치 · 이름 변경 거절<a class="heading-anchor" href="#edit-patch-errors" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>증상 / 오류</th><th>근본 원인</th><th>정확한 복구 절차</th></tr></thead><tbody><tr><td><code>edit</code> / <code>patch</code> / <code>rename</code>에서 <code>status: "conflict"</code></td><td><code>--rev</code>를 읽은 뒤 디스크 파일이 변경됨</td><td><code>lancet read &lt;FILE&gt; --json</code>으로 새 내용과 <code>rev</code>를 다시 읽어 수정을 재계산해 적용합니다.</td></tr><tr><td><code>edit --find</code> 거절 (0회 또는 2회 이상 일치)</td><td>리터럴 문자열이 파일 내에서 고유하지 않음</td><td>오류에 출력된 줄 번호를 보고 <code>--find</code> 앞뒤 문맥을 넓히거나 의도한 전체 변경이면 <code>--all</code>을 추가합니다.</td></tr><tr><td><code>edit --symbol</code> 후 문서 주석·어트리뷰트 사라짐</td><td><code>--symbol</code>은 <code>read --symbol</code>처럼 위쪽 <code>///</code>·<code>#[attr]</code>까지 포함함</td><td><code>--with</code>/<code>--with-file</code>에 주석과 어트리뷰트를 포함하거나 본문 줄 범위(<code>--lines</code>)만 지정하세요.</td></tr><tr><td>구문 오류 증가 거절</td><td>편집·패치 결과 Tree-sitter 구문 오류 수가 늘어남</td><td>dry-run diff에서 닫히지 않은 괄호·따옴표를 점검하고, 의도된 중간 단계일 때만 <code>--allow-syntax-errors</code>를 씁니다.</td></tr><tr><td><code>lancet rename</code> 거절 (<code>unsupported</code>)</td><td>최상위/필드/메서드/Python 매개변수/매크로/JSX 태그/섀도잉</td><td><a href='../guides/rename.html#refusals'>거절 목록</a>을 확인하고 <code>lancet refs</code> + <code>lancet edit --edits</code>나 LSP를 사용하세요.</td></tr><tr><td><code>lancet patch</code> 바이너리/복사 diff 거절</td><td>패치에 <code>Binary files</code> 또는 <code>copy from</code> 포함</td><td>텍스트 hunk만 남겨 파이프하세요.</td></tr></tbody></table></div>
+
+<h2 id="search-ast-errors">검색 · AST · 순회 오류<a class="heading-anchor" href="#search-ast-errors" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>증상 / 오류</th><th>근본 원인</th><th>정확한 복구 절차</th></tr></thead><tbody><tr><td>LQL에서 <code>status: "invalid_query"</code></td><td>알 수 없는 필터, 닫히지 않은 따옴표, 연산자 누락</td><td><code>lancet parse '&lt;QUERY&gt;'</code>를 실행해 오류 <code>pos</code> 바이트 위치를 확인하세요.</td></tr><tr><td><code>ast --rewrite --apply</code>가 <code>--limit</code> 거절</td><td>개수 제한과 자동 적용의 조합은 의도치 않은 부분 수정을 유발함</td><td><code>--limit</code>을 빼고 <code>--path GLOB</code>로 대상 파일을 좁히세요.</td></tr><tr><td><code>ast 'if ($C) $S'</code>가 <code>if ... else</code> 누락</td><td>Lancet은 <code>if</code>와 <code>if-else</code> AST 노드를 엄격히 구분함</td><td><code>else</code> 분기까지 포함하는 두 번째 패턴을 함께 실행하세요.</td></tr><tr><td><code>lancet rg -P</code> 실패</td><td>PCRE2 전후방 탐색·역참조 미지원</td><td>룩어라운드 없는 Rust <code>regex</code>나 LQL <code>before()</code> / <code>NOT</code>으로 작성하세요.</td></tr><tr><td><code>lancet fd</code>에 경로 2개 전달 시 오류</td><td><code>lancet fd [PATTERN] [PATH]</code>는 최대 1개 <code>PATH</code>만 허용</td><td>디렉터리마다 나눠 호출하거나, 패턴이 폴더명과 같다면 <code>-p PATTERN</code>을 쓰세요.</td></tr></tbody></table></div>
+
+<h2 id="index-docs-mcp">인덱스 · 문서 · MCP 문제<a class="heading-anchor" href="#index-docs-mcp" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>증상 / 메시지</th><th>근본 원인</th><th>정확한 복구 절차</th></tr></thead><tbody><tr><td><code>--trust-index</code>에서 방금 수정한 파일이 검색 안 됨</td><td><code>--trust-index</code>는 설계상 디스크 stat 검사를 건너뜀</td><td><code>--trust-index</code>를 빼고 <code>auto</code> 모드를 쓰거나 <code>lancet index .</code>로 동기화하세요.</td></tr><tr><td>Windows에서 크기·<code>mtime</code> 동일한 수정 놓침</td><td>Windows에서 Rust stdlib이 <code>mtime</code>과 <code>size</code>만 제공함</td><td>타임스탬프를 되돌리는 도구 실행 후엔 <code>lancet index .</code>나 <code>--no-index</code>를 쓰세요.</td></tr><tr><td><code>lancet rg</code>가 PDF / <code>.docx</code> 내용을 못 찾음</td><td><code>lancet rg</code>는 <code>rg</code> 호환성 때문에 어댑터가 기본 OFF</td><td><code>lancet rg --docs</code>를 붙이거나 기본 LQL 검색(<code>lancet 'query'</code>)을 쓰세요.</td></tr><tr><td>스캔 PDF / 이미지 텍스트가 비어 있음</td><td>임베디드 텍스트 레이어가 없는 이미지</td><td><code>--ocr</code>을 붙이고 <code>PATH</code>에 <code>pdftoppm</code>과 <code>tesseract</code>가 있는지 확인하세요.</td></tr><tr><td>MCP 목록에 <code>lancet_edit</code> / <code>patch</code> / <code>rename</code> 없음</td><td><code>lancet mcp --read-only</code>로 실행됨</td><td>편집이 필요하면 <code>--read-only</code> 없이 서버를 다시 시작하세요.</td></tr></tbody></table></div>
+
+      <div class="pager"><a class="pager-card prev" href="json-and-mcp.html"><small>← 이전</small><b>JSON 스키마 · MCP 11개 도구</b></a><div></div></div>
+      <div class="meta-foot">
+        <span>MIT OR Apache-2.0 · Rust 단일 바이너리</span>
+        <a href="https://github.com/CREE1116/lancet/blob/main/skills/lancet/references/edit-patch-rename.md" target="_blank" rel="noopener">GitHub에서 소스 보기 →</a>
+      </div>
+    </article>
+  </main>
+
+  <aside class="doc-toc" aria-label="이 페이지 목차">
+    <div class="toc-title">이 페이지 목차</div>
+    <ul class="toc-list" id="doc-toc"></ul>
+  </aside>
+</div>
+
+<div class="search-modal" id="search-modal" role="dialog" aria-modal="true" aria-label="문서 검색…" hidden>
+  <div class="search-panel">
+    <div class="search-input-row">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <input id="search-input" type="search" placeholder="문서 검색…" autocomplete="off" spellcheck="false">
+      <button class="search-esc" id="search-esc" type="button">Esc</button>
+    </div>
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../../../assets/docs-search.js?v=1"></script>
+<script src="../../../assets/docs.js?v=1"></script>
+</body>
+</html>

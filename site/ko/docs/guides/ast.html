@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>구조적 AST 검색 & 안전한 치환 (24개 언어) — lancet 문서</title>
+<meta name="description" content="$VAR, $_, $$$ARGS, 문장 메타변수, 구조 동등성, dry-run diff, 중첩 건너뛰기(skipped_overlaps).">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://cree1116.github.io/lancet/ko/docs/guides/ast.html">
+<link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/guides/ast.html">
+<link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/guides/ast.html">
+<link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/guides/ast.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="lancet">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:url" content="https://cree1116.github.io/lancet/ko/docs/guides/ast.html">
+<meta property="og:title" content="구조적 AST 검색 & 안전한 치환 (24개 언어) — lancet 문서">
+<meta property="og:description" content="$VAR, $_, $$$ARGS, 문장 메타변수, 구조 동등성, dry-run diff, 중첩 건너뛰기(skipped_overlaps).">
+<meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image-ko.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../../../assets/docs.css?v=1">
+</head>
+<body data-docs-root="../" data-search-url="../../../assets/docs-search.json">
+
+<header class="doc-header">
+  <div class="doc-header-in">
+    <button class="menu-btn" id="menu-btn" type="button" aria-label="문서 메뉴 열기" aria-expanded="false">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg>
+    </button>
+    <a class="doc-brand" href="../../index.html">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 27 L24 6 l3 3 L8 28 Z" fill="currentColor" style="color:var(--accent)"/></svg>
+      lancet
+    </a>
+    <a class="doc-badge" href="../index.html">문서</a>
+    <button class="search-trigger" id="search-trigger" type="button">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <span>문서 검색…</span>
+      <kbd>/</kbd>
+    </button>
+    <nav class="header-links" aria-label="Primary">
+      <a href="../../index.html" class="hide-sm">홈</a>
+      <a href="../../../docs/guides/ast.html" hreflang="en" lang="en">English</a>
+      <a class="header-gh" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span class="hide-sm">GitHub</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+
+<div class="doc-shell">
+  <aside class="doc-sidebar" aria-label="Documentation navigation">
+    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="../index.html">설치 · 빠른 시작</a></li><li><a href="../migration.html">rg·fd·sg에서 전환</a></li><li><a href="../filtering.html">무시 규칙 · 글롭 · 타입</a></li></ul></div><div class="nav-group"><div class="nav-group-title">탐색과 검색</div><ul class="nav-list"><li><a href="explore.html">파일 탐색 · 아웃라인 · 랭킹</a></li><li><a href="search.html">텍스트 검색 · LQL · 배치</a></li><li><a href="ast.html" class="active">구조적 AST 검색 · 치환</a></li><li><a href="read-and-documents.html">정밀 읽기 · PDF · HWP</a></li></ul></div><div class="nav-group"><div class="nav-group-title">편집과 에이전트</div><ul class="nav-list"><li><a href="edit.html">안전한 편집 & CAS</a></li><li><a href="patch.html">원자적 다중 파일 패치</a></li><li><a href="rename.html">로컬 스코프 이름 변경</a></li><li><a href="agents-mcp.html">AI 에이전트 · MCP · 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">아키텍처와 내부 구조</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">인덱스(LANCET04) & 최신성</a></li><li><a href="../concepts/write-safety.html">쓰기 안전성 & 파일 정체성</a></li><li><a href="../concepts/benchmarks.html">벤치마크 & 경쟁 비교</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="../reference/cli.html">CLI 명령 · 종료 코드</a></li><li><a href="../reference/rg-parity.html">lancet rg 호환성 표</a></li><li><a href="../reference/lql-and-ast.html">LQL 문법 · AST 24개 언어</a></li><li><a href="../reference/json-and-mcp.html">JSON 스키마 · MCP 11개 도구</a></li><li><a href="../reference/troubleshooting.html">문제 해결 · 오류 복구</a></li></ul></div>
+  </aside>
+
+  <main class="doc-main">
+    <article class="doc-article">
+      <div class="crumb">탐색과 검색</div>
+      <h1>구조적 AST 검색 & 안전한 치환 (24개 언어)</h1>
+      <p class="lede">트라이그램 프리필터와 dry-run diff 위에서 24개 Tree-sitter 언어의 구문 트리를 검색·변환합니다.</p>
+      
+<p><code>lancet ast</code>는 내장된 24개 Tree-sitter 문법으로 구문 트리를 매치합니다. 공백, 개행, 주석, 문자열 내용 차이를 무시하고 실제 코드 구조만 겨냥합니다.</p>
+
+<h2 id="metavariables">메타변수와 구조 동등성 제약<a class="heading-anchor" href="#metavariables" aria-label="Link to section">#</a></h2>
+<ul>
+  <li><strong><code>$VAR</code> (단일 명명 노드):</strong> 이름 있는 AST 노드 1개를 캡처합니다. 같은 이름을 반복하면(예: <code>$X == $X</code>, <code>$X = $X</code>) 두 서브트리의 <strong>구조적 동등성</strong>을 강제합니다.</li>
+  <li><strong><code>$_</code> (익명 와일드카드):</strong> 단일 노드에 매치되지만 리라이트 캡처에 저장하지 않습니다.</li>
+  <li><strong><code>$$$ARGS</code> (가변 형제 노드):</strong> 0개 이상의 형제 노드(함수 인자, 구조체 필드, 문장 블록)에 매치합니다.</li>
+  <li><strong>C 계열 문장 메타변수:</strong> C, C++, Rust, Go, JS/TS/TSX, Java, C# 등에서 <code>if ($C) $S</code>, <code>{ $$$B }</code> 같은 문장/블록 패턴이 동작합니다.</li>
+</ul>
+
+<h2 id="recipes">언어별 AST 검색·치환 레시피<a class="heading-anchor" href="#recipes" aria-label="Link to section">#</a></h2>
+<div class="doc-code"><div class="doc-code-head"><span>터미널</span><button class="copy-btn" type="button">복사</button></div><pre><code># Rust: .unwrap()을 ? 연산자로 바꾸는 dry-run 미리보기
+lancet ast &#x27;$X.unwrap()&#x27; src --lang rs --rewrite &#x27;$X?&#x27;
+
+# Rust: 가변 인자 panic! 호출 찾기
+lancet ast &#x27;panic!($$$ARGS)&#x27; src --lang rs
+
+# Python: 자기 자신과의 중복 비교 탐지 ($X 구조 동등성)
+lancet ast &#x27;$X == $X&#x27; . --lang py
+
+# Go: 테스트 파일을 제외한 fmt.Errorf 래핑 일괄 치환 미리보기
+lancet ast &#x27;fmt.Errorf($FMT, $ERR)&#x27; pkg/ --lang go --path &#x27;!*_test.go&#x27; --rewrite &#x27;errors.Wrap($ERR, $FMT)&#x27;
+
+# TypeScript / TSX: console.log 호출 찾기
+lancet ast &#x27;console.log($$$ARGS)&#x27; web/ --lang tsx</code></pre></div>
+
+<h2 id="rewrites">안전한 리라이트와 원자적 --apply<a class="heading-anchor" href="#rewrites" aria-label="Link to section">#</a></h2>
+<ol>
+  <li><strong>먼저 미리보기:</strong> <code>--rewrite TEMPLATE</code>만 주면 디스크를 수정하지 않고 unified diff(<code>mode: "dry-run"</code>)를 출력합니다.</li>
+  <li><strong><code>skipped_overlaps</code> 확인:</strong> 한 파일 안에 중첩된 매치(예: 중첩된 <code>$X.unwrap().foo.unwrap()</code>)가 있으면 가장 앞/바깥쪽 편집을 우선 적용하고 겹치는 안쪽 편집은 건너뛰어 오프셋 손상을 막습니다. 안쪽 잔여분은 한 번 더 실행하면 됩니다.</li>
+  <li><strong>원자적 기록:</strong> <code>--apply</code>를 추가하면 Tree-sitter 구문 검사 게이트와 <code>write_atomic</code>을 거쳐 반영합니다.</li>
+</ol>
+
+<div class="callout warn"><div class="callout-title">주의할 제약과 ast-grep과의 차이</div><ul><li><strong><code>--apply</code>는 <code>--limit</code>과 병행 불가:</strong> 일부 개수만 잘린 리라이트가 실수로 반영되지 않도록 <code>--limit</code>을 거절합니다. 대신 <code>--path</code> 글롭으로 대상을 좁히세요.</li><li><strong>엄격한 <code>if</code> 모양:</strong> <code>if ($C) $S</code>는 <code>else</code>가 없는 순수 <code>if</code>만 매치합니다(<code>ast-grep</code>은 <code>if ... else</code>도 함께 매치).</li><li><strong><code>--lang cpp</code>의 <code>.h</code> 포함:</strong> C++ 검색 시 <code>.cpp</code>/<code>.cc</code>/<code>.cxx</code>/<code>.hpp</code>뿐 아니라 <code>.h</code> 헤더 파일도 스캔합니다.</li><li><strong>리터럴 없는 패턴:</strong> 3바이트 이상 리터럴이 없으면 <code>.lancet</code>으로 좁힐 수 없어 해당 언어 파일을 전부 파싱합니다(<code>ast-grep</code>의 0.6~1.0배 속도; 최악의 <code>$$$</code> 백트래킹은 메모이제이션과 단계 예산으로 제한).</li></ul></div>
+
+      <div class="pager"><a class="pager-card prev" href="search.html"><small>← 이전</small><b>텍스트 검색 · LQL · 배치</b></a><a class="pager-card next" href="read-and-documents.html"><small>다음 →</small><b>정밀 읽기 · PDF · HWP</b></a></div>
+      <div class="meta-foot">
+        <span>MIT OR Apache-2.0 · Rust 단일 바이너리</span>
+        <a href="https://github.com/CREE1116/lancet/blob/main/skills/lancet/references/query-and-ast.md" target="_blank" rel="noopener">GitHub에서 소스 보기 →</a>
+      </div>
+    </article>
+  </main>
+
+  <aside class="doc-toc" aria-label="이 페이지 목차">
+    <div class="toc-title">이 페이지 목차</div>
+    <ul class="toc-list" id="doc-toc"></ul>
+  </aside>
+</div>
+
+<div class="search-modal" id="search-modal" role="dialog" aria-modal="true" aria-label="문서 검색…" hidden>
+  <div class="search-panel">
+    <div class="search-input-row">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <input id="search-input" type="search" placeholder="문서 검색…" autocomplete="off" spellcheck="false">
+      <button class="search-esc" id="search-esc" type="button">Esc</button>
+    </div>
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../../../assets/docs-search.js?v=1"></script>
+<script src="../../../assets/docs.js?v=1"></script>
+</body>
+</html>
