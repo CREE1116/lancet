@@ -56,9 +56,9 @@
 | 측정 | 결과 | 비용 |
 |---|---|---|
 | 후보 계획(경로 → 인덱스 → 신선도 → 대상 파일) | `rg`, `fd`, `refs`, `ast`에 4벌 → **1단계 후 `scope::plan` 하나 (+ `fd`)** | 경로 처리 하나 고치려면 네 군데 |
-| 언어별 `match Lang::X` 분기 | 129곳 (`code.rs` 103, `ast_grep.rs` 22, `rename.rs` 4) | 언어 추가·수정이 수십 군데 |
-| tree-sitter 파서·캐시 | 3벌 (`code.rs`, `ast_grep.rs`, `rename.rs`) | |
-| `refs`가 파일 하나를 파싱하는 횟수 | 4번 (심볼, 함수 범위, 식별자, 스코프를 각자 파싱) | 성능 손실 |
+| 언어별 `match Lang::X` 분기 | 129곳 (`code.rs` 103, `ast_grep.rs` 22, `rename.rs` 4) → **2단계 후 2곳 (`LangSpec` 표)** | 언어 추가·수정이 수십 군데 |
+| tree-sitter 파서·캐시 | 3벌 (`code.rs`, `ast_grep.rs`, `rename.rs`) → **2단계 후 1벌** | |
+| `refs`가 파일 하나를 파싱하는 횟수 | 4번 (심볼, 함수 범위, 식별자, 스코프를 각자 파싱) → **2단계 후 1번** | 성능 손실 |
 | 쓰기 규칙 | `edit --edits`·`patch`는 전부 아니면 전무, `ast --apply`는 파일마다 | 명령마다 안전성이 다름 |
 | 걷기 → 검색 | 걷기를 끝까지 마친 뒤 검색 시작 | 두 단계가 겹치지 않음 |
 | `rg` 출력 | 모든 결과를 메모리에 모은 뒤 경로순 출력 | 큰 출력에서 메모리, 첫 출력 지연 |
@@ -99,6 +99,7 @@ trait Matcher: Sync {
 
 - 인덱스(파일 수천 개 → 수십 개) → 리터럴(파싱 없이 바이트 비교) → 실제 판정 순서라, 비싼 tree-sitter 파싱은 리터럴이 들어 있는 파일에서만 일어난다.
 - `rg`(regex), `refs`(식별자), `ast`(AST 패턴)가 같은 파이프라인을 탄다. 새 검색 기능은 `Matcher` 하나만 구현하면 인덱스, 신선도, 병렬, 정렬, 여러 경로를 공짜로 얻는다.
+- **2단계 결정: trait은 만들지 않음.** 세 명령 모두 이미 이 순서를 따른다(인덱스 조건은 `scope::plan`, 그다음 `rg`는 버퍼 정규식, `refs`·`ast`는 memmem 리터럴 검사 뒤에 파싱). 파일별 처리가 명령마다 달라(rg 출력, refs 분류, ast 재작성) 세 구현을 함께 쓰는 소비자가 없으므로, trait은 이름만 바꾸는 추상화가 된다(2.4). 네 번째 검색 명령이 생기면 다시 판단한다.
 
 #### ② 한 번 파싱하고, 필요한 것만 계산 (성능)
 
@@ -252,7 +253,7 @@ src/
 | 정리 (완료) | 쿼리 언어와 `parse`·`explain`·`batch` 삭제, `status` → `index --status`. 쿼리 실행기로 검사하던 엔진 테스트 7개(인덱스=스캔, 증분 갱신, LSM 병합, 신선도, 퍼즈, 문서 변환, 손상 문서)는 `rg`로 옮겨 유지. | 모든 테스트, rg 대조 138케이스 통과 |
 | 0. 기준선 (완료) | rename 오라클(`bench/rename_oracle.py`), diff ↔ patch 왕복 테스트, 에이전트 A/B(`bench/agents/`)를 저장소로 옮김. rg 대조를 ripgrep 16.0으로 올려 150케이스를 CI에서 실행(`--in`, `--in0`, `--max-bytes`, `--no-pre` 구현). 기준값 `bench/results/baseline-step0.md`, README 성능 표 재측정. 그 과정에서 diff(끝 줄바꿈, CRLF, 큰 파일 → Myers)와 trust 모드(인덱스 범위 밖 요청) 버그를 고침. | CI에서 대조 150케이스 통과 |
 | 1. Scope (완료) | `rg`·`refs`·`ast`의 후보 계획을 `scope::plan` 하나로 합침(경로 여러 개, 표시 경로 `AsGiven`/`Clean`, 중복 제거, 인덱스·신선도·trust 판단). `fd`는 디렉터리까지 나열하고 인덱스에서 목록을 바로 읽는 다른 방식이라 따로 둠. ⑥은 두 방식 모두 측정상 느려서 넣지 않음. "인덱스 없이 rg보다 12% 느림"은 측정 시점 차이였음(번갈아 재면 -1%~+5%). | 계획 코드 4벌 → 1벌(+`fd`), 모든 자산 통과, 기준값과 같음 |
-| 2. LangSpec + Doc + Syntax + Matcher | 언어 표, 한 번 파싱(②), 스코프 해석기 분리. `refs`·`ast`의 판정이 `Syntax`에 기대므로 `Matcher`(①)도 여기서 함께 정한다. | `match Lang::X` 대부분 제거, refs 파싱 4 → 1, rename 오라클 통과 |
+| 2. LangSpec + Syntax (완료) | `code::Syntax`로 한 번 파싱(refs 파싱 4 → 1: Go 201 → 115 ms, Rust 734 → 639 ms), tree-sitter 파서 3벌 → 1벌(`code::parse_tree`), 언어 정보를 `LangSpec` 표로(언어 분기 129 → 2, 남은 둘은 로직), 스코프 해석기를 `scopes.rs`로 분리. `Matcher` trait은 만들지 않음(① 참고). `Doc` 코어는 읽기 경로를 다루는 3단계로 넘김. | 7개 언어에서 outline·refs --rank·ast 출력이 0단계와 같음, rename 오라클 통과 |
 | 3. Change | `ChangeSet`으로 쓰기 명령 다섯 개를 옮긴다. | `ast --apply`도 전부 아니면 전무 |
 | 4. 인터페이스 | 명령 목록, 렌더러, `Refusal`, `main.rs`를 명령별로 나누기. | 도움말·MCP·스킬이 같은 목록에서 나옴 |
 | 5. 마무리 | 영어판 문서, 문서 사이트(`docs/site/`) 맞추기. ⑧ 검토. | |

@@ -26,7 +26,7 @@ LANCET = str(ROOT / "target" / "release" / "lancet")
 COMMANDS = [
     ("rg literal", "rust", ["rg", "-c", "ThreadPoolBuilder", "--no-index"]),
     ("rg regex", "linux", ["rg", "-c", r"spin_lock_irq\w*\(", "--no-index"]),
-    ("refs, Rust (4 parses/file today)", "rust/compiler", ["refs", "span_bug", "--no-index"]),
+    ("refs, Rust", "rust/compiler", ["refs", "span_bug", "--no-index"]),
     ("refs, Python", "django", ["refs", "get_object_or_404", "--no-index"]),
     ("refs, Go", "kubernetes/pkg", ["refs", "NewController", "--no-index"]),
     ("refs --rank", "django/django/db", ["refs", "--rank", "*Field", "--kind", "class", "--no-index"]),
