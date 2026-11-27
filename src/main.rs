@@ -26,33 +26,30 @@ const ABOUT: &str =
     "Lancet: surgical code, AST, and multi-format document search, inspection, and refactoring CLI.
 
 Examples:
-  lancet '\"optimizer\" in ext:py'
-  lancet '(\"OOM\" OR \"out of memory\") NOT \"CPU\" in line'
-  lancet 'near(\"gradient\", \"clip\", 30) in function | expand parent | limit 5' src
-  lancet fd --tree --max-depth 2 .
-  lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'
-  lancet edit src/search.rs --symbol execute_one --with-file new.rs --rev <REV>
+  lancet fd --tree --dirs -d 2 .
+  lancet rg -w spin_lock src
   lancet read src/search.rs --symbol execute_one
   lancet read report.pdf --page 2
-  lancet outline src/search.rs
-  lancet refs SearchOptions src
+  lancet edit src/net.rs --old-string 'retries = 3' --new-string 'retries = 5' --apply
+  lancet refs --rank '*Service' --kind class .
+  lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'
+  lancet 'near(\"retry\", \"timeout\", 20) in function' src     (query language)
 
-Subcommands:
-  lancet fd [PATTERN] [PATH]    fast .gitignore-aware file & folder finder / tree view
-  lancet ast <PATTERN> [PATH]   tree-sitter structural search & safe AST rewrite
-  lancet rg [FLAGS] PATTERN [PATH...]   ripgrep-compatible search (same flags and output)
-  lancet read <TARGET>          surgical line / symbol / page / sheet / archive reader
-  lancet edit <PATH>            replace / delete / insert lines addressed like `read`
-  lancet patch [DIFF|-]         apply a unified diff (git diff) atomically, verified hunk by hunk
-  lancet rename TARGET OLD NEW  rename a local binding and its resolved uses inside one file
-  lancet mcp [--root DIR]       run an MCP (Model Context Protocol) server over stdio
-  lancet outline [PATH]         document table-of-contents & code declaration skeleton
-  lancet refs <SYMBOL> [PATH]   lexical AST symbol definitions & references
-  lancet index [PATH]           build or incrementally update the index (PATH/.lancet)
-  lancet status [PATH]          show index status
-  lancet parse <QUERY>          print the canonical query and its IR as JSON
-  lancet explain <QUERY>        show trigram requirements and index candidate selectivity
-  lancet batch [PATH]           run multiple queries over one shared index/walk";
+Commands:
+  lancet fd [PATTERN] [PATH...]      find files and folders (`--tree`, globs like '**/*.ts')
+  lancet rg [FLAGS] PATTERN [PATH...]   ripgrep: same flags, output and exit codes
+  lancet read TARGET...              lines, symbols, pages, sheets, archive entries (`--offset/--limit`)
+  lancet edit PATH                   replace / delete / insert by lines, symbol or exact text (`--old-string`)
+  lancet write PATH                  create a file, or replace one you have read (`--rev`)
+  lancet patch [DIFF|-]              apply a unified diff or a Codex patch, all files or none
+  lancet refs SYMBOL [PATH]          definitions and references (`--rank` for the most used)
+  lancet outline [PATH]              declarations, headings, sheets, archive contents
+  lancet ast PATTERN [PATH]          structural search and rewrite (24 languages)
+  lancet rename FILE:LINE OLD NEW    rename a local variable and its uses
+  lancet index [PATH]                build or update the index (optional; results are always fresh)
+  lancet mcp                         MCP server with one `lancet` tool taking these arguments
+
+Advanced: lancet status, parse, explain, batch (see `lancet <command> --help`)";
 
 #[derive(Parser)]
 #[command(name = "lancet", version, about = ABOUT)]
@@ -66,13 +63,13 @@ struct SearchCli {
     #[arg(long)]
     json: bool,
     /// Ignore the index and scan files directly
-    #[arg(long)]
+    #[arg(long, hide = true)]
     no_index: bool,
     /// Use the index without checking for changed files (fastest, may be stale)
-    #[arg(long, conflicts_with = "no_index")]
+    #[arg(long, conflicts_with = "no_index", hide = true)]
     trust_index: bool,
     /// Index directory (default: PATH/.lancet)
-    #[arg(long)]
+    #[arg(long, hide = true)]
     index_dir: Option<PathBuf>,
     /// Search hidden files and directories
     #[arg(long)]
@@ -90,7 +87,7 @@ struct SearchCli {
     #[arg(long, default_value_t = 240)]
     max_cols: usize,
     /// Print statistics to stderr
-    #[arg(long)]
+    #[arg(long, hide = true)]
     stats: bool,
     /// Enable external OCR (tesseract/pdftoppm) for images and scanned PDFs
     #[arg(long)]
@@ -151,11 +148,11 @@ struct ExplainCli {
     query: String,
     #[arg(default_value = ".")]
     path: PathBuf,
-    #[arg(long)]
+    #[arg(long, hide = true)]
     index_dir: Option<PathBuf>,
-    #[arg(long)]
+    #[arg(long, hide = true)]
     no_index: bool,
-    #[arg(long, conflicts_with = "no_index")]
+    #[arg(long, conflicts_with = "no_index", hide = true)]
     trust_index: bool,
     #[arg(long)]
     hidden: bool,
@@ -180,11 +177,11 @@ struct BatchCli {
     /// JSON object {"name": "query", ...} or array ["query1", ...]
     #[arg(long)]
     queries_json: Option<String>,
-    #[arg(long)]
+    #[arg(long, hide = true)]
     no_index: bool,
-    #[arg(long, conflicts_with = "no_index")]
+    #[arg(long, conflicts_with = "no_index", hide = true)]
     trust_index: bool,
-    #[arg(long)]
+    #[arg(long, hide = true)]
     index_dir: Option<PathBuf>,
     #[arg(long)]
     hidden: bool,
@@ -252,13 +249,13 @@ struct FdCli {
     #[arg(long)]
     limit: Option<usize>,
     /// Ignore the index and walk the filesystem directly
-    #[arg(long)]
+    #[arg(long, hide = true)]
     no_index: bool,
     /// Read file entries directly from the mmap'd Lancet index without walking disk
-    #[arg(long, conflicts_with = "no_index")]
+    #[arg(long, conflicts_with = "no_index", hide = true)]
     trust_index: bool,
     /// Custom index directory (default: PATH/.lancet)
-    #[arg(long)]
+    #[arg(long, hide = true)]
     index_dir: Option<PathBuf>,
     /// Include hidden files and directories
     #[arg(long)]
@@ -276,7 +273,7 @@ struct FdCli {
     #[arg(long)]
     json: bool,
     /// Print statistics to stderr
-    #[arg(long)]
+    #[arg(long, hide = true)]
     stats: bool,
 }
 
@@ -307,13 +304,13 @@ struct AstCli {
     #[arg(long)]
     limit: Option<usize>,
     /// Ignore the Lancet trigram index and scan all matching language files
-    #[arg(long)]
+    #[arg(long, hide = true)]
     no_index: bool,
     /// Use the index without checking mtime/size on disk (fastest)
-    #[arg(long, conflicts_with = "no_index")]
+    #[arg(long, conflicts_with = "no_index", hide = true)]
     trust_index: bool,
     /// Custom index directory (default: PATH/.lancet or ancestor)
-    #[arg(long)]
+    #[arg(long, hide = true)]
     index_dir: Option<PathBuf>,
     /// Search hidden files and directories
     #[arg(long)]
@@ -328,7 +325,7 @@ struct AstCli {
     #[arg(long)]
     json: bool,
     /// Print execution statistics to stderr
-    #[arg(long)]
+    #[arg(long, hide = true)]
     stats: bool,
 }
 
@@ -502,13 +499,13 @@ struct RefsCli {
     #[arg(long)]
     limit: Option<usize>,
     /// Ignore the Lancet trigram index
-    #[arg(long)]
+    #[arg(long, hide = true)]
     no_index: bool,
     /// Use the index without checking mtime/size on disk (fastest)
-    #[arg(long, conflicts_with = "no_index")]
+    #[arg(long, conflicts_with = "no_index", hide = true)]
     trust_index: bool,
     /// Custom index directory (default: PATH/.lancet or ancestor)
-    #[arg(long)]
+    #[arg(long, hide = true)]
     index_dir: Option<PathBuf>,
     /// Search hidden files and directories
     #[arg(long)]
@@ -523,7 +520,7 @@ struct RefsCli {
     #[arg(long)]
     json: bool,
     /// Print execution statistics to stderr
-    #[arg(long)]
+    #[arg(long, hide = true)]
     stats: bool,
 }
 
@@ -1050,17 +1047,26 @@ struct EditCli {
     #[arg(short = 's', long)]
     symbol: Option<String>,
     /// Exact TEXT to change (not whole lines; may span lines). Refused unless it
-    /// occurs exactly once — or pass --all to change every occurrence
-    #[arg(short = 'f', long, alias = "old-string", allow_hyphen_values = true)]
+    /// occurs exactly once, or pass --replace-all to change every occurrence
+    #[arg(
+        short = 'f',
+        long = "old-string",
+        visible_alias = "find",
+        allow_hyphen_values = true
+    )]
     find: Option<String>,
-    /// With --find: change every occurrence instead of requiring exactly one (alias --replace-all)
-    #[arg(long, alias = "replace-all", requires = "find")]
+    /// With --old-string: change every occurrence instead of requiring exactly one
+    #[arg(long = "replace-all", visible_alias = "all", requires = "find")]
     all: bool,
-    /// With --find: require exactly N occurrences and change all of them
+    /// With --old-string: require exactly N occurrences and change all of them
     #[arg(long, value_name = "N", requires = "find")]
     expected_replacements: Option<usize>,
-    /// Replace the addressed lines (or the --find text) with TEXT (alias --new-string)
-    #[arg(long, alias = "new-string", allow_hyphen_values = true)]
+    /// Replace the addressed lines (or the --old-string text) with TEXT
+    #[arg(
+        long = "new-string",
+        visible_alias = "with",
+        allow_hyphen_values = true
+    )]
     with: Option<String>,
     /// Replace the addressed lines with the contents of FILE (`-` reads stdin)
     #[arg(long)]
@@ -1249,6 +1255,159 @@ struct RgCli {
     /// Accepted for compatibility; output is always sorted by path
     #[arg(long, value_name = "SORTBY")]
     sort: Option<String>,
+    /// Omit lines longer than NUM bytes ("[Omitted long matching line]")
+    #[arg(short = 'M', long, value_name = "NUM")]
+    max_columns: Option<usize>,
+    /// With -M: print the first NUM bytes of a long line instead
+    #[arg(long)]
+    max_columns_preview: bool,
+    /// Print the byte offset of each line (of each match with -o)
+    #[arg(short = 'b', long)]
+    byte_offset: bool,
+    /// Remove leading whitespace from printed lines
+    #[arg(long)]
+    trim: bool,
+    /// Print each file's name on its own line above its matches
+    #[arg(long, overrides_with = "no_heading")]
+    heading: bool,
+    /// Same as --color always --heading --line-number
+    #[arg(short = 'p', long)]
+    pretty: bool,
+    /// String printed between context groups (default `--`)
+    #[arg(long, value_name = "SEP", allow_hyphen_values = true)]
+    context_separator: Option<String>,
+    /// Print nothing between context groups
+    #[arg(long)]
+    no_context_separator: bool,
+    /// Separator after the path / line / column of a matching line (default `:`)
+    #[arg(long, value_name = "SEP", allow_hyphen_values = true)]
+    field_match_separator: Option<String>,
+    /// Separator after the path / line / column of a context line (default `-`)
+    #[arg(long, value_name = "SEP", allow_hyphen_values = true)]
+    field_context_separator: Option<String>,
+    /// Print SEP instead of `/` in paths
+    #[arg(long, value_name = "SEP")]
+    path_separator: Option<String>,
+    /// With -c / --count-matches: also print files with no match
+    #[arg(long)]
+    include_zero: bool,
+    /// Print totals after the results
+    #[arg(long)]
+    stats: bool,
+    /// Sort results in reverse (path, modified, accessed, created)
+    #[arg(long, value_name = "SORTBY")]
+    sortr: Option<String>,
+    /// Same as --sort path
+    #[arg(long, hide = true)]
+    sort_files: bool,
+    /// Ignore files listed in PATH (gitignore format; repeatable)
+    #[arg(long, value_name = "PATH")]
+    ignore_file: Vec<PathBuf>,
+    /// Don't respect .gitignore / .git/info/exclude
+    #[arg(long)]
+    no_ignore_vcs: bool,
+    /// Don't respect .ignore / .rgignore
+    #[arg(long)]
+    no_ignore_dot: bool,
+    /// Don't respect ignore files in parent directories
+    #[arg(long)]
+    no_ignore_parent: bool,
+    /// Don't respect the global gitignore
+    #[arg(long)]
+    no_ignore_global: bool,
+    /// Don't respect .git/info/exclude
+    #[arg(long)]
+    no_ignore_exclude: bool,
+    /// Don't respect --ignore-file files
+    #[arg(long)]
+    no_ignore_files: bool,
+    /// Respect .gitignore even outside a git repository
+    #[arg(long)]
+    no_require_git: bool,
+    /// Match globs in ignore files case-insensitively
+    #[arg(long)]
+    ignore_file_case_insensitive: bool,
+    /// Suppress messages about invalid ignore files (no effect)
+    #[arg(long, hide = true)]
+    no_ignore_messages: bool,
+    /// Match --glob case-insensitively
+    #[arg(long)]
+    glob_case_insensitive: bool,
+    /// Clear a file type's globs (before --type-add)
+    #[arg(long, value_name = "TYPE")]
+    type_clear: Vec<String>,
+    /// Don't cross into other file systems
+    #[arg(long)]
+    one_file_system: bool,
+    /// Stop a file's search at the first non-matching line after a match
+    #[arg(long)]
+    stop_on_nonmatch: bool,
+    /// Don't print errors about files and paths (exit status still reports them)
+    #[arg(long)]
+    no_messages: bool,
+    /// Text encoding: auto (BOM sniffing, default), none, or a WHATWG label (latin1, sjis, utf-16le, …)
+    #[arg(short = 'E', long, value_name = "ENCODING")]
+    encoding: Option<String>,
+    /// Treat CRLF as a line terminator ($ matches before \r\n)
+    #[arg(long)]
+    crlf: bool,
+    /// Use NUL as the line terminator
+    #[arg(long)]
+    null_data: bool,
+    /// Search binary files in directories too (printing "binary file matches")
+    #[arg(long)]
+    binary: bool,
+    /// Search inside .gz files
+    #[arg(short = 'z', long)]
+    search_zip: bool,
+    /// Disable Unicode in the regex (\w, \d, case folding are ASCII-only)
+    #[arg(long)]
+    no_unicode: bool,
+    /// Print lancet's version
+    #[arg(short = 'V', long)]
+    version: bool,
+    // Accepted for compatibility; they change nothing lancet does.
+    #[arg(long, hide = true)]
+    mmap: bool,
+    #[arg(long, hide = true)]
+    no_mmap: bool,
+    #[arg(long, hide = true)]
+    line_buffered: bool,
+    #[arg(long, hide = true)]
+    block_buffered: bool,
+    #[arg(long, hide = true)]
+    no_config: bool,
+    #[arg(long, hide = true)]
+    no_pcre2_unicode: bool,
+    #[arg(long, hide = true)]
+    debug: bool,
+    #[arg(long, hide = true)]
+    trace: bool,
+    #[arg(long, hide = true, value_name = "NUM")]
+    dfa_size_limit: Option<String>,
+    #[arg(long, hide = true, value_name = "NUM")]
+    regex_size_limit: Option<String>,
+    #[arg(long, hide = true, value_name = "PATH")]
+    hostname_bin: Option<String>,
+    #[arg(long, hide = true, value_name = "FORMAT")]
+    hyperlink_format: Option<String>,
+    #[arg(long, hide = true, value_name = "SPEC")]
+    colors: Vec<String>,
+    // Refused with a reason (see docs/rg-parity.md).
+    #[arg(short = 'P', long, hide = true)]
+    pcre2: bool,
+    #[arg(long, hide = true)]
+    pcre2_version: bool,
+    #[arg(long, hide = true, value_name = "ENGINE")]
+    engine: Option<String>,
+    #[arg(long, hide = true)]
+    auto_hybrid_regex: bool,
+    #[arg(long, hide = true, value_name = "COMMAND")]
+    pre: Option<String>,
+    #[arg(long, hide = true, value_name = "GLOB")]
+    pre_glob: Vec<String>,
+    #[arg(long, hide = true, value_name = "KIND")]
+    generate: Option<String>,
     /// Accepted for compatibility; output never uses headings
     #[arg(long)]
     no_heading: bool,
@@ -1256,13 +1415,13 @@ struct RgCli {
     #[arg(long, value_name = "WHEN")]
     color: Option<String>,
     /// Ignore the lancet index (search like plain ripgrep)
-    #[arg(long)]
+    #[arg(long, hide = true)]
     no_index: bool,
     /// Answer from the lancet index without checking for changed files
-    #[arg(long, conflicts_with = "no_index")]
+    #[arg(long, hide = true, conflicts_with = "no_index")]
     trust_index: bool,
     /// Custom index directory (default: PATH/.lancet or an ancestor)
-    #[arg(long)]
+    #[arg(long, hide = true)]
     index_dir: Option<PathBuf>,
 }
 
@@ -1272,8 +1431,63 @@ fn run_rg(cli: RgCli) -> ExitCode {
         eprintln!("lancet rg: {msg}");
         ExitCode::from(2)
     };
+    if cli.version {
+        println!("lancet {}", env!("CARGO_PKG_VERSION"));
+        return ExitCode::SUCCESS;
+    }
+    if cli.pcre2_version {
+        println!("PCRE2 is not available in this build of lancet.");
+        return ExitCode::from(1);
+    }
+    let refused = if cli.pcre2 || cli.engine.as_deref() == Some("pcre2") {
+        Some("-P/--pcre2: lancet uses Rust regex only, which keeps matching linear-time and lets the index derive a sound trigram filter")
+    } else if cli
+        .engine
+        .as_deref()
+        .is_some_and(|e| e != "default" && e != "auto")
+    {
+        Some("--engine: only the default (Rust regex) engine is available")
+    } else if cli.pre.is_some() || !cli.pre_glob.is_empty() {
+        Some("--pre/--pre-glob: lancet doesn't run a process per file; documents and archives are read in-process with --docs")
+    } else if cli.generate.is_some() {
+        Some("--generate: lancet has no man page or completion generator yet")
+    } else {
+        None
+    };
+    if let Some(why) = refused {
+        return fail(&format!("not supported: {why} (see docs/rg-parity.md)"));
+    }
+    let _ = (
+        cli.auto_hybrid_regex,
+        cli.mmap,
+        cli.no_mmap,
+        cli.line_buffered,
+        cli.block_buffered,
+    );
+    let _ = (
+        cli.no_config,
+        cli.no_pcre2_unicode,
+        cli.debug,
+        cli.trace,
+        cli.no_ignore_messages,
+    );
+    let _ = (
+        &cli.dfa_size_limit,
+        &cli.regex_size_limit,
+        &cli.hostname_bin,
+        &cli.hyperlink_format,
+        &cli.colors,
+    );
+    if let Some(label) = cli.encoding.as_deref() {
+        if label != "auto"
+            && label != "none"
+            && encoding_rs::Encoding::for_label(label.as_bytes()).is_none()
+        {
+            return fail(&format!("unknown encoding '{label}'"));
+        }
+    }
     if cli.type_list {
-        let b = match lancet::walk::types_builder(&cli.type_add) {
+        let b = match lancet::walk::types_builder(&cli.type_clear, &cli.type_add) {
             Ok(b) => b,
             Err(e) => return fail(&e),
         };
@@ -1344,6 +1558,7 @@ fn run_rg(cli: RgCli) -> ExitCode {
         None => None,
     };
     let color = match cli.color.as_deref() {
+        None if cli.pretty => true,
         None | Some("auto") => {
             io::stdout().is_terminal()
                 && std::env::var_os("NO_COLOR").is_none()
@@ -1367,6 +1582,51 @@ fn run_rg(cli: RgCli) -> ExitCode {
     o.types = cli.type_;
     o.types_not = cli.type_not;
     o.type_add = cli.type_add;
+    o.type_clear = cli.type_clear;
+    o.line_number = o.line_number || cli.pretty;
+    o.heading = (cli.heading || cli.pretty) && !cli.no_heading;
+    o.max_columns = cli.max_columns.filter(|&m| m > 0);
+    o.max_columns_preview = cli.max_columns_preview;
+    o.byte_offset = cli.byte_offset;
+    o.trim = cli.trim;
+    o.context_separator = if cli.no_context_separator {
+        None
+    } else {
+        Some(
+            cli.context_separator
+                .unwrap_or_else(|| "--".into())
+                .into_bytes(),
+        )
+    };
+    if let Some(s) = cli.field_match_separator {
+        o.field_match_separator = s.into_bytes();
+    }
+    if let Some(s) = cli.field_context_separator {
+        o.field_context_separator = s.into_bytes();
+    }
+    o.path_separator = cli.path_separator;
+    o.include_zero = cli.include_zero;
+    o.stats = cli.stats;
+    o.sort = match (cli.sort.as_deref(), cli.sortr.as_deref(), cli.sort_files) {
+        (_, Some(k), _) => match lancet::rg::SortBy::parse(k) {
+            Ok(b) => Some((b, true)),
+            Err(e) => return fail(&e),
+        },
+        (Some(k), None, _) => match lancet::rg::SortBy::parse(k) {
+            Ok(b) => Some((b, false)),
+            Err(e) => return fail(&e),
+        },
+        (None, None, _) => None,
+    };
+    o.glob_case_insensitive = cli.glob_case_insensitive;
+    o.stop_on_nonmatch = cli.stop_on_nonmatch;
+    o.no_messages = cli.no_messages;
+    o.encoding = cli.encoding;
+    o.crlf = cli.crlf;
+    o.null_data = cli.null_data;
+    o.binary = cli.binary;
+    o.search_zip = cli.search_zip;
+    o.no_unicode = cli.no_unicode;
     o.walk = WalkOpts {
         hidden: cli.hidden || cli.unrestricted >= 2,
         no_ignore: cli.no_ignore || cli.unrestricted >= 1,
@@ -1374,6 +1634,18 @@ fn run_rg(cli: RgCli) -> ExitCode {
         follow: cli.follow,
         max_depth: cli.max_depth,
         max_filesize,
+        ignore: lancet::walk::IgnoreOpts {
+            files: cli.ignore_file,
+            no_vcs: cli.no_ignore_vcs,
+            no_dot: cli.no_ignore_dot,
+            no_parent: cli.no_ignore_parent,
+            no_global: cli.no_ignore_global,
+            no_exclude: cli.no_ignore_exclude,
+            no_files: cli.no_ignore_files,
+            no_require_git: cli.no_require_git,
+            case_insensitive: cli.ignore_file_case_insensitive,
+        },
+        one_file_system: cli.one_file_system,
     };
     o.index = index_mode(cli.no_index, cli.trust_index);
     o.index_dir = cli.index_dir;
@@ -1389,6 +1661,8 @@ fn run_rg(cli: RgCli) -> ExitCode {
     match res {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::from(1),
+        // Already reported (paths that don't exist), like ripgrep: exit 2.
+        Err(msg) if msg.is_empty() => ExitCode::from(2),
         Err(msg) => fail(&msg),
     }
 }
@@ -1682,7 +1956,7 @@ struct McpCli {
     #[arg(long)]
     read_only: bool,
     /// Add --trust-index to searches that don't pick an index mode themselves
-    #[arg(long)]
+    #[arg(long, hide = true)]
     trust_index: bool,
     /// Add -j N to searches that don't set it themselves
     #[arg(short = 'j', long)]

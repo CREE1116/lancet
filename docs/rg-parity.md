@@ -1,92 +1,102 @@
 # `lancet rg` — ripgrep Feature Parity
 
-`lancet rg` provides ripgrep's flags, Rust `regex` engine, `.gitignore` / `.ignore` / `.rgignore` traversal rules, exit codes (`0` match, `1` no match, `2` error), and output formats on top of Lancet's always-fresh trigram index and in-process document/archive extractors.
+`lancet rg` takes ripgrep's flags and prints ripgrep's output, with ripgrep's Rust `regex` engine, traversal rules (`.gitignore`, `.ignore`, `.rgignore`, `--ignore-file`), decoding (BOM sniffing, `-E`), binary-file handling and exit codes (`0` match, `1` no match, `2` error), on top of Lancet's always-fresh trigram index.
+
+Every flag of ripgrep 15.2's `--help` is listed below: **supported**, **accepted with no effect** (it changes nothing observable in lancet), or **not supported** with the reason.
 
 ## Verification
 
-- **Fixture parity (`bench/rg_parity.py`):** 68 edge-case queries (Unicode case folding, CRLF, missing final newline, binary files, hidden/ignored files, nested directories, adjacent word boundaries, `-m` with `-C`, `--vimgrep`, `--files`, `--max-depth`, `--max-filesize`, `-L`/`--follow`, etc.) match `ripgrep 15.2` byte-for-byte in stdout and exit code.
-- **Linux kernel parity:** Full-tree queries on Linux kernel v6.12 match `ripgrep 15.2` byte-for-byte both with and without `.lancet` (3.7–8.3× faster with the index).
+- **Fixture parity (`bench/rg_parity.py`):** 138 cases — every supported flag below plus Unicode case folding, CRLF, missing final newline, UTF-8/UTF-16 BOMs, latin1, NUL-separated data, binary files named and in directories, `.gz`, hidden / ignored / `.ignore` / `.rgignore` / `.git/info/exclude` / `--ignore-file` rules, missing paths — compare stdout and exit code with `ripgrep 15.2` byte for byte (`--stats` timing lines excluded).
+- **Real trees:** Linux v6.12, LLVM, rust, kubernetes, VS Code, Django, CPython and Spring queries match `ripgrep 15.2` byte for byte with and without `.lancet` (see [`bench/results/SUITE.md`](../bench/results/SUITE.md)).
 
 ---
 
-## Flag & Feature Comparison
+## Patterns & matching
 
-### Patterns & Matching
+| Flag | Status | Notes |
+|---|---|---|
+| `-e`, `--regexp PATTERN` | Supported | Repeatable; combined by alternation |
+| `-f`, `--file FILE` | Supported | One pattern per line; `-` reads stdin |
+| `-F`, `--fixed-strings` | Supported | |
+| `-i` / `-s` / `-S` (`--ignore-case` / `--case-sensitive` / `--smart-case`) | Supported | Last one wins; smart case looks at literals only (`\W` doesn't count) |
+| `-w`, `--word-regexp` | Supported | ripgrep's boundaries (`-w '@x'` works) |
+| `-x`, `--line-regexp` | Supported | |
+| `-v`, `--invert-match` | Supported | |
+| `-U`, `--multiline` / `--multiline-dotall` | Supported | |
+| `--crlf` | Supported | `$` matches before `\r\n`; lancet-added terminators become `\r\n` |
+| `--null-data` | Supported | NUL ends lines (and output lines) |
+| `--no-unicode` | Supported | ASCII `\w`, `\d`, `\b`, case folding |
+| `-P`, `--pcre2`, `--engine`, `--auto-hybrid-regex`, `--pcre2-version`, `--no-pcre2-unicode` | **Not supported** | Rust `regex` only: matching stays linear-time and the index can derive a sound trigram filter from every pattern. `--engine default` and `--no-pcre2-unicode` are accepted |
+| `--dfa-size-limit`, `--regex-size-limit` | Accepted, no effect | lancet's regex size limit is fixed at 256 MiB |
 
-| Flag | Meaning | Status | Notes |
-|---|---|---|---|
-| `-e`, `--regexp <PATTERN>` | Pattern to search (repeatable) | Supported | Combined with alternation |
-| `-f`, `--file <FILE>` | Read patterns from file, one per line (`-` for stdin) | Supported | |
-| `-F`, `--fixed-strings` | Treat patterns as literal strings | Supported | |
-| `-i`, `--ignore-case` | Case-insensitive matching | Supported | Last of `-i`/`-s`/`-S` wins |
-| `-s`, `--case-sensitive` | Case-sensitive matching (default) | Supported | Last of `-i`/`-s`/`-S` wins |
-| `-S`, `--smart-case` | Case-insensitive unless pattern has an uppercase literal | Supported | AST-aware in regex mode (classes like `\W` don't trigger case sensitivity) |
-| `-w`, `--word-regexp` | Match only surrounded by word boundaries | Supported | Matches `ripgrep` boundary behavior (`-w '@x'` works) |
-| `-x`, `--line-regexp` | Match only spanning the whole line | Supported | |
-| `-v`, `--invert-match` | Print lines that do not match | Supported | |
-| `-U`, `--multiline` | Allow matches to span lines | Supported | |
-| `--multiline-dotall` | With `-U`, allow `.` to match newlines | Supported | |
-| `-P`, `--pcre2` | PCRE2 engine (lookarounds, backreferences) | Unsupported | Uses Rust `regex` for guaranteed linear-time matching (no catastrophic backtracking), sound HIR → trigram index compilation, and zero C PCRE2 dependency |
+## Output
 
-### Output & Formatting
+| Flag | Status | Notes |
+|---|---|---|
+| `-o`, `--only-matching` | Supported | |
+| `-c`, `--count` / `--count-matches` / `--include-zero` | Supported | |
+| `-l`, `--files-with-matches` / `--files-without-match` | Supported | |
+| `-q`, `--quiet` | Supported | |
+| `-m`, `--max-count NUM` | Supported | Trailing context still printed, as in ripgrep |
+| `-A` / `-B` / `-C`, `--passthru` | Supported | The last of `--passthru` / `-A` / `-B` / `-C` wins |
+| `--context-separator SEP`, `--no-context-separator` | Supported | |
+| `--field-match-separator SEP`, `--field-context-separator SEP` | Supported | |
+| `-n` / `-N`, `-H` / `-I` (`--with-filename` / `--no-filename`) | Supported | Line numbers are **on by default** (see below) |
+| `--column`, `-b`, `--byte-offset` | Supported | `-b` gives the match's offset with `-o` |
+| `--vimgrep`, `--json` | Supported | `--json` reports `binary_offset` for binary files |
+| `-0`, `--null`, `--path-separator SEP` | Supported | |
+| `-r`, `--replace TEXT` | Supported | `$1`, `${name}` |
+| `--trim` | Supported | |
+| `-M`, `--max-columns NUM`, `--max-columns-preview` | Supported | Measured with the line terminator, as ripgrep does |
+| `--heading` / `--no-heading`, `-p`, `--pretty` | Supported | Off by default (see below) |
+| `--color WHEN` | Supported | `auto` (default): color on a terminal only; `NO_COLOR` / `TERM=dumb` respected |
+| `--colors SPEC` | Accepted, no effect | lancet's colors are fixed |
+| `--hyperlink-format`, `--hostname-bin` | Accepted, no effect | No hyperlinks are printed |
+| `--stats` | Supported | "bytes searched" for **binary** files counts the whole decoded file; ripgrep counts only what it read before stopping |
+| `--sort` / `--sortr` (`path`, `modified`, `accessed`, `created`, `none`), `--sort-files` | Supported | Paths keep the order given on the command line and are sorted within each, as `rg --sort path` does |
+| `--line-buffered`, `--block-buffered` | Accepted, no effect | Output is written per file |
 
-| Flag | Meaning | Status | Notes |
-|---|---|---|---|
-| `-o`, `--only-matching` | Print only matched spans | Supported | |
-| `-c`, `--count` | Print number of matching lines per file | Supported | |
-| `--count-matches` | Print total match count per file | Supported | |
-| `-l`, `--files-with-matches` | Print only paths with at least one match | Supported | |
-| `--files-without-match` | Print only paths with no matches | Supported | |
-| `-q`, `--quiet` | No output; exit `0` on first match | Supported | |
-| `-m`, `--max-count <NUM>` | Stop after `NUM` matching lines per file | Supported | Trailing context respects `-m` |
-| `-A`, `-B`, `-C` | Lines of after / before / surrounding context | Supported | Context separator `--` emitted properly |
-| `-n` / `-N` | Show (`--line-number`) / hide (`--no-line-number`) line numbers | Supported | **Line numbers are ON by default** (see [Intentional Differences](#intentional-differences)) |
-| `-H` / `-I` | Always (`--with-filename`) / never (`--no-filename`) print file path | Supported | Last flag wins |
-| `--column` | Show 1-based column of first match | Supported | |
-| `--vimgrep` | `path:line:col:text` for every match | Supported | |
-| `--json` | ripgrep JSON Lines (`begin` / `match` / `context` / `end` / `summary`) | Supported | |
-| `-0`, `--null` | NUL byte after file paths | Supported | |
-| `-r`, `--replace <TEXT>` | Replace matches in output (`$1`, `${name}`) | Supported | |
-| `--sort <SORTBY>` | Sort output | No-op | Output is **always** sorted by path component |
-| `--no-heading` | Never print filename headings | No-op | Headings are never used |
-| `--color <WHEN>` | Colorize output (`auto`, `always`, `ansi`, `never`) | Supported | `--color auto` (default) colors on TTYs (`NO_COLOR`/`TERM=dumb` respected) and emits plain text when piped |
-| `--passthru` | Print both matching and non-matching lines | Supported | Files without a match are printed too; exit status still reflects matches; the last of `--passthru` / `-A` / `-B` / `-C` wins |
+## Files & traversal
 
-### File Filtering & Traversal
+| Flag | Status | Notes |
+|---|---|---|
+| `-g`, `--glob`, `--iglob`, `--glob-case-insensitive` | Supported | Positive globs override hidden/ignore rules, as in ripgrep |
+| `-t` / `-T`, `--type-add`, `--type-clear`, `--type-list` | Supported | ripgrep's type table |
+| `-.`, `--hidden`, `--no-ignore`, `-u` / `-uu` / `-uuu` | Supported | |
+| `--ignore-file PATH`, `--no-ignore-files`, `--ignore-file-case-insensitive` | Supported | `--ignore-file` applies even with `--no-ignore`, as in ripgrep |
+| `--no-ignore-vcs`, `--no-ignore-dot`, `--no-ignore-parent`, `--no-ignore-global`, `--no-ignore-exclude`, `--no-require-git` | Supported | These (and `--one-file-system`) search with a live walk instead of the index |
+| `--no-ignore-messages` | Accepted, no effect | |
+| `-L`, `--follow`, `--max-depth`, `--max-filesize`, `--one-file-system` | Supported | |
+| `--files` | Supported | |
+| `-j`, `--threads` | Supported | |
+| `--no-messages` | Supported | Missing paths are reported (unless this flag) and the other paths are still searched; exit `2` |
+| `--mmap` / `--no-mmap`, `--no-config` | Accepted, no effect | lancet reads no config file |
 
-| Flag | Meaning | Status | Notes |
-|---|---|---|---|
-| `-g`, `--glob <GLOB>` | Include/exclude paths by glob (`!` negates; repeatable) | Supported | Positive globs override hidden/ignore as in ripgrep |
-| `--iglob <GLOB>` | Case-insensitive `--glob` | Supported | |
-| `-t`, `--type <TYPE>` | Search only files of `TYPE` | Supported | Uses `ignore` crate's ripgrep type table |
-| `-T`, `--type-not <TYPE>` | Skip files of `TYPE` | Supported | |
-| `--type-list` | Print known file types | Supported | |
-| `-a`, `--text` | Search binary files as text | Supported | |
-| `-u` / `-uu` / `-uuu` | Unrestricted: no ignore (`-u`), + hidden (`-uu`), + binary (`-uuu`) | Supported | |
-| `-.`, `--hidden` | Search hidden files and directories | Supported | |
-| `--no-ignore` | Do not respect `.gitignore` / `.ignore` / `.rgignore` | Supported | |
-| `--files` | Print files that would be searched | Supported | Respects `-g`, `-t`, `--hidden`, `-u` |
-| `-j`, `--threads <NUM>` | Worker thread count | Supported | |
-| `-L`, `--follow` | Follow symbolic links | Supported | Follows symlinked files and directories (`--trust-index -L` falls back to live walk so unindexed symlinks are never missed) |
-| `--max-depth <NUM>` | Maximum traversal depth | Supported | Enforced in both live walk and `--trust-index` |
-| `--max-filesize <NUM>` | Skip files larger than `NUM` (`K`/`M`/`G` suffixes supported) | Supported | Enforced in both live walk and `--trust-index` |
-| `-z`, `--search-zip` | Search compressed files via external tools | Not needed | Lancet extracts `.zip`, `.tar`, `.gz`, `.tgz` natively in-process |
-| `--type-add <TYPESPEC>` | Define a file type (`name:glob`, repeatable; `name:include:a,b` merges types) | Supported | Applies to `-t`, `-T`, `--files` and `--type-list` |
-| `--pre <COMMAND>` | Run a preprocessor per file | Unsupported | lancet extracts documents and archives in-process (`--docs`) instead of spawning a process per file |
+## Input
 
-### Lancet Extensions on `lancet rg`
+| Flag | Status | Notes |
+|---|---|---|
+| (default) BOM sniffing | Supported | A UTF-8 BOM is dropped; UTF-16 LE/BE files are transcoded |
+| `-E`, `--encoding ENC` | Supported | `auto`, `none`, or any WHATWG label (`latin1`, `sjis`, `utf-16le`, …) |
+| `-a`, `--text` | Supported | |
+| `--binary` | Supported | Binary files met in directories are searched like named ones: NULs become line breaks, and text output is one `binary file matches (found "\0" byte around offset N)` line |
+| `-z`, `--search-zip` | Partly | `.gz` is decompressed in-process. ripgrep's other formats (`.bz2`, `.xz`, `.lz4`, `.zst`, `.Z`, `.br`) need external programs and are not supported. `--docs` reads `.zip`, `.tar`, `.tgz` and documents |
+| `--pre COMMAND`, `--pre-glob GLOB` | **Not supported** | lancet doesn't run a process per file; documents and archives are read in-process with `--docs` |
+| `--debug`, `--trace` | Accepted, no effect | |
+| `-V`, `--version` | Supported | Prints lancet's version |
+| `--generate KIND` | **Not supported** | No man page or shell-completion generator yet |
 
-| Flag / Behavior | Description |
+## Lancet additions
+
+| Flag | Description |
 |---|---|
-| `--no-index` | Ignore `.lancet` and scan files directly |
-| `--trust-index` | Answer from `.lancet` without checking files for changes (mtime, size, ctime, inode) |
-| `--index-dir <DIR>` | Custom index directory (default: `PATH/.lancet` or ancestor) |
-| `--docs` | Also search inside `.pdf`, `.docx`, `.pptx`, `.odt`, `.hwp`, `.hwpx`, `.epub`, `.xlsx`/`.xls`/`.ods`, `.zip`, `.tar`, `.gz`, `.tgz` in-process. Off by default, so output matches ripgrep (which treats them as binary) |
+| `--docs` | Also search inside `.pdf`, `.docx`, `.pptx`, `.odt`, `.hwp`, `.hwpx`, `.epub`, `.xlsx`/`.xls`/`.ods`, `.zip`, `.tar`, `.gz`, `.tgz` (off by default, so output matches ripgrep) |
+| `--no-index` / `--trust-index` / `--index-dir DIR` | Hidden from `--help`. The default uses `.lancet` when present and re-checks changed files, so results never go stale; `--trust-index` skips that check |
 
 ---
 
-## Intentional Differences
+## Intentional differences
 
-1. **Always path-sorted:** `lancet rg` always sorts output by path component (equivalent to `rg --sort path`, where `a/b.txt` sorts before `a.txt`), making results deterministic across runs and thread counts.
-2. **Line numbers enabled by default:** `-n` is on even when stdout is piped or redirected; pass `-N` (`--no-line-number`) to omit line numbers.
-3. **No headings, color only on a terminal:** output is always `path:line:text` (never ripgrep's grouped headings). `--color auto` (the default) colors output on a TTY and prints plain text when piped or redirected.
+1. **Always sorted by path** (as `rg --sort path`), so output is the same on every run and thread count.
+2. **Line numbers on by default**, even when piped, so coordinates survive between an agent's steps; `-N` turns them off.
+3. **No headings unless asked** (`--heading` / `--pretty`): output is `path:line:text`.

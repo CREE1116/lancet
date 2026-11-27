@@ -17,6 +17,31 @@ pub struct WalkOpts {
     pub follow: bool,
     pub max_depth: Option<usize>,
     pub max_filesize: Option<u64>,
+    /// ripgrep's finer ignore controls (`--ignore-file`, `--no-ignore-vcs`, …).
+    pub ignore: IgnoreOpts,
+    /// `--one-file-system`: don't cross into other file systems.
+    pub one_file_system: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct IgnoreOpts {
+    /// `--ignore-file`: extra gitignore-format files (applied even with `--no-ignore`).
+    pub files: Vec<PathBuf>,
+    pub no_vcs: bool,
+    pub no_dot: bool,
+    pub no_parent: bool,
+    pub no_global: bool,
+    pub no_exclude: bool,
+    pub no_files: bool,
+    pub no_require_git: bool,
+    /// `--ignore-file-case-insensitive`: ignore-file globs match case-insensitively.
+    pub case_insensitive: bool,
+}
+
+impl IgnoreOpts {
+    pub fn is_default(&self) -> bool {
+        *self == IgnoreOpts::default()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -48,9 +73,15 @@ fn has_glob_meta(s: &str) -> bool {
 }
 
 /// ripgrep's default file types plus `--type-add NAME:GLOB` (or `NAME:include:A,B`) definitions.
-pub fn types_builder(type_add: &[String]) -> Result<ignore::types::TypesBuilder, String> {
+pub fn types_builder(
+    type_clear: &[String],
+    type_add: &[String],
+) -> Result<ignore::types::TypesBuilder, String> {
     let mut b = ignore::types::TypesBuilder::new();
     b.add_defaults();
+    for t in type_clear {
+        b.clear(t);
+    }
     for d in type_add {
         b.add_def(d).map_err(|e| e.to_string())?;
     }
@@ -74,6 +105,7 @@ impl FileFilter {
         root: &Path,
         globs: &[String],
         iglobs: &[String],
+        type_clear: &[String],
         type_add: &[String],
         select: &[String],
         negate: &[String],
@@ -94,7 +126,7 @@ impl FileFilter {
         let rg_types = if select.is_empty() && negate.is_empty() {
             None
         } else {
-            let mut b = types_builder(type_add)?;
+            let mut b = types_builder(type_clear, type_add)?;
             for t in select {
                 b.select(t);
             }
@@ -272,19 +304,30 @@ pub fn walk(root: &Path, opts: &WalkOpts, filter: &FileFilter, need_meta: bool) 
     let out: Mutex<Vec<FileEntry>> = Mutex::new(Vec::new());
     let mut b = WalkBuilder::new(root);
     let ig = !opts.no_ignore;
+    let io = &opts.ignore;
     b.hidden(!opts.hidden)
-        .ignore(ig)
-        .git_ignore(ig)
-        .git_global(ig)
-        .git_exclude(ig)
-        .parents(ig)
+        .ignore(ig && !io.no_dot)
+        .git_ignore(ig && !io.no_vcs)
+        .git_global(ig && !io.no_vcs && !io.no_global)
+        .git_exclude(ig && !io.no_vcs && !io.no_exclude)
+        .parents(ig && !io.no_parent)
+        .require_git(!io.no_require_git)
+        .ignore_case_insensitive(io.case_insensitive)
+        .same_file_system(opts.one_file_system)
         .follow_links(opts.follow)
         .max_depth(opts.max_depth)
         .max_filesize(opts.max_filesize)
         .threads(opts.threads)
         .filter_entry(|e| e.file_name() != crate::index::DIR_NAME);
-    if ig {
+    if ig && !io.no_dot {
         b.add_custom_ignore_filename(".rgignore"); // as ripgrep does
+    }
+    if !io.no_files {
+        for f in &io.files {
+            if let Some(e) = b.add_ignore(f) {
+                eprintln!("rg: {}: {e}", f.display());
+            }
+        }
     }
     if let Some(ov) = &filter.overrides {
         // In the walker, as in ripgrep: whitelist globs win over hidden/ignore rules

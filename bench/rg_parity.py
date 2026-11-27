@@ -12,6 +12,7 @@ Usage: python3 bench/rg_parity.py [--rg PATH] [--lancet PATH] [--extra DIR]
 from __future__ import annotations
 
 import argparse
+import gzip
 import os
 import shutil
 import subprocess
@@ -38,6 +39,20 @@ FILES = {
     "sub/x.rs": "foo\nfoo\nfoo\nfoo\nfoo\n",
     "sub/y.txt": "one\ntwo foo\nthree\nfour\nfive foo\nsix\nseven\n",
     ".gitignore": "*.log\n",
+    # Encodings, long lines, NUL-separated data, compressed files, ignore files.
+    "enc/u16.txt": "\ufefffoo utf16\n".encode("utf-16-le"),
+    "enc/bom.txt": b"\xef\xbb\xbffoo bom\n",
+    "enc/latin1.txt": b"caf\xe9 foo latin1\n",
+    "long.txt": "foo " + "y" * 120 + "\n",
+    "nul.dat": b"a\0foo\0b\0",
+    "zip/x.txt.gz": gzip.compress(b"foo gz\n", mtime=0),
+    ".ignore": "dotignored.txt\n",
+    "dotignored.txt": "foo dot\n",
+    ".rgignore": "rgignored.txt\n",
+    "rgignored.txt": "foo rgi\n",
+    "custom.ignore": "cust.txt\n",
+    "cust.txt": "foo cust\n",
+    "excl.txt": "foo excl\n",
 }
 
 CASES: list[list[str]] = [
@@ -116,9 +131,59 @@ CASES: list[list[str]] = [
     ["--type-add", "notes:*.md", "-T", "notes", "foo"],
     ["--type-add", "mix:*.md", "--type-add", "mix:*.rs", "-t", "mix", "foo"],
     ["--type-add", "notes:*.md", "--type-add", "both:include:notes,rust", "-t", "both", "foo"],
+    # Output shaping.
+    ["-b", "foo"],
+    ["-b", "-o", "foo"],
+    ["--column", "-b", "foo"],
+    ["--trim", "foo"],
+    ["-M", "20", "foo"],
+    ["-M", "20", "--max-columns-preview", "foo"],
+    ["-M", "8", "-C", "1", "two|five"],
+    ["--heading", "foo"],
+    ["--heading", "-C", "1", "foo"],
+    ["--context-separator", "##", "-C", "1", "two|five"],
+    ["--no-context-separator", "-C", "1", "two|five"],
+    ["--field-match-separator", "|", "--field-context-separator", "~", "-C", "1", "two"],
+    ["--path-separator", "\\", "foo"],
+    ["-c", "--include-zero", "foo"],
+    ["--sortr", "path", "foo"],
+    ["--stop-on-nonmatch", "foo"],
+    # Filtering.
+    ["--ignore-file", "custom.ignore", "foo"],
+    ["--ignore-file", "custom.ignore", "--no-ignore-files", "foo"],
+    ["--no-ignore", "--ignore-file", "custom.ignore", "foo"],
+    ["--no-ignore-vcs", "foo"],
+    ["--no-ignore-dot", "foo"],
+    ["--no-ignore-exclude", "foo"],
+    ["--glob-case-insensitive", "-g", "*.TXT", "foo"],
+    ["--type-clear", "rust", "--type-add", "rust:*.md", "-t", "rust", "foo"],
+    ["--one-file-system", "foo"],
+    ["--ignore-file", "custom.ignore", "--ignore-file-case-insensitive", "foo"],
+    ["--sort", "none", "-c", "foo", "a.txt"],
+    ["--sort-files", "foo"],
+    ["--pretty", "--color", "never", "foo"],
+    # Input.
+    ["-E", "none", "foo"],
+    ["-E", "latin1", "caf"],
+    ["--crlf", "foo$"],
+    ["--binary", "foo"],
+    ["-z", "foo"],
+    ["--no-unicode", "-i", "kelvin"],
 ]
 
 FILE_ARG_CASES: list[list[str]] = [
+    ["foo", "enc/u16.txt"],
+    ["foo", "enc/bom.txt"],
+    ["foo", "bin.dat"],
+    ["-c", "foo", "bin.dat"],
+    ["-o", "foo", "bin.dat"],
+    ["--null-data", "foo", "nul.dat"],
+    ["-z", "foo", "zip/x.txt.gz"],
+    ["foo", "nope", "a.txt"],
+    ["--no-messages", "foo", "nope", "a.txt"],
+    ["--stats", "foo", "a.txt", "sub", "enc"],
+    ["--stats", "-c", "foo", "a.txt", "sub", "enc"],
+    ["--crlf", "-l", "foo", "a.txt", "crlf.txt"],
     ["foo", "a.txt"],
     ["-H", "foo", "a.txt"],
     ["foo", "a.txt", "sub"],
@@ -132,6 +197,12 @@ LIST_CASES: list[list[str]] = [
     ["--files", "-t", "rust"],
     ["--files", "--hidden"],
     ["--files", "--type-add", "notes:*.md", "-t", "notes"],
+    ["--files", "--path-separator", "\\"],
+    ["--files", "--ignore-file", "custom.ignore"],
+    ["--files", "--no-ignore-vcs"],
+    ["--files", "--no-ignore-dot"],
+    ["--files", "--no-ignore-exclude"],
+    ["--files", "--sortr", "path"],
 ]
 
 
@@ -151,11 +222,13 @@ def main() -> int:
     for rel, body in FILES.items():
         p = tmp / rel
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_bytes(body.encode())
+        p.write_bytes(body if isinstance(body, bytes) else body.encode())
     link_target = tmp.parent / f"{tmp.name}-link-target.txt"
     link_target.write_text("foo via symlink\n")
     os.symlink(link_target, tmp / "linked.txt")
     subprocess.run(["git", "init", "-q"], cwd=tmp)  # .gitignore needs a repo
+    (tmp / ".git" / "info").mkdir(parents=True, exist_ok=True)
+    (tmp / ".git" / "info" / "exclude").write_text("excl.txt\n")
 
     total = failed = 0
 
@@ -164,6 +237,8 @@ def main() -> int:
         total += 1
         rc_rg, out_rg = run([args.rg, "--sort", "path", "-n", *flags], cwd)
         rc_la, out_la = run([args.lancet, "rg", "-n", *flags], cwd)
+        if "--stats" in flags:  # timings differ run to run
+            out_rg, out_la = (b"\n".join(l for l in o.split(b"\n") if b"seconds" not in l) for o in (out_rg, out_la))
         if (rc_rg, out_rg) == (rc_la, out_la):
             return
         failed += 1

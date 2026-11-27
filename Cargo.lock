@@ -654,6 +654,7 @@ dependencies = [
  "calamine",
  "cfb",
  "clap",
+ "encoding_rs",
  "flate2",
  "globset",
  "ignore",

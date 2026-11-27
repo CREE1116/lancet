@@ -35,9 +35,9 @@ Use `lancet batch [PATH] -q 'Q1' -q 'Q2' [--name n1 --name n2]` or `--queries-js
 
 ## 2. `lancet rg` (ripgrep Parity & Extensions)
 
-- **Supported flags:** `-e`/`--regexp`, `-f`/`--file`, `-F`, `-i`/`-s`/`-S` (AST-aware smart case), `-w`, `-x`, `-v`, `-U`, `--multiline-dotall`, `-o`, `-c`, `--count-matches`, `-l`, `--files-without-match`, `-q`, `-m`, `-A`/`-B`/`-C`, `-n`/`-N`, `-H`/`-I`, `--column`, `--vimgrep`, `--json`, `-0`/`--null`, `-r`/`--replace`, `-a`, `-u`/`-uu`/`-uuu`, `-.`/`--hidden`, `--no-ignore`, `-g`/`--glob`, `--iglob`, `-t`/`--type`, `-T`/`--type-not`, `--type-list`, `--type-add NAME:GLOB`, `--passthru`, `-L`/`--follow`, `--max-depth NUM`, `--max-filesize NUM[K|M|G]`, `--files`, `--color auto|always|ansi|never`, `-j`.
+- **Flags:** all of ripgrep 15.2's, with the same output and exit codes, except `-P`/`--pcre2`, `--pre`/`--pre-glob` and `--generate` (refused with a reason); `-z` decompresses `.gz` only. Full table: `docs/rg-parity.md`.
 - **Lancet extensions:** `--no-index`, `--trust-index`, `--index-dir DIR`, `--docs` (searches inside PDF, DOCX/PPTX/ODT, HWP/HWPX, EPUB, XLSX/XLS/ODS, ZIP/TAR/GZ/TGZ in-process).
-- **Intentional differences:** always sorted by path component, `-n` stays ON when piped (`-N` disables), `-P`/`--pcre2` is unsupported (guaranteed linear-time matching + sound trigram HIR lowering).
+- **Intentional differences:** always sorted by path, `-n` stays ON when piped (`-N` disables), no headings unless `--heading`/`--pretty`.
 
 ---
 

@@ -69,6 +69,45 @@ pub struct RgOptions {
     /// `--passthru`: print every line of every searched file (callers also set
     /// `before`/`after` to cover the whole file).
     pub passthru: bool,
+    /// `-M`: longer lines are omitted (or cut, with `max_columns_preview`).
+    pub max_columns: Option<usize>,
+    pub max_columns_preview: bool,
+    /// `-b`: byte offset of the line (of the match with `-o`) before the text.
+    pub byte_offset: bool,
+    /// `--trim`: leading whitespace removed from printed lines.
+    pub trim: bool,
+    /// `--heading`: the file name on its own line above that file's lines.
+    pub heading: bool,
+    /// Printed between context groups; `None` = `--no-context-separator`.
+    pub context_separator: Option<Vec<u8>>,
+    pub field_match_separator: Vec<u8>,
+    pub field_context_separator: Vec<u8>,
+    /// `--path-separator`: printed in place of `/` in paths.
+    pub path_separator: Option<String>,
+    /// `--include-zero`: `-c` also prints files with no match.
+    pub include_zero: bool,
+    /// `--stats`: totals after the results.
+    pub stats: bool,
+    /// `--sort` / `--sortr`.
+    pub sort: Option<(SortBy, bool)>,
+    pub glob_case_insensitive: bool,
+    pub type_clear: Vec<String>,
+    /// `--stop-on-nonmatch`: a file's search ends at the first non-matching line after a match.
+    pub stop_on_nonmatch: bool,
+    /// `--no-messages`: errors about files and paths are not printed (still exit 2).
+    pub no_messages: bool,
+    /// `-E`: `None`/`auto` sniffs a UTF-8/UTF-16 BOM; `none` searches raw bytes.
+    pub encoding: Option<String>,
+    /// `--crlf`: `$` matches before `\r\n`.
+    pub crlf: bool,
+    /// `--null-data`: lines end at NUL instead of `\n`.
+    pub null_data: bool,
+    /// `--binary`: binary files in directory searches are searched as named ones are.
+    pub binary: bool,
+    /// `-z`: search inside `.gz` files.
+    pub search_zip: bool,
+    /// `--no-unicode`: ASCII-only `\w`, `\d`, `\b` and case folding.
+    pub no_unicode: bool,
     pub walk: WalkOpts,
     pub index: IndexMode,
     pub index_dir: Option<PathBuf>,
@@ -111,10 +150,92 @@ impl RgOptions {
             types_not: Vec::new(),
             type_add: Vec::new(),
             passthru: false,
+            max_columns: None,
+            max_columns_preview: false,
+            byte_offset: false,
+            trim: false,
+            heading: false,
+            context_separator: Some(b"--".to_vec()),
+            field_match_separator: b":".to_vec(),
+            field_context_separator: b"-".to_vec(),
+            path_separator: None,
+            include_zero: false,
+            stats: false,
+            sort: None,
+            glob_case_insensitive: false,
+            type_clear: Vec::new(),
+            stop_on_nonmatch: false,
+            no_messages: false,
+            encoding: None,
+            crlf: false,
+            null_data: false,
+            binary: false,
+            search_zip: false,
+            no_unicode: false,
             walk: WalkOpts::default(),
             index: IndexMode::Auto,
             index_dir: None,
         }
+    }
+}
+
+/// `--sort` / `--sortr` keys.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SortBy {
+    Path,
+    Modified,
+    Accessed,
+    Created,
+    None,
+}
+
+impl SortBy {
+    pub fn parse(s: &str) -> Result<SortBy, String> {
+        Ok(match s {
+            "path" => SortBy::Path,
+            "modified" => SortBy::Modified,
+            "accessed" => SortBy::Accessed,
+            "created" => SortBy::Created,
+            "none" => SortBy::None,
+            _ => {
+                return Err(format!(
+                    "invalid sort key '{s}' (path, modified, accessed, created, none)"
+                ))
+            }
+        })
+    }
+}
+
+/// What ripgrep's default decoder does: a UTF-8 BOM is dropped, a UTF-16 one
+/// transcodes the file; `-E LABEL` transcodes from LABEL; `-E none` keeps raw bytes.
+/// Only a file that needs it is copied; the rest stay memory-mapped.
+fn decode(o: &RgOptions, raw: content::Content) -> content::Content {
+    use content::Content::Owned;
+    if o.encoding.as_deref() == Some("none") {
+        return raw;
+    }
+    if let Some((enc, bom)) = encoding_rs::Encoding::for_bom(&raw) {
+        if enc == encoding_rs::UTF_8 {
+            return Owned(raw[bom..].to_vec());
+        }
+        return Owned(
+            enc.decode_without_bom_handling(&raw[bom..])
+                .0
+                .into_owned()
+                .into_bytes(),
+        );
+    }
+    match o.encoding.as_deref().filter(|l| *l != "auto") {
+        Some(label) => match encoding_rs::Encoding::for_label(label.as_bytes()) {
+            Some(enc) if enc != encoding_rs::UTF_8 => Owned(
+                enc.decode_without_bom_handling(&raw)
+                    .0
+                    .into_owned()
+                    .into_bytes(),
+            ),
+            _ => raw,
+        },
+        None => raw,
     }
 }
 
@@ -188,6 +309,8 @@ struct Engine {
     word: bool,
     /// Replacement with group numbers shifted for the `-w` wrapper group.
     replace: Option<Vec<u8>>,
+    /// `--crlf`: a line's trailing `\r` is not part of what is matched.
+    crlf: bool,
 }
 
 impl Engine {
@@ -250,6 +373,8 @@ impl Engine {
         let build = |p: &str| {
             RegexBuilder::new(p)
                 .size_limit(1 << 28)
+                .crlf(o.crlf)
+                .unicode(!o.no_unicode)
                 .build()
                 .map_err(|e| format!("regex parse error:\n{e}"))
         };
@@ -274,6 +399,7 @@ impl Engine {
                 buf_re,
                 word,
                 replace,
+                crlf: o.crlf,
             },
             full,
         ))
@@ -282,6 +408,10 @@ impl Engine {
     /// Match spans in `hay` (the user's match, without `-w` boundary characters).
     fn spans(&self, hay: &[u8], out: &mut Vec<(usize, usize)>) {
         out.clear();
+        let hay = match hay.strip_suffix(b"\r") {
+            Some(h) if self.crlf => h,
+            _ => hay,
+        };
         if !self.word {
             out.extend(self.re.find_iter(hay).map(|m| (m.start(), m.end())));
             return;
@@ -363,6 +493,10 @@ fn shift_group_refs(r: &str) -> String {
 
 /// One searched file's printed output and counts.
 struct FileOut {
+    /// Matches (not lines) in the file, for `--stats`.
+    matches: u64,
+    /// Bytes searched, for `--stats`.
+    bytes: u64,
     display: String,
     out: Vec<u8>,
     selected: u64,
@@ -379,27 +513,52 @@ struct Ctx<'a> {
 /// `explicit`: named on the command line (searched even if binary, like ripgrep).
 fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Option<FileOut> {
     let o = cx.o;
-    let data = if o.docs && crate::adapters::is_adapted_path(path, false) {
-        // --docs: the text lancet's extractors see (PDF, Office, HWP, archives).
+    let gz = o.search_zip
+        && path.extension().is_some_and(|e| e == "gz")
+        && !path.to_string_lossy().ends_with(".tar.gz");
+    let mut binary_offset = None;
+    let data = if (o.docs && crate::adapters::is_adapted_path(path, false)) || gz {
+        // --docs: the text lancet's extractors see (PDF, Office, HWP, archives);
+        // -z: the decompressed bytes of a .gz.
         content::load_searchable(path, false).ok()??
     } else {
-        // Raw bytes, as ripgrep sees them — PDFs and Office files included.
-        let raw = content::read(path).ok()?;
+        // Raw bytes, as ripgrep sees them — PDFs and Office files included —
+        // after ripgrep's BOM sniffing / `-E` transcoding.
+        let raw = decode(o, content::read(path).ok()?);
         // Binary files are skipped unless -a: in directory searches ripgrep treats a
         // NUL anywhere as binary (lancet's 8 KiB sniff alone would let late-NUL
         // protobufs through); a file named explicitly is judged by its first bytes.
-        let binary = if explicit {
-            content::is_binary(&raw)
-        } else {
-            memchr::memchr(0, &raw).is_some()
-        };
-        if binary && !o.text {
+        let binary = !o.text
+            && !o.null_data
+            && if explicit {
+                content::is_binary(&raw)
+            } else {
+                memchr::memchr(0, &raw).is_some()
+            };
+        if binary && !(explicit || o.binary) {
             return None;
         }
-        raw
+        if binary {
+            // Named (or `--binary`) binary files are searched with NULs as line
+            // breaks, and text output becomes one "binary file matches" line.
+            binary_offset = memchr::memchr(0, &raw);
+            content::Content::Owned(
+                raw.iter()
+                    .map(|&b| if b == 0 { b'\n' } else { b })
+                    .collect(),
+            )
+        } else {
+            raw
+        }
     };
     let data: &[u8] = &data;
+    let display = match &o.path_separator {
+        Some(sep) => display.replace('/', sep),
+        None => display,
+    };
     let mut fo = FileOut {
+        matches: 0,
+        bytes: data.len() as u64,
         display,
         out: Vec::new(),
         selected: 0,
@@ -412,10 +571,13 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
         if o.files_without_match {
             emit_path(&mut fo.out, o, &fo.display);
         }
+        if (o.count || o.count_matches) && o.include_zero && !o.quiet {
+            emit_count(&mut fo, cx, 0);
+        }
         return Some(fo);
     }
 
-    let lines = line_table(data);
+    let lines = line_table(data, if o.null_data { 0 } else { b'\n' });
     let mut sel: Vec<(usize, Vec<(usize, usize)>)> = Vec::new();
     let mut matches_total: u64 = 0;
     let limit = o.max_count.unwrap_or(u64::MAX);
@@ -466,6 +628,9 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
             } else {
                 tmp.clear();
             }
+            if o.stop_on_nonmatch && !sel.is_empty() && tmp.is_empty() != o.invert {
+                break;
+            }
             if tmp.is_empty() == o.invert {
                 matches_total += tmp.len() as u64;
                 sel.push((i, if o.invert { Vec::new() } else { tmp.clone() }));
@@ -476,6 +641,7 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
         }
     }
     fo.selected = sel.len() as u64;
+    fo.matches = matches_total;
 
     if o.quiet {
         return Some(fo);
@@ -487,23 +653,13 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
         return Some(fo);
     }
     if o.count || o.count_matches {
-        if fo.selected > 0 {
+        if fo.selected > 0 || o.include_zero {
             let n = if o.count_matches && !o.invert {
                 matches_total
             } else {
                 fo.selected
             };
-            if cx.show_name {
-                if o.color && !o.null {
-                    fo.out.extend_from_slice(b"\x1b[35m");
-                    fo.out.extend_from_slice(fo.display.as_bytes());
-                    fo.out.extend_from_slice(b"\x1b[0m");
-                } else {
-                    fo.out.extend_from_slice(fo.display.as_bytes());
-                }
-                fo.out.push(if o.null { 0 } else { b':' });
-            }
-            fo.out.extend_from_slice(format!("{n}\n").as_bytes());
+            emit_count(&mut fo, cx, n);
         }
         return Some(fo);
     }
@@ -511,7 +667,29 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
         return Some(fo);
     }
     if o.json {
-        render_json(&mut fo, o, cx.eng, data, &lines, &sel, matches_total);
+        render_json(
+            &mut fo,
+            o,
+            cx.eng,
+            data,
+            &lines,
+            &sel,
+            matches_total,
+            binary_offset,
+        );
+        return Some(fo);
+    }
+    if let Some(off) = binary_offset {
+        if !sel.is_empty() {
+            if cx.show_name {
+                fo.out.extend_from_slice(fo.display.as_bytes());
+                fo.out.extend_from_slice(b": ");
+            }
+            fo.out.extend_from_slice(
+                format!("binary file matches (found \"\\0\" byte around offset {off})\n")
+                    .as_bytes(),
+            );
+        }
         return Some(fo);
     }
 
@@ -532,8 +710,9 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
         let from = match printed_upto {
             Some(p) if p + 1 >= start => p + 1,
             Some(_) => {
-                if context {
-                    fo.out.extend_from_slice(b"--\n");
+                if let (true, Some(sep)) = (context, &o.context_separator) {
+                    fo.out.extend_from_slice(sep);
+                    fo.out.push(b'\n');
                 }
                 start
             }
@@ -573,6 +752,8 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
                     *i + 1,
                     b':',
                     col.filter(|_| o.column || o.vimgrep),
+                    if o.only_matching { ls + s } else { ls },
+                    le < data.len(),
                     &shown,
                     hl,
                 );
@@ -585,6 +766,8 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
                     *i + 1,
                     b':',
                     None,
+                    ls,
+                    le < data.len(),
                     &render_replace(cx, text),
                     None,
                 );
@@ -599,6 +782,8 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
                 *i + 1,
                 b':',
                 col,
+                ls,
+                le < data.len(),
                 &render_replace(cx, text),
                 hl,
             );
@@ -652,9 +837,43 @@ fn emit_text_line(
     col: Option<usize>,
 ) {
     let (s, e) = lines[i];
-    emit(buf, cx, display, i + 1, sep, col, &data[s..e], None);
+    emit(
+        buf,
+        cx,
+        display,
+        i + 1,
+        sep,
+        col,
+        s,
+        e < data.len(),
+        &data[s..e],
+        None,
+    );
 }
 
+/// `path:count` (or `count` alone) for `-c` / `--count-matches`.
+fn emit_count(fo: &mut FileOut, cx: &Ctx<'_>, n: u64) {
+    let o = cx.o;
+    if cx.show_name {
+        if o.color && !o.null {
+            fo.out.extend_from_slice(b"\x1b[35m");
+            fo.out.extend_from_slice(fo.display.as_bytes());
+            fo.out.extend_from_slice(b"\x1b[0m");
+        } else {
+            fo.out.extend_from_slice(fo.display.as_bytes());
+        }
+        if o.null {
+            fo.out.push(0);
+        } else {
+            fo.out.extend_from_slice(&o.field_match_separator);
+        }
+    }
+    fo.out
+        .extend_from_slice(format!("{n}{}", if o.crlf { "\r\n" } else { "\n" }).as_bytes());
+}
+
+/// One output line. `sep` is `:` for a matching line and `-` for context (the
+/// `--field-*-separator`s replace them); `off` is the byte offset for `-b`.
 #[allow(clippy::too_many_arguments)]
 fn emit(
     buf: &mut Vec<u8>,
@@ -663,11 +882,21 @@ fn emit(
     line_no: usize,
     sep: u8,
     col: Option<usize>,
+    off: usize,
+    eol: bool,
     text: &[u8],
     hl_spans: Option<&[(usize, usize)]>,
 ) {
     let o = cx.o;
     let use_color = o.color && !o.vimgrep && !o.null;
+    let is_match = sep == b':';
+    let field: &[u8] = if o.vimgrep {
+        b":"
+    } else if is_match {
+        &o.field_match_separator
+    } else {
+        &o.field_context_separator
+    };
     if cx.show_name || o.vimgrep {
         if use_color {
             buf.extend_from_slice(b"\x1b[35m");
@@ -676,7 +905,11 @@ fn emit(
         } else {
             buf.extend_from_slice(display.as_bytes());
         }
-        buf.push(if o.null { 0 } else { sep });
+        if o.null {
+            buf.push(0);
+        } else {
+            buf.extend_from_slice(field);
+        }
     }
     if o.line_number || o.vimgrep {
         if use_color {
@@ -686,18 +919,52 @@ fn emit(
         } else {
             buf.extend_from_slice(line_no.to_string().as_bytes());
         }
-        buf.push(sep);
+        buf.extend_from_slice(field);
     }
     if let Some(c) = col {
         buf.extend_from_slice(c.to_string().as_bytes());
-        buf.push(sep);
+        buf.extend_from_slice(field);
+    }
+    if o.byte_offset {
+        buf.extend_from_slice(off.to_string().as_bytes());
+        buf.extend_from_slice(field);
+    }
+    // A line keeps its own terminator; one that had none gets ripgrep's (CRLF with --crlf).
+    let term: &[u8] = match (eol, o.null_data, o.crlf) {
+        (_, true, _) => b"\0",
+        (true, _, _) | (false, false, false) => b"\n",
+        (false, false, true) => b"\r\n",
+    };
+    // --trim: leading whitespace goes, and highlight spans move with the text.
+    let cut = if o.trim {
+        text.iter().take_while(|b| b.is_ascii_whitespace()).count()
+    } else {
+        0
+    };
+    let text = &text[cut..];
+    // ripgrep measures a line with its terminator.
+    if let Some(max) = o.max_columns.filter(|&m| text.len() + eol as usize > m) {
+        if o.max_columns_preview {
+            let mut end = max;
+            while end > 0 && end < text.len() && (text[end] & 0xc0) == 0x80 {
+                end -= 1;
+            }
+            buf.extend_from_slice(&text[..end]);
+            buf.extend_from_slice(b" [... omitted end of long line]");
+        } else if is_match {
+            buf.extend_from_slice(b"[Omitted long matching line]");
+        } else {
+            buf.extend_from_slice(b"[Omitted long context line]");
+        }
+        buf.extend_from_slice(term);
+        return;
     }
     if use_color {
         if let Some(spans) = hl_spans.filter(|s| !s.is_empty()) {
             let mut pos = 0;
             for &(s, e) in spans {
-                let s = s.min(text.len());
-                let e = e.min(text.len());
+                let s = s.saturating_sub(cut).min(text.len());
+                let e = e.saturating_sub(cut).min(text.len());
                 if s >= pos && e > s {
                     buf.extend_from_slice(&text[pos..s]);
                     buf.extend_from_slice(b"\x1b[1;31m");
@@ -707,12 +974,12 @@ fn emit(
                 }
             }
             buf.extend_from_slice(&text[pos..]);
-            buf.push(b'\n');
+            buf.extend_from_slice(term);
             return;
         }
     }
     buf.extend_from_slice(text);
-    buf.push(b'\n');
+    buf.extend_from_slice(term);
 }
 
 fn emit_path(buf: &mut Vec<u8>, o: &RgOptions, display: &str) {
@@ -723,14 +990,18 @@ fn emit_path(buf: &mut Vec<u8>, o: &RgOptions, display: &str) {
     } else {
         buf.extend_from_slice(display.as_bytes());
     }
-    buf.push(if o.null { 0 } else { b'\n' });
+    buf.extend_from_slice(match (o.null, o.crlf) {
+        (true, _) => b"\0",
+        (false, true) => b"\r\n",
+        (false, false) => b"\n",
+    });
 }
 
-/// `(start, end)` of each line, `end` excluding the `\n`.
-fn line_table(data: &[u8]) -> Vec<(usize, usize)> {
+/// `(start, end)` of each line, `end` excluding the terminator (`\n`, or NUL with `--null-data`).
+fn line_table(data: &[u8], term: u8) -> Vec<(usize, usize)> {
     let mut v = Vec::new();
     let mut s = 0;
-    for nl in memchr::memchr_iter(b'\n', data) {
+    for nl in memchr::memchr_iter(term, data) {
         v.push((s, nl));
         s = nl + 1;
     }
@@ -747,6 +1018,7 @@ fn line_of(lines: &[(usize, usize)], off: usize) -> usize {
         .min(lines.len().saturating_sub(1))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_json(
     fo: &mut FileOut,
     o: &RgOptions,
@@ -755,6 +1027,7 @@ fn render_json(
     lines: &[(usize, usize)],
     sel: &[(usize, Vec<(usize, usize)>)],
     matches_total: u64,
+    binary_offset: Option<usize>,
 ) {
     let path = json!({ "text": fo.display });
     let w = |v: serde_json::Value, out: &mut Vec<u8>| {
@@ -842,7 +1115,7 @@ fn render_json(
         w(e, &mut fo.out);
     }
     w(
-        json!({"type": "end", "data": {"path": path, "binary_offset": null, "stats": {
+        json!({"type": "end", "data": {"path": path, "binary_offset": binary_offset, "stats": {
             "elapsed": {"secs": 0, "nanos": 0, "human": "0s"},
             "searches": 1, "searches_with_match": 1,
             "bytes_searched": data.len(), "bytes_printed": 0,
@@ -855,7 +1128,9 @@ fn render_json(
 /// `(path, display, explicitly named)` triples.
 type TargetList = Vec<(PathBuf, String, bool)>;
 
-fn targets(o: &RgOptions, req: &Req) -> Result<(TargetList, bool), String> {
+/// Files to search, whether file names are shown, and the paths that don't exist
+/// (reported, like ripgrep, without stopping the search of the others).
+fn targets(o: &RgOptions, req: &Req) -> Result<(TargetList, bool, Vec<String>), String> {
     let roots: Vec<PathBuf> = if o.paths.is_empty() {
         vec![PathBuf::from(".")]
     } else {
@@ -864,7 +1139,15 @@ fn targets(o: &RgOptions, req: &Req) -> Result<(TargetList, bool), String> {
     let implicit = o.paths.is_empty();
     let mut out = Vec::new();
     let mut any_dir = false;
+    let mut missing = Vec::new();
+    // ripgrep keeps the order of the paths given and sorts within each one.
+    let mut group_start = 0;
+    let sort_group = |out: &mut TargetList, from: &mut usize| {
+        out[*from..].sort_by(|a, b| a.1.split('/').cmp(b.1.split('/')));
+        *from = out.len();
+    };
     for root in &roots {
+        sort_group(&mut out, &mut group_start);
         if root.is_file() {
             if o.walk
                 .max_filesize
@@ -877,23 +1160,35 @@ fn targets(o: &RgOptions, req: &Req) -> Result<(TargetList, bool), String> {
             continue;
         }
         if !root.is_dir() {
-            return Err(format!(
+            missing.push(format!(
                 "{}: No such file or directory (os error 2)",
                 root.display()
             ));
+            continue;
         }
         any_dir = true;
+        let (globs, iglobs) = if o.glob_case_insensitive {
+            (Vec::new(), [o.globs.clone(), o.iglobs.clone()].concat())
+        } else {
+            (o.globs.clone(), o.iglobs.clone())
+        };
         let filter = FileFilter::rg(
             root,
-            &o.globs,
-            &o.iglobs,
+            &globs,
+            &iglobs,
+            &o.type_clear,
             &o.type_add,
             &o.types,
             &o.types_not,
         )?;
         // `.lancet` is built without following symlinks, so `--trust-index -L`
         // falls back to a live walk rather than missing symlinked targets.
-        let mode = if o.text || (o.walk.follow && o.index == IndexMode::Trust) {
+        // The index follows the default ignore rules; other rules need a live walk.
+        let mode = if o.text
+            || (o.walk.follow && o.index == IndexMode::Trust)
+            || !o.walk.ignore.is_default()
+            || o.walk.one_file_system
+        {
             IndexMode::Off
         } else {
             o.index
@@ -931,49 +1226,101 @@ fn targets(o: &RgOptions, req: &Req) -> Result<(TargetList, bool), String> {
             out.push((t.path, display, false));
         }
     }
-    // Component-wise, like ripgrep's `--sort path` (`a/b.txt` before `a.txt`).
-    out.sort_by(|a, b| a.1.split('/').cmp(b.1.split('/')));
-    out.dedup_by(|a, b| a.1 == b.1);
+    // Component-wise within each path, like ripgrep's `--sort path` (`a/b.txt` before `a.txt`).
+    sort_group(&mut out, &mut group_start);
+    let mut seen = std::collections::HashSet::new();
+    out.retain(|t| seen.insert(t.1.clone()));
+    if let Some((by, reverse)) = o.sort {
+        let time = |p: &Path| {
+            std::fs::metadata(p).ok().and_then(|m| match by {
+                SortBy::Modified => m.modified().ok(),
+                SortBy::Accessed => m.accessed().ok(),
+                SortBy::Created => m.created().ok(),
+                SortBy::Path | SortBy::None => None,
+            })
+        };
+        if matches!(by, SortBy::Modified | SortBy::Accessed | SortBy::Created) {
+            // Stable: equal times keep path order.
+            out.sort_by_cached_key(|t| time(&t.0));
+        }
+        if reverse {
+            out.reverse();
+        }
+    }
     let show_name = roots.len() > 1 || any_dir;
-    Ok((out, show_name))
+    Ok((out, show_name, missing))
+}
+
+fn report_missing(o: &RgOptions, missing: &[String]) {
+    if !o.no_messages {
+        for m in missing {
+            eprintln!("rg: {m}");
+        }
+    }
 }
 
 /// `lancet rg --files`: the files that would be searched.
+/// `Err("")` means errors were already reported on stderr (exit 2).
 pub fn list_files(o: &RgOptions, w: &mut dyn Write) -> Result<bool, String> {
-    let (ts, _) = targets(o, &Req::All)?;
+    let (ts, _, missing) = targets(o, &Req::All)?;
+    report_missing(o, &missing);
     for (_, d, _) in &ts {
+        let d = match &o.path_separator {
+            Some(sep) => d.replace('/', sep),
+            None => d.clone(),
+        };
         let _ = w.write_all(d.as_bytes());
         let _ = w.write_all(if o.null { b"\0" } else { b"\n" });
+    }
+    if !missing.is_empty() {
+        return Err(String::new());
     }
     Ok(!ts.is_empty())
 }
 
 /// Run a search; `Ok(true)` if anything matched (exit 0), `Ok(false)` if not (exit 1).
+/// `Err("")` means errors were already reported on stderr (exit 2).
 pub fn run(o: &RgOptions, w: &mut dyn Write) -> Result<bool, String> {
+    let t0 = std::time::Instant::now();
     let (eng, full) = Engine::new(o)?;
     // Inverted / files-without-match searches need every file; otherwise the regex's
     // required trigrams narrow the candidates (verified by the regex itself).
-    let req = if o.invert || o.files_without_match || o.passthru {
+    // --stats and --include-zero report every file ripgrep would search, so the
+    // index doesn't narrow them.
+    let req = if o.invert || o.files_without_match || o.passthru || o.stats || o.include_zero {
         Req::All
     } else {
         Req::from_expr(&Expr::Match {
             m: Matcher::Regex { pattern: full },
         })
     };
-    let (ts, dir_search) = targets(o, &req)?;
+    let (ts, dir_search, missing) = targets(o, &req)?;
+    report_missing(o, &missing);
     let show_name = o.with_filename.unwrap_or(dir_search);
+    // --heading: names go on their own line above each file's lines.
+    let heading = o.heading
+        && show_name
+        && !(o.count || o.count_matches || o.files_with_matches || o.files_without_match)
+        && !(o.json || o.quiet || o.vimgrep);
     let cx = Ctx {
         o,
         eng: &eng,
-        show_name,
+        show_name: show_name && !heading,
     };
     let results: Vec<FileOut> = ts
         .par_iter()
         .filter_map(|(p, d, explicit)| search_file(&cx, p, d.clone(), *explicit))
         .collect();
+    let searched_at = t0.elapsed();
     let mut any = false;
     let mut first_group = true;
     let (mut matched_lines, mut searches_with_match) = (0u64, 0u64);
+    let mut printed = 0u64;
+    let mut w = CountingWriter {
+        inner: w,
+        n: &mut printed,
+    };
+    let w = &mut w;
     for r in &results {
         if r.selected > 0 {
             any = true;
@@ -986,10 +1333,21 @@ pub fn run(o: &RgOptions, w: &mut dyn Write) -> Result<bool, String> {
         if r.out.is_empty() {
             continue;
         }
-        // --passthru prints whole files, which ripgrep never separates with `--`.
-        if r.has_output_group && (o.before > 0 || o.after > 0) && !o.json && !o.passthru {
+        if heading {
             if !first_group {
-                let _ = w.write_all(b"--\n");
+                let _ = w.write_all(b"\n");
+            }
+            first_group = false;
+            if o.color {
+                let _ = w.write_all(format!("\x1b[35m{}\x1b[0m\n", r.display).as_bytes());
+            } else {
+                let _ = w.write_all(format!("{}\n", r.display).as_bytes());
+            }
+        } else if r.has_output_group && (o.before > 0 || o.after > 0) && !o.json && !o.passthru {
+            // --passthru prints whole files, which ripgrep never separates with `--`.
+            if let (false, Some(sep)) = (first_group, &o.context_separator) {
+                let _ = w.write_all(sep);
+                let _ = w.write_all(b"\n");
             }
             first_group = false;
         }
@@ -1002,7 +1360,49 @@ pub fn run(o: &RgOptions, w: &mut dyn Write) -> Result<bool, String> {
                       "matched_lines": matched_lines}}});
         let _ = writeln!(w, "{summary}");
     }
+    if o.stats && !o.json {
+        let matches: u64 = results.iter().map(|r| r.matches).sum();
+        // Decoded bytes, as ripgrep counts them. (For binary files ripgrep counts
+        // only what it read before stopping, which this doesn't reproduce.)
+        let bytes: u64 = results.iter().map(|r| r.bytes).sum();
+        // ripgrep's "bytes printed" counts matching/context lines, not -c / -l output.
+        let printed = if o.count || o.count_matches || o.files_with_matches || o.files_without_match
+        {
+            0
+        } else {
+            *w.n
+        };
+        let total = t0.elapsed();
+        let text = format!(
+            "\n{matches} matches\n{matched_lines} matched lines\n{searches_with_match} files contained matches\n{} files searched\n{} bytes printed\n{bytes} bytes searched\n{:.6} seconds spent searching\n{:.6} seconds total\n",
+            ts.len(),
+            printed,
+            searched_at.as_secs_f64(),
+            total.as_secs_f64()
+        );
+        let _ = w.write_all(text.as_bytes());
+    }
+    if !missing.is_empty() {
+        return Err(String::new());
+    }
     Ok(any)
+}
+
+/// Counts what is written, for `--stats`' "bytes printed".
+struct CountingWriter<'a> {
+    inner: &'a mut dyn Write,
+    n: &'a mut u64,
+}
+
+impl Write for CountingWriter<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let k = self.inner.write(buf)?;
+        *self.n += k as u64;
+        Ok(k)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
 }
 
 #[cfg(test)]
