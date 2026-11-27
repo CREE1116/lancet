@@ -14,7 +14,7 @@ use crate::output::Status;
 use crate::patch::{apply_patch, PatchOptions};
 use crate::query::FileType;
 use crate::read_cmd::{parse_col_spec, parse_line_spec, read_file_range, ReadOptions};
-use crate::refs::{find_refs, RefsOptions};
+use crate::refs::{find_refs, rank_symbols, RefsOptions};
 use crate::rename::{rename as rename_local, RenameOptions};
 use crate::rg::{parse_filesize, run as run_rg_cmd, RgOptions};
 use crate::search::{search, IndexMode, SearchOptions};
@@ -352,6 +352,7 @@ fn tool_definitions(cfg: &McpConfig) -> Vec<Value> {
                     "pattern_mode": { "type": "string", "enum": ["substring", "glob", "regex"], "default": "substring" },
                     "case_sensitive": { "type": "boolean", "default": false },
                     "kinds": { "type": "array", "items": { "type": "string", "enum": ["file", "dir"] } },
+                    "dirs": { "type": "boolean", "default": false, "description": "Only directories (same as kinds: [\"dir\"])" },
                     "exts": { "type": "array", "items": { "type": "string" } },
                     "type_classes": { "type": "array", "items": { "type": "string" } },
                     "max_depth": { "type": "integer", "minimum": 0 },
@@ -369,7 +370,7 @@ fn tool_definitions(cfg: &McpConfig) -> Vec<Value> {
         }),
         json!({
             "name": "lancet_search",
-            "description": "Search code, PDFs, Office documents, HWP/HWPX, and archives using Lancet's query DSL (AND/OR/NOT, near/before, fuzzy, regex, in function/class/string/comment, pipes like `| expand parent | limit 10 | budget tokens:1500`).",
+            "description": "Search code, PDFs, Office documents, HWP/HWPX, and archives using Lancet's query DSL (AND/OR/NOT, near/before, fuzzy, regex, in line/block/file/function, pipes like `| expand parent | limit 10 | budget tokens:1500`).",
             "annotations": {
                 "readOnlyHint": true,
                 "destructiveHint": false,
@@ -442,7 +443,7 @@ fn tool_definitions(cfg: &McpConfig) -> Vec<Value> {
         }),
         json!({
             "name": "lancet_refs",
-            "description": "Index-accelerated `[def]` declarations and lexical AST `[ref]` occurrences across 24 languages (comments and string literals excluded).",
+            "description": "Index-accelerated `[def]` declarations and lexical AST `[ref]` occurrences across 24 languages (comments and string literals excluded). Set `rank: true` to treat `symbol` as a declaration glob (e.g. `*Service`) and rank matching declarations by reference count.",
             "annotations": {
                 "readOnlyHint": true,
                 "destructiveHint": false,
@@ -453,12 +454,14 @@ fn tool_definitions(cfg: &McpConfig) -> Vec<Value> {
                 "type": "object",
                 "required": ["symbol"],
                 "properties": {
-                    "symbol": { "type": "string" },
+                    "symbol": { "type": "string", "description": "Exact symbol name (or glob pattern when `rank: true`, e.g. `*Service`)" },
                     "path": { "type": "string" },
                     "lang": { "type": "string" },
                     "exts": { "type": "array", "items": { "type": "string" } },
                     "paths": { "type": "array", "items": { "type": "string" } },
                     "all_files": { "type": "boolean", "default": false },
+                    "rank": { "type": "boolean", "default": false, "description": "Rank declarations matching `symbol` glob by lexical reference count" },
+                    "kinds": { "type": "array", "items": { "type": "string" }, "description": "Filter declaration kinds when `rank: true` (e.g. `class`, `function`, `struct`)" },
                     "limit": { "type": "integer", "minimum": 1 },
                     "index_mode": { "type": "string", "enum": ["auto", "off", "trust"] },
                     "hidden": { "type": "boolean", "default": false },
@@ -792,6 +795,9 @@ fn call_fd(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Value, bool), 
             other => return Err(format!("unknown kind `{other}` (expected `file` or `dir`)")),
         }
     }
+    if opt_bool(args, "dirs", false)? {
+        opts.include_dirs = true;
+    }
     opts.exts = opt_str_vec(args, "exts")?;
     for tc in opt_str_vec(args, "type_classes")? {
         let ft = FileType::parse(&tc).ok_or_else(|| format!("unknown type_class `{tc}`"))?;
@@ -894,6 +900,11 @@ fn call_rg(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Value, bool), 
         while end > 0 && !full.is_char_boundary(end) {
             end -= 1;
         }
+        if let Some(nl) = full[..end].rfind('\n') {
+            if nl > 0 {
+                end = nl + 1;
+            }
+        }
         full[..end].to_string()
     } else {
         full.into_owned()
@@ -949,7 +960,16 @@ fn call_read(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Value, bool)
 }
 
 fn call_refs(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Value, bool), String> {
-    let symbol = req_str(args, "symbol")?;
+    let rank = opt_bool(args, "rank", false)?;
+    let kinds = opt_str_vec(args, "kinds")?;
+    if !kinds.is_empty() && !rank {
+        return Err("`kinds` only applies when `rank: true`".into());
+    }
+    let symbol = if rank {
+        opt_str(args, "symbol")?.unwrap_or("*")
+    } else {
+        req_str(args, "symbol")?
+    };
     let root = resolve_path(&cfg.root, opt_str(args, "path")?);
     let mut opts = RefsOptions::new(symbol, root);
     opts.lang = opt_str(args, "lang")?.map(str::to_string);
@@ -963,8 +983,13 @@ fn call_refs(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Value, bool)
         no_ignore: opt_bool(args, "no_ignore", false)?,
         ..WalkOpts::default()
     };
-    let resp = find_refs(&opts);
-    to_tool_payload(&resp, resp.status)
+    if rank {
+        let resp = rank_symbols(&opts, &kinds);
+        to_tool_payload(&resp, resp.status)
+    } else {
+        let resp = find_refs(&opts);
+        to_tool_payload(&resp, resp.status)
+    }
 }
 
 fn call_ast(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Value, bool), String> {

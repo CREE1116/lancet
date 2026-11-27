@@ -189,6 +189,15 @@ fn mcp_end_to_end_search_read_cas_edit_ast_and_patch() {
     assert!(!err);
     assert_eq!(fd_res["status"], json!("complete"));
 
+    let (fd_dirs, err) = mcp.call_tool("lancet_fd", json!({ "dirs": true, "tree": true }));
+    assert!(!err);
+    assert_eq!(fd_dirs["status"], json!("complete"));
+    assert!(fd_dirs["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|e| e["kind"] == json!("dir")));
+
     let (out_res, err) = mcp.call_tool("lancet_outline", json!({ "path": "src/lib.rs" }));
     assert!(!err);
     assert_eq!(out_res["status"], json!("complete"));
@@ -375,10 +384,22 @@ fn mcp_end_to_end_search_read_cas_edit_ast_and_patch() {
     let after_ren = fs::read_to_string(root.join("src/local.rs")).unwrap();
     assert!(after_ren.contains("let scaled = x + 1;\n    scaled * 2"));
 
-    // Refs & rg truncation check
+    // Refs, ranked declarations & rg truncation check
     let (refs_res, err) = mcp.call_tool("lancet_refs", json!({ "symbol": "greet" }));
     assert!(!err);
     assert_eq!(refs_res["definitions"].as_array().unwrap().len(), 1);
+
+    let (rank_res, err) = mcp.call_tool(
+        "lancet_refs",
+        json!({ "symbol": "g*", "rank": true, "kinds": ["function"] }),
+    );
+    assert!(!err);
+    assert_eq!(rank_res["status"], json!("complete"));
+    assert!(rank_res["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|e| e["name"] == json!("greet")));
 
     let big = "match_token_line\n".repeat(40);
     fs::write(root.join("docs/big.txt"), big).unwrap();
@@ -388,7 +409,9 @@ fn mcp_end_to_end_search_read_cas_edit_ast_and_patch() {
     );
     assert!(!err);
     assert_eq!(trunc_rg["truncated"], json!(true));
-    assert!(trunc_rg["output"].as_str().unwrap().len() <= 256);
+    let trunc_out = trunc_rg["output"].as_str().unwrap();
+    assert!(trunc_out.len() <= 256);
+    assert!(trunc_out.ends_with('\n'));
 }
 
 #[test]

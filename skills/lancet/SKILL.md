@@ -11,13 +11,13 @@ Lancet runs identically through **MCP (`lancet_*`)** and **CLI (`lancet ...`)** 
 
 | Task | MCP Tool | CLI Command |
 |---|---|---|
-| Map folders/files or tree view | `lancet_fd` | `lancet fd [--tree -d 2] [PAT] [PATH]` |
+| Map folders/files or tree view | `lancet_fd` (`dirs: true`) | `lancet fd [--tree -d 2 --dirs] [PAT] [PATH]` |
 | Declarations, Markdown headings, sheet/zip outline | `lancet_outline` | `lancet outline [PATH] [-d N]` |
 | Boolean, proximity, fuzzy, AST-scoped query | `lancet_search` | `lancet '<QUERY>' [PATH]` |
 | Multi-query single-walk batch | — | `lancet batch [PATH] -q ...` / `--queries-json` |
 | `ripgrep`-style regex / line grep | `lancet_rg` | `lancet rg [FLAGS] PATTERN [PATH...]` |
 | Structural AST search & rewrite | `lancet_ast` | `lancet ast '<PAT>' [PATH] [-l LANG] [-r TPL]` |
-| Lexical `[def]` + `[ref]` lookup (skips comments/strings) | `lancet_refs` | `lancet refs <SYMBOL> [PATH]` |
+| Lexical `[def]` + `[ref]` or ranked declarations | `lancet_refs` (`rank: true`) | `lancet refs [--rank --kind K] <SYM\|GLOB> [PATH]` |
 | Surgical line / symbol / page / sheet / archive read | `lancet_read` | `lancet read <TARGET> [--symbol\|-l\|-p\|--budget-tokens]` |
 | CAS-safe line / symbol / `find` / multi-hunk edit | `lancet_edit` | `lancet edit <PATH> (--lines\|--symbol\|--find\|--edits)` |
 | Atomic multi-file unified diff | `lancet_patch` | `lancet patch [DIFF\|-] [--root DIR] [-p N]` |
@@ -27,7 +27,8 @@ Lancet runs identically through **MCP (`lancet_*`)** and **CLI (`lancet ...`)** 
 ## 2. Core 4-Step Workflow
 
 1. **Orient first** (never dump whole files or run blind recursive globs):
-   - `lancet_fd` (`tree: true`, `max_depth: 2`) and `lancet_outline` on target files/dirs.
+   - `lancet_fd` (`tree: true`, `max_depth: 2`, optionally `dirs: true`) and `lancet_outline` on target files/dirs.
+   - To find central symbols in an unfamiliar repo, rank declarations by usage with `lancet_refs(symbol="*Service", rank=true, kinds=["class"])` / `lancet refs --rank '*Service' --kind class`.
 2. **Locate exact coordinates**:
    - Use `lancet_search` (`'near("a","b",20) in function'`), `lancet_rg`, `lancet_refs`, or `lancet_ast`.
    - When running several exploratory queries, use CLI `lancet batch` to share one directory walk and index open.

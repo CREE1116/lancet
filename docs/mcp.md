@@ -12,8 +12,8 @@ Lancet ships a built-in Model Context Protocol (MCP) stdio server (`lancet mcp`)
 
 | Flag | Default | Description |
 |---|---|---|
-| `--root <DIR>` | `.` | Workspace root used to resolve relative paths in tool calls |
-| `--read-only` | `false` | Omits `lancet_edit` and `lancet_patch` from `tools/list` and refuses writes (`lancet_ast` `apply`, `lancet_index` mutating actions) |
+| `--root <DIR>` | `.` | Default working directory for resolving relative paths in tool calls (not a chroot/sandbox; absolute or `..` paths work like the CLI) |
+| `--read-only` | `false` | Omits `lancet_edit`, `lancet_patch`, and `lancet_rename` from `tools/list` and refuses writes (`lancet_ast` `apply`, `lancet_index` mutating actions) |
 | `--trust-index` | `false` | Default `index_mode` becomes `trust` instead of `auto` (fastest; skips filesystem change checks unless overridden per call) |
 | `-j`, `--threads <NUM>` | CPU count | Rayon worker thread count |
 
@@ -79,12 +79,12 @@ Every read/search tool treats `0` matches as a normal `empty` result (`isError: 
 
 | Tool | Role | Notes |
 |---|---|---|
-| `lancet_fd` | `.gitignore`-aware file/dir discovery & `--tree` | Supports `pattern_mode`, `exts`, `type_classes`, `changed_within`, `min_size`/`max_size`, `index_mode` |
+| `lancet_fd` | `.gitignore`-aware file/dir discovery & `--tree` | Supports `dirs: true`, `pattern_mode`, `exts`, `type_classes`, `changed_within`, `min_size`/`max_size`, `index_mode` |
 | `lancet_search` | Lancet DSL query (`AND`/`OR`/`NOT`, `near`, `fuzzy`, `regex`, pipes) | Supports `--budget` pipes, `max_lines`, `max_cols`, `ocr` |
-| `lancet_rg` | `ripgrep`-compatible regex/fixed search | Always returns deterministic path-sorted lines with line numbers; `docs: true` enables PDF/Office/HWP/archives; supports `passthru` & `type_add`; output capped via `max_output_bytes` |
+| `lancet_rg` | `ripgrep`-compatible regex/fixed search | Always returns deterministic path-sorted lines with line numbers; `docs: true` enables PDF/Office/HWP/archives; supports `passthru` & `type_add`; output capped cleanly at line boundaries via `max_output_bytes` |
 | `lancet_outline` | Declaration skeletons, Markdown headings, sheets, archive manifests | Supports `max_depth`, `exts`, `limit`, `ocr` |
 | `lancet_read` | Exact `lines`, `symbol`, `page`, `sheet`/`rows`/`cols`, `archive.zip!entry` | Returns `rev` (XXH3-64) on plain-text files and `next_line` with `budget_tokens` |
-| `lancet_refs` | Index-accelerated `[def]` / `[ref]` lexical AST lookup | Excludes comments & string literals across 24 languages |
+| `lancet_refs` | Index-accelerated `[def]` / `[ref]` lexical AST lookup & `--rank` | Excludes comments & string literals across 24 languages; `rank: true` + `kinds` ranks declarations matching `symbol` glob by reference count |
 | `lancet_ast` | Tree-sitter structural search & optional `rewrite` | 24 languages; `apply: false` (dry-run) by default; `apply: true` refused under `--read-only` |
 | `lancet_edit` | Locked CAS line/symbol/`find`/multi-hunk `edits` | Omitted under `--read-only`; verifies `rev` and Tree-sitter syntax gate |
 | `lancet_patch` | Atomic multi-file unified diff apply (`git diff` / `diff -u`) | Omitted under `--read-only`; exact hunk matching + race rollback |
