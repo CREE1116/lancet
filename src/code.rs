@@ -146,6 +146,8 @@ mod imp {
         pub pattern_wrappers: &'static [(&'static str, &'static str)],
         /// The order to try instead when the pattern ends with `;`.
         pub pattern_wrappers_semi: Option<&'static [(&'static str, &'static str)]>,
+        /// The scope rules `rename` and `refs` resolve names with, if modeled.
+        pub(crate) scopes: Option<crate::scopes::Family>,
     }
 
     /// A JS/TS variable bound to a function is a function.
@@ -238,6 +240,7 @@ mod imp {
                 ("impl __LancetWrap__ { ", " }"),
                 ("type __LancetWrap__ = ", ";"),
             ],
+            scopes: Some(crate::scopes::Family::Rust),
             pattern_wrappers_semi: Some(&[
                 ("fn __lancet_wrap__() { ", " }"),
                 ("fn __lancet_wrap__() { let _ = ", "; }"),
@@ -259,6 +262,7 @@ mod imp {
             ],
             symbol_if: None,
             pattern_wrappers: NO_WRAP,
+            scopes: Some(crate::scopes::Family::Python),
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -271,6 +275,7 @@ mod imp {
             symbols: JS_SYMBOLS,
             symbol_if: Some(js_symbol),
             pattern_wrappers: JS_WRAP,
+            scopes: Some(crate::scopes::Family::Js),
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -283,6 +288,7 @@ mod imp {
             symbols: JS_SYMBOLS,
             symbol_if: Some(js_symbol),
             pattern_wrappers: JS_WRAP,
+            scopes: Some(crate::scopes::Family::Js),
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -295,6 +301,7 @@ mod imp {
             symbols: JS_SYMBOLS,
             symbol_if: Some(js_symbol),
             pattern_wrappers: JS_WRAP,
+            scopes: Some(crate::scopes::Family::Js),
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -316,6 +323,7 @@ mod imp {
                 ("package p\n", ""),
                 ("package p\ntype __LancetWrap__ ", ""),
             ],
+            scopes: Some(crate::scopes::Family::Go),
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -332,6 +340,7 @@ mod imp {
                 ("void __lancet_wrap__(void) {\n", "\n}"),
                 ("", ""),
             ],
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -349,6 +358,7 @@ mod imp {
                 ("class __LancetWrap__ {\n", "\n};"),
                 ("", ""),
             ],
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -368,6 +378,7 @@ mod imp {
                 ("fn __lancet_wrap__() void {\n", "\n}"),
                 ("", ""),
             ],
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -392,6 +403,7 @@ mod imp {
                 ("class __LW {\n", "\n}"),
                 ("", ""),
             ],
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -424,6 +436,7 @@ mod imp {
                 ("class __LW {\n", "\n}"),
                 ("", ""),
             ],
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -445,6 +458,7 @@ mod imp {
                 ("fun __lw() {\n", "\n}"),
                 ("", ""),
             ],
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -469,6 +483,7 @@ mod imp {
                 ("object __LW {\n", "\n}"),
                 ("", ""),
             ],
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -491,6 +506,7 @@ mod imp {
                 ("func __lw() -> Any { return (", ") }"),
                 ("struct __LW {\n", "\n}"),
             ],
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -508,6 +524,7 @@ mod imp {
             ],
             symbol_if: None,
             pattern_wrappers: NO_WRAP,
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -532,6 +549,7 @@ mod imp {
                 ("<?php\n", ""),
                 ("<?php\nclass __LW {\n", "\n}"),
             ],
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -544,6 +562,7 @@ mod imp {
             symbols: &[("function_definition", "function")],
             symbol_if: None,
             pattern_wrappers: NO_WRAP,
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -559,6 +578,7 @@ mod imp {
             ],
             symbol_if: None,
             pattern_wrappers: &[("local __lv = (", ")"), ("", "")],
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -571,6 +591,7 @@ mod imp {
             symbols: &[("block", "block"), ("attribute", "attr")],
             symbol_if: None,
             pattern_wrappers: &[("", ""), ("__lancet_attr = ", "")],
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -583,6 +604,7 @@ mod imp {
             symbols: &[],
             symbol_if: None,
             pattern_wrappers: NO_WRAP,
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -595,6 +617,7 @@ mod imp {
             symbols: &[("rule_set", "rule")],
             symbol_if: None,
             pattern_wrappers: &[("", ""), (".__lw { ", " }")],
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -607,6 +630,7 @@ mod imp {
             symbols: &[],
             symbol_if: Some(json_symbol),
             pattern_wrappers: &[("", ""), ("{ ", " }")],
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -619,6 +643,7 @@ mod imp {
             symbols: &[("block_mapping_pair", "key")],
             symbol_if: None,
             pattern_wrappers: NO_WRAP,
+            scopes: None,
             pattern_wrappers_semi: None,
         },
         LangSpec {
@@ -631,6 +656,7 @@ mod imp {
             symbols: &[("table", "table"), ("table_array_element", "table")],
             symbol_if: Some(toml_symbol),
             pattern_wrappers: NO_WRAP,
+            scopes: None,
             pattern_wrappers_semi: None,
         },
     ];

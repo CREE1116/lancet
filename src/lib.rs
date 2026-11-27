@@ -28,4 +28,5 @@ pub mod refs;
 pub mod rename;
 pub mod rg;
 pub mod scope;
+pub mod scopes;
 pub mod walk;
