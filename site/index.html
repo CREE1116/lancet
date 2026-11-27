@@ -92,7 +92,7 @@
           <button role="tab" aria-selected="false" data-method="homebrew" data-cmd="brew tap CREE1116/lancet https://github.com/CREE1116/lancet && brew install CREE1116/lancet/lancet">Homebrew</button>
           <button role="tab" aria-selected="false" data-method="windows" data-cmd="irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex">Windows</button>
           <button role="tab" aria-selected="false" data-method="cargo" data-cmd="cargo binstall --git https://github.com/CREE1116/lancet lancet">cargo</button>
-          <button role="tab" aria-selected="false" data-method="agent" data-prompt="true" data-cmd="Install lancet (curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh), run &quot;lancet index .&quot; in this repo, and add https://raw.githubusercontent.com/CREE1116/lancet/main/docs/agent-instructions.md to AGENTS.md / CLAUDE.md.">for Agent</button>
+          <button role="tab" aria-selected="false" data-method="agent" data-prompt="true" data-cmd="Install lancet (curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh), register the built-in MCP server (lancet mcp --root . per https://raw.githubusercontent.com/CREE1116/lancet/main/docs/mcp.md), install the official skill (skills/lancet/SKILL.md), and run &quot;lancet index .&quot; in this repo.">for Agent</button>
         </div>
         <div class="cmd"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh</code><button class="copy" id="copy">Copy</button></div>
       </div>
@@ -300,16 +300,22 @@ git diff | lancet patch --apply</pre>
       </div>
       <div class="code">
         <div class="code-head">
-          <h4>AGENTS.md / CLAUDE.md</h4>
+          <h4>MCP · Official Skill · AGENTS.md</h4>
           <button type="button" class="copy" id="copy-agent-start">Copy rules</button>
         </div>
-<pre><span class="c"># Paste into AGENTS.md / CLAUDE.md (full guide: docs/agent-instructions.md)</span>
+<pre><span class="c"># 1. Built-in MCP server (Claude Code, Cursor, Codex, Antigravity)</span>
+claude mcp add --transport stdio lancet -- lancet mcp --root .
+<span class="c"># Other clients: see docs/mcp.md &amp; skills/lancet/references/mcp-config.json</span>
 
-1. Orient:  lancet fd --tree --max-depth 2 . | lancet outline FILE
-2. Search:  lancet rg -w SYMBOL src  |  lancet 'query in ext:rs'
-3. Read:    lancet read FILE --symbol NAME --json   <span class="c"># note "rev"</span>
-4. Edit:    lancet edit FILE --find '...' --with '...' --rev REV --apply
-5. On conflict (exit 2): read again, redo on new content, retry with new rev.</pre>
+<span class="c"># 2. Official Agent Skill (skills/lancet/SKILL.md)</span>
+<span class="c"># Copy skills/lancet/ into ~/.claude/skills, ~/.codex/skills,</span>
+<span class="c"># ~/.gemini/config/skills, or .agents/skills (or use AGENTS.md):</span>
+
+1. Orient:  lancet_fd / lancet_outline (or lancet fd / outline)
+2. Search:  lancet_search / lancet_rg / lancet_refs / lancet_ast
+3. Read:    lancet_read --symbol NAME  <span class="c"># capture "rev"</span>
+4. Change:  lancet_edit / lancet_patch with rev + apply: true
+5. On conflict: re-read via lancet_read and retry with the new rev.</pre>
       </div>
     </div>
   </div>
@@ -321,6 +327,7 @@ git diff | lancet patch --apply</pre>
     <div style="display:flex;gap:20px;flex-wrap:wrap">
       <a href="https://github.com/CREE1116/lancet">GitHub</a>
       <a href="https://github.com/CREE1116/lancet/releases">Releases</a>
+      <a href="https://github.com/CREE1116/lancet/blob/main/docs/mcp.md">MCP &amp; Skill</a>
       <a href="https://github.com/CREE1116/lancet/blob/main/docs/grammar.md">Query language</a>
       <a href="https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md">ripgrep parity</a>
       <a href="https://github.com/CREE1116/lancet/blob/main/docs/why-one-tool.md">Why one tool</a>
@@ -331,6 +338,6 @@ git diff | lancet patch --apply</pre>
 
 <!-- Optional zero-cookie analytics (GoatCounter): replace YOUR_CODE and uncomment -->
 <!-- <script data-goatcounter="https://YOUR_CODE.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script> -->
-<script src="assets/site.js?v=5"></script>
+<script src="assets/site.js?v=6"></script>
 </body>
 </html>

@@ -60,17 +60,14 @@
 
   /* one-click agent instructions copy */
   const AGENT_RULES = `# lancet — Code Search, Read & Edit Rules
-Use \`lancet\` as your unified CLI replacement for \`rg\`, \`fd\`, \`ast-grep\`, \`cat\`, and \`sed\`.
+Prefer \`lancet_*\` MCP tools (via \`lancet mcp --root .\`) or the \`lancet\` CLI over \`rg\`, \`fd\`, \`ast-grep\`, and \`cat\`/\`sed\`.
+Full skill: skills/lancet/SKILL.md | MCP setup: docs/mcp.md
 
-1. Orient:  lancet fd --tree --max-depth 2 . | lancet outline FILE
-2. Search:  lancet rg -w SYMBOL src  |  lancet 'query in ext:rs'
-3. Read:    lancet read FILE --symbol NAME --json   # note "rev"
-4. Refs:    lancet refs SYMBOL src --lang rs
-5. AST:     lancet ast '$X.unwrap()' src --rewrite '$X?' [--apply]
-6. Edit:    lancet edit FILE --find '...' --with '...' --rev REV --apply
-   (Batch multiple hunks in one call with --edits -; line numbers match read 1:1)
-7. Patch:   git diff | lancet patch --apply
-8. On conflict (exit 2): re-run lancet read, re-apply on new content, retry with new rev.`;
+1. Orient:  lancet_fd / lancet_outline (or \`lancet fd --tree --max-depth 2 .\`, \`lancet outline FILE\`)
+2. Search:  lancet_search / lancet_rg / lancet_refs / lancet_ast
+3. Read:    lancet_read(target, symbol=...) or \`lancet read FILE --symbol NAME --json\` -> capture "rev"
+4. Edit:    lancet_edit / lancet_patch / lancet_ast(rewrite) — preview dry-run first, then pass rev + apply: true
+5. On conflict: re-read via lancet_read, adapt to the new content, and retry with the new rev.`;
 
   const copyAgent = async (btn, resetLabel) => {
     try {
