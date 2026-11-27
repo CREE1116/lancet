@@ -2935,6 +2935,59 @@ fn rename_local_bindings_exactly_or_refuses() {
 }
 
 #[test]
+fn refs_skip_other_types_members_and_shadowing_locals() {
+    use lancet::refs::{find_refs, RefsOptions};
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    let lines = |o: &RefsOptions| -> Vec<(String, usize)> {
+        find_refs(o)
+            .references
+            .iter()
+            .map(|r| (rel(&r.path), r.line))
+            .collect()
+    };
+    // Rust free fn: `.rev()`, `rev:` (also inside a macro) and a local `rev` are not it.
+    fs::write(
+        root.join("a.rs"),
+        "pub fn rev(b: &[u8]) -> u8 { b[0] }\n\
+         fn g(xs: Vec<u8>) -> u8 {\n\
+             let n: Vec<u8> = xs.into_iter().rev().collect();\n\
+             let s = S { rev: rev(&n) };\n\
+             let v = vec![S { rev: 1 }];\n\
+             let rev = 3;\n\
+             crate::rev(&n) + rev + s.rev\n\
+         }\n",
+    )
+    .unwrap();
+    // Python: a local of the same name is skipped, `mod.rev()` may be this function.
+    fs::write(
+        root.join("b.py"),
+        "def rev(x):\n    return x\n\ndef h(m):\n    rev = 1\n    return rev + m.rev(2)\n\ndef k():\n    return rev(3)\n",
+    )
+    .unwrap();
+    let mut o = RefsOptions::new("rev", root);
+    o.index = IndexMode::Off;
+    let r = find_refs(&o);
+    assert_eq!(r.definitions.len(), 2, "{:?}", r.definitions);
+    // Two definitions in two languages: only shadowing locals go (not members,
+    // since the Python one isn't a Rust free fn).
+    assert!(lines(&o).contains(&("b.py".into(), 6)), "{:?}", lines(&o));
+    assert!(!lines(&o).contains(&("b.py".into(), 5)), "{:?}", lines(&o));
+    fs::remove_file(root.join("b.py")).unwrap();
+    assert_eq!(
+        lines(&o),
+        vec![("a.rs".into(), 4), ("a.rs".into(), 7)],
+        "{:?}",
+        find_refs(&o).warnings
+    );
+    assert!(find_refs(&o).warnings.iter().any(|w| w.contains("local")));
+    // A name with no definition (only locals) still lists every use.
+    let mut l = RefsOptions::new("xs", root);
+    l.index = IndexMode::Off;
+    assert_eq!(find_refs(&l).total_references, 2);
+}
+
+#[test]
 fn refs_rank_orders_declarations_by_use() {
     use lancet::refs::{find_refs, rank_symbols, RefsOptions};
     let dir = TempDir::new().unwrap();

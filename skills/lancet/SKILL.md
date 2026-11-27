@@ -5,76 +5,42 @@ description: Use the `lancet` CLI instead of the built-in Read, Grep, Glob, Edit
 
 # Lancet (CLI)
 
-One binary for the whole find → read → change loop, used **instead of** the built-in file tools. Every command shares one index and one coordinate system: a hit at `src/x.rs:42` is line 42 in `read`, `edit` and `rename`, and paths come out joined onto the PATH you passed, so they can be fed straight back in.
+One binary for find → read → change, used **instead of** the built-in file tools. All commands share one coordinate system: `src/x.rs:42` from `rg` is line 42 in `read`, `edit` and `rename`, and paths can be fed straight back in. Results are always fresh; on big repos (≳ 5k files) run `lancet index .` once for speed.
 
-Check it is installed with `lancet --version`. Results are always fresh; on large repos (≳ 5k files) run `lancet index .` once to make searches fast (the `.lancet/` cache ignores itself in git).
-
-## Instead of the built-in tools
-
-| Built-in | Same thing with lancet |
+| Instead of | Run |
 |---|---|
-| **Read** `file_path, offset, limit` | `lancet read src/x.rs --offset 120 --limit 60` · `lancet read src/x.rs:120-180 src/y.rs:10-40` · `--symbol handle_request` · `report.pdf --page 3` |
-| **Read** an image | Over MCP, `read` returns the image itself. The CLI prints only its type and size (a shell can't show pictures), so with the CLI view images with your own image-capable tool. `--ocr` gives an image's or a scanned PDF's text instead. |
-| **Grep** | `lancet rg -w spin_lock src` · `lancet rg -t py -C2 'def \w+_test'` (ripgrep's flags and output, byte for byte) |
-| **Glob** | `lancet fd '**/*.ts'` · `lancet fd 'src/**/mod.rs'` · `lancet fd -e proto` |
-| **Edit** `old_string, new_string, replace_all` | `lancet edit src/x.rs --old-string 'retries = 3' --new-string 'retries = 5' --apply` (`--replace-all`, `--expected-replacements N`) |
-| **Write** `file_path, content` | `lancet write src/new.rs --with-file - --apply <<'EOF' … EOF` (an existing file needs the `--rev` you read it at) |
-| `apply_patch` / `git apply` | `lancet patch - --apply` takes unified diffs **and** Codex `*** Begin Patch` patches |
+| **Read** | `lancet read src/x.rs --offset 120 --limit 60` · `lancet read src/x.rs:120-180 src/y.rs:10-40` · `--symbol handle_request` · `report.pdf --page 3` (PDF, Office, HWP too; `--ocr` for scans) |
+| **Grep** | `lancet rg -w spin_lock src` (ripgrep's flags and output) |
+| **Glob** | `lancet fd '**/*.ts'` · `lancet fd -e proto` |
+| **Edit** | `lancet edit src/x.rs --old-string 'retries = 3' --new-string 'retries = 5' --apply` (`--replace-all`) |
+| **Write** | `lancet write docs/new.md --with-file - --apply <<'EOF' … EOF` |
+| apply_patch | `lancet patch - --apply` (unified diff or Codex `*** Begin Patch`) |
+| Rename a local | `lancet rename src/x.rs:42 count total --apply` (Rust, Python, JS/TS, Go; checks scopes) |
+| Definitions + uses | `lancet refs SearchOptions src` (code only; skips other types' `.name` and same-named locals) |
+| Layout | `lancet fd --tree --dirs -d 2 .` · `lancet outline src/server.rs` |
+| AST search / rewrite | `lancet ast '$X.unwrap()' src --lang rs` (`--rewrite '$X?' --apply`) |
 
-`--find`/`--with`/`--all` are the same as `--old-string`/`--new-string`/`--replace-all`. Add `--json` to any command when you need to parse the result.
-
-## Things the built-ins can't do
-
-| To… | Run |
-|---|---|
-| See the layout | `lancet fd --tree --dirs -d 2 .` (folders only) · `lancet outline src/server.rs` (declarations) |
-| Find the central types | `lancet refs --rank '*Service' --kind class .` (most referenced first) |
-| Definitions + references, code only | `lancet refs SearchOptions src` |
-| Structural search / rewrite | `lancet ast '$X.unwrap()' src --lang rs` · add `--rewrite '$X?' --apply` |
-| Rename a local variable safely | `lancet rename src/x.rs:42 count total --apply` |
-| Change several files at once | `lancet edit --edits - --apply` (below) |
-| Proximity / fuzzy / in-function search | `lancet 'near("retry", "timeout", 20) in function' src` |
+Images: over MCP `read` returns the image; with the CLI use your own image viewer.
 
 ## Editing
 
-- **A simple change is one call:** after reading the text, `lancet edit FILE --old-string '…' --new-string '…' --apply`. It refuses unless the text occurs exactly once (the error lists the lines where it does: add context, or `--replace-all`), so it can't hit the wrong place.
-- **Pass `--rev` when it matters:** editing by `--lines`/`--symbol`, replacing a whole file with `write`, or when other agents may be editing the same files. `lancet read` prints `# PATH rev REV` on its first line; with `--rev REV` the write is refused if the file changed since. After applying, lancet prints `rev X -> Y`; `Y` is the rev for your next edit of that file.
-- **Preview** by leaving out `--apply`: every writing command (`edit`, `write`, `patch`, `ast --rewrite`, `rename`) prints the diff and changes nothing.
-- Other targets: `--lines 10:20` (as `read` numbers them) or `--symbol NAME` (the span `read --symbol` shows, **including doc comments and attributes above it** — keep them in the replacement or they are deleted). Other operations: `--delete`, `--insert-before TEXT`, `--insert-after TEXT`, `--with-file FILE` (`-` = stdin).
-- **Several changes in one call** (one file or many): `lancet edit --edits - --apply` with a JSON array on stdin. Each hunk has `"path"` (plus `"rev"` only when the rule above calls for it), a target (`"old_string"`, `"lines"` or `"symbol"`), and an operation (`"new_string"`, `"delete"`, `"insert_before"`, `"insert_after"`); `{"path": …, "content": …}` creates or replaces a whole file. Every file is checked first; if anything fails, no file is written.
+- **Edit straight from what you saw.** An `rg` hit or a `read` already shows the text: pass it as `--old-string`. It must occur exactly once (the error lists where it does: add context, or `--replace-all`), so it can't hit the wrong place.
+- **The printed diff is the check.** `--apply` prints exactly what changed; you don't need to re-read or re-grep. Leave out `--apply` to preview.
+- **Several files in one call:** `lancet edit --edits - --apply` with a JSON array on stdin. Everything is checked first; if anything fails, nothing is written.
   ```json
   [{"path": "src/a.rs", "old_string": "old_call(", "new_string": "new_call(", "replace_all": true},
-   {"path": "src/b.rs", "rev": "7b476d63ee94a701", "lines": "40", "insert_after": "    log::info!(\"done\");"},
+   {"path": "src/b.rs", "lines": "40", "insert_after": "    log::info!(\"done\");"},
    {"path": "src/c.rs", "content": "pub fn c() {}\n"}]
   ```
-- Edits that add syntax errors are refused. Fix the replacement; don't reach for `--allow-syntax-errors`.
-- PDFs, Office files, HWP and archive entries are read-only.
+- **`--rev`** (from `# PATH rev REV`, the first line `read` prints) is only needed for `--lines`/`--symbol` edits, `write` over an existing file, or when other agents edit the same files: the write is refused if the file changed since.
+- `--symbol NAME` spans include doc comments and attributes: keep them in the replacement.
+- Edits that add syntax errors are refused: fix the replacement.
 
 ## When a command refuses
 
-Exit `0` = done, `1` = nothing found (not an error), `2` = refused or invalid — including a path that doesn't exist. Read the message (on stderr):
+Exit `0` done, `1` nothing found, `2` refused (message on stderr).
+- **"file changed since rev"**: `read` again and redo the change.
+- **old_string not unique / not found**: add context, or `--replace-all`.
+- **`rename` refused** (macro it can't see into, `eval`, a capture): use `lancet refs NAME` and one `lancet edit --edits` call.
 
-- **"file changed since rev"** — someone else wrote the file. `read` it again, redo your change on the new content, retry with the new rev.
-- **old_string not unique / not found** — include more surrounding text (or `--replace-all`); re-read if the file may have changed.
-- **`write` to an existing file** — read it first and pass `--rev`, or change part of it with `edit`.
-- **`rename` refused** — it only renames locals (variables, parameters, closure and loop variables) in Rust, Python, JS/TS and Go, and stops if the name is used inside a macro, `eval`, a JSX tag, or if the new name would shadow or capture another. Fall back to `lancet refs NAME` and one `lancet edit --edits` call over the sites you checked.
-
-## Setup tip (Claude Code)
-
-So reads and searches don't ask for permission each time, allow them in `.claude/settings.json` (writes keep asking):
-
-```json
-{"permissions": {"allow": ["Bash(lancet rg:*)", "Bash(lancet fd:*)", "Bash(lancet read:*)", "Bash(lancet refs:*)", "Bash(lancet outline:*)", "Bash(lancet status:*)"]}}
-```
-
-## Good to know
-
-- `lancet rg` keeps line numbers on when piped (`-N` turns them off) and always sorts by path; `-P` (PCRE2) is not supported.
-- Query strings (`lancet '…'`) match `"text"` case-insensitively; `regex("…")` is case-sensitive unless `(?i)`.
-- `--trust-index` skips the freshness check (faster, may miss edits since `lancet index`); the default never returns stale results.
-
-## More
-
-- Query language, `rg` flags, `ast` languages and metavariables: [references/query-and-ast.md](references/query-and-ast.md)
-- `read`, `edit --edits`, `write`, `patch` (incl. Codex format) and `rename` in detail: [references/edit-patch-rename.md](references/edit-patch-rename.md)
-- Clients without a shell: `lancet mcp` serves one `lancet` tool that takes these same arguments as `{"args": [...]}` — [references/mcp-config.json](references/mcp-config.json), `docs/mcp.md`
+More: [references/edit-patch-rename.md](references/edit-patch-rename.md) (read/edit/write/patch/rename in detail, Claude Code allowlist) · [references/query-and-ast.md](references/query-and-ast.md) (query language, `rg` notes, AST patterns) · `lancet mcp` for clients without a shell.

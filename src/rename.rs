@@ -100,9 +100,14 @@ pub fn rename(o: &RenameOptions) -> RenameResponse {
     r
 }
 
+pub use imp::local_name_starts;
+
 #[cfg(not(feature = "ast"))]
 mod imp {
     use super::*;
+    pub fn local_name_starts(_path: &std::path::Path, _src: &str) -> Option<Vec<usize>> {
+        None
+    }
     pub fn run(_o: &RenameOptions, _r: &mut RenameResponse) -> Result<(), (Status, String)> {
         Err((
             Status::Unsupported,
@@ -738,6 +743,31 @@ mod imp {
             .map_err(|e| (Status::Unsupported, e.to_string()))?;
         p.parse(src, None)
             .ok_or_else(|| (Status::InvalidQuery, "parse failed".into()))
+    }
+
+    /// Sorted starts of the identifiers that are, or resolve to, a binding inside a
+    /// function (a `let`, a parameter, a nested item): a search for a top-level name
+    /// can skip them. `None` when the language isn't modeled or names are resolved
+    /// at run time (`eval`, `with`, `locals()`).
+    pub fn local_name_starts(path: &std::path::Path, src: &str) -> Option<Vec<usize>> {
+        let lang = Lang::from_path(path)?;
+        let a = analyze(lang, family(lang)?, src).ok()?;
+        if !a.dynamic.is_empty() {
+            return None;
+        }
+        let local = |i: usize| a.decls[i].local && !a.rebound.contains(&a.decls[i].name);
+        let mut out: Vec<usize> = (0..a.decls.len())
+            .filter(|&i| local(i))
+            .flat_map(|i| a.decls[i].sites.iter().map(|s| s.0))
+            .chain(
+                a.uses
+                    .iter()
+                    .filter(|u| a.resolve(&u.name, u.span.0).is_some_and(local))
+                    .map(|u| u.span.0),
+            )
+            .collect();
+        out.sort_unstable();
+        Some(out)
     }
 
     fn analyze(lang: Lang, fam: L, src: &str) -> Result<Analysis, Fail> {

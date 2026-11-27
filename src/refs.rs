@@ -124,6 +124,12 @@ struct FileRefs {
     scanned: bool,
     defs: Vec<RefHit>,
     refs: Vec<RefHit>,
+    /// Rust `.name` / `name:` uses, dropped when every definition is a free `fn`.
+    member: Vec<RefHit>,
+    /// Uses of a same-named local binding, dropped when the name has a definition.
+    local: Vec<RefHit>,
+    /// How many of `defs` are Rust `fn`s outside any `impl` / `trait`.
+    free_fns: usize,
 }
 
 fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> Option<FileRefs> {
@@ -136,6 +142,9 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
             scanned: false,
             defs: Vec::new(),
             refs: Vec::new(),
+            member: Vec::new(),
+            local: Vec::new(),
+            free_fns: 0,
         });
     }
     let src = String::from_utf8(bytes).ok()?;
@@ -155,6 +164,9 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
 
     let mut defs = Vec::new();
     let mut refs = Vec::new();
+    let mut member = Vec::new();
+    let mut local = Vec::new();
+    let mut free_fns = 0;
 
     if code::ENABLED && code::supports_path(&target.path) {
         let syms = code::extract_symbols(&target.path, raw_bytes).unwrap_or_default();
@@ -177,9 +189,11 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
             }
         }
 
+        let locals = crate::rename::local_name_starts(&target.path, &src).unwrap_or_default();
         if let Some(id_spans) = code::find_identifier_spans(&target.path, raw_bytes, symbol) {
-            for (s, e) in id_spans {
+            for (s, e, role) in id_spans {
                 if def_spans.contains(&(s, e)) {
+                    free_fns += (role == code::IdRole::FreeFn) as usize;
                     continue;
                 }
                 let (ln, col) = byte_to_line_col(&line_starts, s);
@@ -190,7 +204,7 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
                     })
                     .min_by_key(|f| f.end - f.start)
                     .and_then(|f| f.name.clone());
-                refs.push(RefHit {
+                let hit = RefHit {
                     path: target.rel.clone(),
                     line: ln,
                     col,
@@ -198,7 +212,14 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
                     enclosing,
                     text: line_snippet(ln),
                     ast_verified: true,
-                });
+                };
+                if role == code::IdRole::Member {
+                    member.push(hit);
+                } else if locals.binary_search(&s).is_ok() {
+                    local.push(hit);
+                } else {
+                    refs.push(hit);
+                }
             }
         }
     } else {
@@ -223,6 +244,9 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
         scanned: true,
         defs,
         refs,
+        member,
+        local,
+        free_fns,
     })
 }
 
@@ -377,13 +401,42 @@ fn find_refs_raw(opts: &RefsOptions) -> RefsResponse {
         .map(|t| scan_one_file(t, sym, &finder))
         .collect();
 
+    let per_file: Vec<FileRefs> = per_file.into_iter().flatten().collect();
+    let n_defs: usize = per_file.iter().map(|f| f.defs.len()).sum();
+    // A free `fn` is never called as `x.name()` and is no field: those uses are
+    // other types' methods and fields that share the name (`.rev()`, `rev:`).
+    let only_free_fns = n_defs > 0 && per_file.iter().map(|f| f.free_fns).sum::<usize>() == n_defs;
+    let mut warnings = warnings;
     let mut files_scanned = 0usize;
     let mut definitions = Vec::new();
     let mut references = Vec::new();
-    for item in per_file.into_iter().flatten() {
+    let (mut hidden, mut hidden_locals) = (0usize, 0usize);
+    for mut item in per_file {
         files_scanned += item.scanned as usize;
         definitions.extend(item.defs);
+        if only_free_fns {
+            hidden += item.member.len();
+        } else {
+            item.refs.append(&mut item.member);
+        }
+        // A local binding shadows the definition: its uses mean the local.
+        if n_defs > 0 {
+            hidden_locals += item.local.len();
+        } else {
+            item.refs.append(&mut item.local);
+        }
+        item.refs.sort_by_key(|r| (r.line, r.col));
         references.extend(item.refs);
+    }
+    if hidden > 0 {
+        warnings.push(format!(
+            "left out {hidden} `.{sym}` / `{sym}:` use(s): `{sym}` is a free function, so those are methods or fields of other types"
+        ));
+    }
+    if hidden_locals > 0 {
+        warnings.push(format!(
+            "left out {hidden_locals} use(s) of local variables also named `{sym}`"
+        ));
     }
 
     let total_references = references.len();

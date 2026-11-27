@@ -101,3 +101,11 @@ Hunks may carry `"path"` (and, optionally, that file's `"rev"`); then PATH is op
   - Comments inside the scope mentioning `old` are left untouched and counted in `comment_mentions`.
   - Uses locked `--rev` CAS writes; preview unless `--apply`.
   - **Fallback when refused:** use `lancet refs <SYMBOL>` + `lancet edit --edits` (multi-hunk) or `lancet ast --rewrite` across the verified sites.
+
+## Claude Code: skip permission prompts for reads
+
+Allow the read-only commands in `.claude/settings.json` (writes keep asking):
+
+```json
+{"permissions": {"allow": ["Bash(lancet rg:*)", "Bash(lancet fd:*)", "Bash(lancet read:*)", "Bash(lancet refs:*)", "Bash(lancet outline:*)", "Bash(lancet status:*)"]}}
+```

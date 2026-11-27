@@ -15,9 +15,19 @@ pub struct CodeSpan {
     pub name_end: usize,
 }
 
+/// What an identifier occurrence is, where the syntax alone can tell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdRole {
+    Plain,
+    /// Rust `.name` / `name:` — a method or field of some type, never a free item.
+    Member,
+    /// The name of a Rust `fn` outside any `impl` / `trait`.
+    FreeFn,
+}
+
 #[cfg(feature = "ast")]
 mod imp {
-    use super::CodeSpan;
+    use super::{CodeSpan, IdRole};
     use std::cell::RefCell;
     use std::path::Path;
     use tree_sitter::{Language, Node, Parser};
@@ -668,9 +678,9 @@ mod imp {
         path: &Path,
         src: &[u8],
         ident: &str,
-    ) -> Option<Vec<(usize, usize)>> {
+    ) -> Option<Vec<(usize, usize, IdRole)>> {
         let target = ident.as_bytes();
-        with_tree(path, src, |_lang, root| {
+        with_tree(path, src, |lang, root| {
             let mut out = Vec::new();
             visit_dfs(root, |node| {
                 if node.child_count() != 0 {
@@ -681,11 +691,42 @@ mod imp {
                 if e.saturating_sub(s) != target.len() || &src[s..e] != target {
                     return;
                 }
-                if !is_comment_or_string(node) {
-                    out.push((s, e));
+                if is_comment_or_string(node) {
+                    return;
                 }
+                let role = match (lang, node.parent()) {
+                    (Lang::Rust, _) if node.kind() == "field_identifier" => IdRole::Member,
+                    // `x.name` / `name: value` inside a macro's token tree
+                    (Lang::Rust, Some(p))
+                        if p.kind() == "token_tree"
+                            && (node.prev_sibling().is_some_and(|b| b.kind() == ".")
+                                || node.next_sibling().is_some_and(|b| b.kind() == ":")) =>
+                    {
+                        IdRole::Member
+                    }
+                    (Lang::Rust, Some(p))
+                        if p.kind() == "function_item"
+                            && p.child_by_field_name("name")
+                                .is_some_and(|n| n.id() == node.id()) =>
+                    {
+                        let mut a = p.parent();
+                        while let Some(x) = a {
+                            if matches!(x.kind(), "impl_item" | "trait_item") {
+                                break;
+                            }
+                            a = x.parent();
+                        }
+                        if a.is_none() {
+                            IdRole::FreeFn
+                        } else {
+                            IdRole::Plain
+                        }
+                    }
+                    _ => IdRole::Plain,
+                };
+                out.push((s, e, role));
             });
-            out.sort_unstable();
+            out.sort_unstable_by_key(|x| (x.0, x.1));
             out
         })
     }
@@ -713,7 +754,7 @@ mod imp {
         _path: &Path,
         _src: &[u8],
         _ident: &str,
-    ) -> Option<Vec<(usize, usize)>> {
+    ) -> Option<Vec<(usize, usize, super::IdRole)>> {
         None
     }
     #[allow(clippy::type_complexity)]
