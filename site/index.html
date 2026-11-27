@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lancet — find, read and change code at index speed</title>
+<meta name="description" content="One Rust binary for AI coding agents: ripgrep-compatible search on a trigram index, Tree-sitter AST search and rewrite in 24 languages, exact reads, and rev-guarded edits that never overwrite another agent.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/site.css">
+<link rel="alternate" hreflang="ko" href="ko/">
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="lancet home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 27 L24 6 l3 3 L8 28 Z" fill="currentColor" style="color:var(--accent)"/></svg>
+      lancet
+    </a>
+    <div class="links">
+      <a href="#how">How it works</a>
+      <a href="#features" class="opt">Features</a>
+      <a href="#bench" class="keep">Benchmarks</a>
+      <a href="#start" class="opt">Get started</a>
+      <a href="https://github.com/CREE1116/lancet/tree/main/docs" class="opt">Docs</a>
+      <a href="ko/" class="keep" hreflang="ko" lang="ko">한국어</a>
+    </div>
+    <a class="gh" href="https://github.com/CREE1116/lancet">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Search · read · edit — for AI coding agents</div>
+      <h1>Find, read and change code at <em>index speed</em>.</h1>
+      <p class="lede">One Rust binary replaces the <code>rg</code> + <code>fd</code> + <code>ast-grep</code> + <code>cat</code> + <code>sed</code> chain. Every step shares one index and one coordinate system, results are always fresh, and edits from two agents never silently overwrite each other.</p>
+      <div class="badges">
+        <span class="badge">ripgrep-compatible output, byte for byte</span>
+        <span class="badge">24 Tree-sitter languages</span>
+        <span class="badge">PDF · Office · HWP · archives</span>
+        <span class="badge">MIT / Apache-2.0</span>
+      </div>
+      <div class="install" id="install">
+        <div class="tabs" role="tablist" aria-label="Install method">
+          <button role="tab" aria-selected="true" data-cmd="curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh">macOS / Linux</button>
+          <button role="tab" aria-selected="false" data-cmd="brew tap CREE1116/lancet https://github.com/CREE1116/lancet && brew install CREE1116/lancet/lancet">Homebrew</button>
+          <button role="tab" aria-selected="false" data-cmd="irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex">Windows</button>
+          <button role="tab" aria-selected="false" data-cmd="cargo binstall --git https://github.com/CREE1116/lancet lancet">cargo</button>
+        </div>
+        <div class="cmd"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh</code><button class="copy" id="copy">Copy</button></div>
+      </div>
+    </div>
+    <div class="term" aria-label="Terminal session using lancet (real output from the lancet repository)">
+      <div class="term-bar"><i></i><i></i><i></i><span>~/lancet — an agent's session</span></div>
+      <pre id="term" aria-live="off"></pre>
+    </div>
+  </div>
+</header>
+
+<section id="how">
+  <div class="wrap">
+    <div class="eyebrow">How it works</div>
+    <h2>Three ideas, one binary.</h2>
+    <p class="lede">The index only decides which files <em>not</em> to open. Search, read and edit agree on every line number. Every write is a compare-and-swap.</p>
+
+    <div class="explainer" id="explainer">
+      <div class="scene-tabs" role="tablist" aria-label="Explainer scenes">
+        <button class="scene-tab" role="tab" aria-selected="true" data-i="0"><b>01</b><span>Index speed, fresh results</span><i class="prog"></i></button>
+        <button class="scene-tab" role="tab" aria-selected="false" data-i="1"><b>02</b><span>One coordinate system</span><i class="prog"></i></button>
+        <button class="scene-tab" role="tab" aria-selected="false" data-i="2"><b>03</b><span>Agents never overwrite</span><i class="prog"></i></button>
+      </div>
+      <div class="stage">
+
+        <!-- Scene 1 -->
+        <div class="scene on" data-scene="0">
+          <div class="s-index">
+            <div>
+              <div class="q-pill"><span class="k">lancet</span> '"spin_lock"'</div><div style="font-size:12px;color:var(--text-3);margin-top:6px">Linux v6.12, measured</div>
+              <div class="grams" id="grams"></div>
+              <div class="counters">
+                <div class="counter"><span>files in the tree</span><b id="c-all">86,218</b></div>
+                <div class="counter"><span>opened and verified (9.1%)</span><b id="c-cand">0</b></div>
+                <div class="counter hit"><span>matching files (8.2%)</span><b id="c-hit">0</b></div>
+              </div>
+            </div>
+            <div>
+              <div class="files" id="files" aria-hidden="true"></div>
+              <div class="legend-row">
+                <span><i style="background:var(--bg-3)"></i>never opened</span>
+                <span><i style="background:color-mix(in srgb,var(--accent) 35%,var(--bg-3))"></i>opened, no match</span>
+                <span><i style="background:var(--accent)"></i>match</span>
+                <span><i style="background:var(--warn)"></i>edited after <code>lancet index</code></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scene 2 -->
+        <div class="scene" data-scene="1">
+          <div class="s-coord">
+            <div class="panel fade" data-at="1">
+              <h4>1 · search</h4>
+<pre><span class="dim2">$</span> lancet rg -w retries src
+<span class="t-path">src/net.rs</span>:<span class="mark">2</span>:    let retries = 3;
+<span class="t-path">src/net.rs</span>:3:    retries</pre>
+            </div>
+            <div class="panel fade" data-at="2">
+              <h4>2 · read — same line numbers</h4>
+<pre><span class="dim2">$</span> lancet read src/net.rs --json
+<span class="dim2">rev</span> e70d5a898f122a62
+<span class="ln">1 |</span> pub fn retry_limit() -> u32 {
+<span class="mark"><span class="ln">2 |</span>     let retries = 3;</span>
+<span class="ln">3 |</span>     retries
+<span class="ln">4 |</span> }</pre>
+            </div>
+            <div class="panel fade" data-at="3">
+              <h4>3 · edit — guarded by rev</h4>
+<pre><span class="dim2">$</span> lancet edit src/net.rs \
+    --find 'let retries = 3;' \
+    --with 'let retries = 5;' \
+    --rev e70d5a898f122a62 --apply
+<span class="del">-    let retries = 3;</span>
+<span class="add">+    let retries = 5;</span>
+<span class="dim2">applied: lines 2-2, rev</span> 1486bdffbc06c68f</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scene 3 -->
+        <div class="scene" data-scene="2">
+          <div class="s-agents">
+            <div class="filebox">src/net.rs <span class="rev" id="filerev">rev e70d…</span></div>
+            <div class="lanes">
+              <div class="lane"><div class="who">agent A</div><div class="track" id="laneA"></div></div>
+              <div class="lane"><div class="who">agent B</div><div class="track" id="laneB"></div></div>
+            </div>
+            <div class="versus fade" data-at="5">
+              <div class="vs badv"><small>4 agents, read → change → write back (plain files)</small><b>600 / 800</b><small>updates lost, every write exited 0</small></div>
+              <div class="vs goodv"><small>the same 4 agents with <code>lancet edit --rev</code></small><b>0 / 800</b><small>updates lost; losers got <code>conflict</code> and retried</small></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="caption" id="caption" aria-live="polite"></div>
+        <button class="play" id="play" aria-label="Pause animation">❚❚ pause</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="eyebrow">Features</div>
+    <h2>Everything an agent does to a codebase.</h2>
+    <div class="grid3">
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div>
+        <h3>Index speed, never stale</h3>
+        <p>A trigram index picks candidate files; every candidate is checked by the same evaluator a full scan uses. Files edited since indexing are found by <code>mtime</code>/<code>size</code>/<code>ctime</code>/<code>inode</code> and scanned live. No daemon to run.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
+        <h3>ripgrep, byte for byte</h3>
+        <p><code>lancet rg</code> takes ripgrep's flags and prints ripgrep's output, checked byte for byte on 8 codebases. It reads <code>.gitignore</code>, <code>.rgignore</code>, globs and <code>--type</code> the same way.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/></svg></div>
+        <h3>Structural search &amp; rewrite</h3>
+        <p><code>lancet ast '$X.unwrap()' --rewrite '$X?'</code> in 24 Tree-sitter languages, with <code>$$$ARGS</code> and statement metavariables. A rewrite is a dry-run diff until <code>--apply</code>.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 10v10"/></svg></div>
+        <h3>Exact reads, small context</h3>
+        <p><code>read --symbol</code>, line ranges, PDF pages and spreadsheet cells, all under a token budget. On the same lookups it used 5–30× less context than reading whole files.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="4"/></svg></div>
+        <h3>Safe edits for many agents</h3>
+        <p><code>edit</code>, <code>patch</code> and AST rewrites write through one locked compare-and-swap. A stale <code>--rev</code> gets <code>conflict</code> and writes nothing. Symlinks, hard links and file mode are kept, and edits that add syntax errors are refused.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/></svg></div>
+        <h3>Documents in scope</h3>
+        <p>PDF, DOCX, PPTX, XLSX, HWP, EPUB, ZIP and TAR are extracted in-process, with caps against decompression bombs. A hit on line 42 of a <code>.docx</code> is line 42 in <code>read</code> too.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="bench">
+  <div class="wrap">
+    <div class="eyebrow">Benchmarks</div>
+    <h2>8 codebases, 7 languages, same output as ripgrep.</h2>
+    <p class="lede">Speedup over ripgrep on rare-literal queries. <b>auto</b> checks freshness on every query (the default); <b>trust</b> answers from the index alone (<code>--trust-index</code>). Every text result was compared byte for byte with ripgrep's.</p>
+
+    <div class="chart">
+      <div class="chart-head">
+        <h3>Speedup vs ripgrep (log scale, min–max across queries)</h3>
+        <div class="legend"><span><i style="background:var(--series-1)"></i>auto (always fresh)</span><span><i style="background:var(--series-2)"></i>trust (--trust-index)</span></div>
+      </div>
+      <div id="bench-chart" role="img" aria-label="Range chart of lancet speedup over ripgrep per codebase; the table below has the same numbers."></div>
+      <div class="tip" id="tip"></div>
+      <details class="table">
+        <summary>Show as table</summary>
+        <table>
+          <thead><tr><th>Codebase</th><th>Files</th><th>Index build · size</th><th>auto vs rg</th><th>trust vs rg</th><th>AST vs ast-grep</th></tr></thead>
+          <tbody id="bench-rows"></tbody>
+        </table>
+      </details>
+    </div>
+    <p class="honest"><b>Where lancet doesn't win:</b> regexes with no literal text (the index can't narrow them, so it runs at ripgrep's speed or up to 1.4× slower) and AST patterns with no literal text (0.6–1.0× ast-grep's speed). <a href="https://github.com/CREE1116/lancet/blob/main/bench/results/SUITE.md">Full tables and method →</a></p>
+  </div>
+</section>
+
+<section id="why">
+  <div class="wrap">
+    <div class="eyebrow">Why one tool</div>
+    <h2>Tool chains fail between the steps.</h2>
+    <p class="lede">Each row was reproduced with the real tools by <a href="https://github.com/CREE1116/lancet/blob/main/bench/failure_modes.py"><code>bench/failure_modes.py</code></a>.</p>
+    <table class="fail">
+      <thead><tr><th>Chain</th><th>What happened</th><th>lancet</th></tr></thead>
+      <tbody>
+        <tr><td><code>rg -n</code> → two <code>sed -i</code> edits</td><td>The second edit hit the <b class="bad">wrong line</b>; both exited 0</td><td><code>edit --edits</code> uses the original line numbers</td></tr>
+        <tr><td>4 agents: read → change → write back</td><td><b class="bad">600 of 800</b> updates lost, silently</td><td><code>edit --rev</code>: <b class="good">0 of 800</b> lost</td></tr>
+        <tr><td><code>patch -p1</code> with one stale hunk</td><td>One file changed, one rejected: <b class="bad">half-applied</b></td><td><code>patch</code>: nothing written, <code>conflict</code></td></tr>
+        <tr><td><code>sed</code> rename</td><td>Also rewrote comments and strings (<b class="bad">0.3–11.7%</b> of occurrences)</td><td><code>refs</code> / <code>ast</code> only touch code</td></tr>
+        <tr><td><code>rga</code> → <code>pandoc</code> on a <code>.docx</code></td><td><b class="bad">0 of 40</b> lines read held the hit</td><td><b class="good">40 of 40</b>: search and read share one extraction</td></tr>
+        <tr><td>zoekt right after editing 20 files</td><td>New text found in <b class="bad">0</b>, deleted text still found in <b class="bad">20</b></td><td>auto mode: <b class="good">20</b> and <b class="good">0</b></td></tr>
+        <tr><td><code>sed -i</code> / <code>perl -pi</code></td><td>Broke <b class="bad">hard links and symlinks</b>, lost mode <code>0640</code></td><td>Same file: links, mode and owner kept</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="start">
+  <div class="wrap">
+    <div class="eyebrow">Get started</div>
+    <h2>Install, index once, hand it to your agent.</h2>
+    <div class="qs">
+      <div class="code">
+        <h4>terminal</h4>
+<pre><span class="c"># optional: build the index once (it updates itself afterwards)</span>
+lancet index .
+
+lancet fd --tree --max-depth 2 .
+lancet rg -w spin_lock src
+lancet read src/search.rs --symbol execute_one
+lancet refs SearchOptions src
+lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'
+lancet edit src/net.rs --find 'retries = 3' \
+  --with 'retries = 5' --rev &lt;REV&gt; --apply
+git diff | lancet patch --apply</pre>
+      </div>
+      <div class="code">
+        <h4>AGENTS.md / CLAUDE.md</h4>
+<pre><span class="c"># Copy docs/agent-instructions.md into your agent's</span>
+<span class="c"># instructions. The core loop it teaches:</span>
+
+1. Search:  lancet rg ... / lancet '...query...'
+2. Read:    lancet read FILE --symbol NAME --json
+            → note "rev"
+3. Change:  lancet edit FILE ... --rev REV --apply
+4. On conflict (exit 2): read again, redo the
+   change on the new content, retry with the new rev.</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>lancet · MIT OR Apache-2.0</div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap">
+      <a href="https://github.com/CREE1116/lancet">GitHub</a>
+      <a href="https://github.com/CREE1116/lancet/releases">Releases</a>
+      <a href="https://github.com/CREE1116/lancet/blob/main/docs/grammar.md">Query language</a>
+      <a href="https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md">ripgrep parity</a>
+      <a href="https://github.com/CREE1116/lancet/blob/main/docs/why-one-tool.md">Why one tool</a>
+      <a href="ko/" hreflang="ko" lang="ko">한국어</a>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/site.js"></script>
+</body>
+</html>

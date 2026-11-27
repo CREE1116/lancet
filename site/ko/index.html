@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lancet — 인덱스 속도로 코드를 찾고, 읽고, 고친다</title>
+<meta name="description" content="AI 코딩 에이전트를 위한 단일 Rust 바이너리: 트라이그램 인덱스 위의 ripgrep 호환 검색, 24개 언어 Tree-sitter AST 검색·치환, 정확한 읽기, 다른 에이전트의 작업을 덮어쓰지 않는 rev 기반 편집.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="alternate" hreflang="en" href="../">
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="lancet 홈">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 27 L24 6 l3 3 L8 28 Z" fill="currentColor" style="color:var(--accent)"/></svg>
+      lancet
+    </a>
+    <div class="links">
+      <a href="#how">작동 원리</a>
+      <a href="#features" class="opt">기능</a>
+      <a href="#bench" class="keep">벤치마크</a>
+      <a href="#start" class="opt">시작하기</a>
+      <a href="https://github.com/CREE1116/lancet/tree/main/docs" class="opt">문서</a>
+      <a href="../" class="keep" hreflang="en" lang="en">English</a>
+    </div>
+    <a class="gh" href="https://github.com/CREE1116/lancet">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">검색 · 읽기 · 편집 — AI 코딩 에이전트를 위해</div>
+      <h1>코드를 찾고, 읽고, 고치는 일을 <em>인덱스 속도로</em>.</h1>
+      <p class="lede"><code>rg</code> + <code>fd</code> + <code>ast-grep</code> + <code>cat</code> + <code>sed</code>로 이어지던 도구 체인을 Rust 바이너리 하나로 대신합니다. 모든 단계가 하나의 인덱스와 하나의 좌표계를 공유하고, 결과는 항상 최신이며, 두 에이전트의 편집이 서로를 조용히 덮어쓰는 일이 없습니다.</p>
+      <div class="badges">
+        <span class="badge">ripgrep과 바이트 단위로 같은 출력</span>
+        <span class="badge">Tree-sitter 24개 언어</span>
+        <span class="badge">PDF · 오피스 · HWP · 압축 파일</span>
+        <span class="badge">MIT / Apache-2.0</span>
+      </div>
+      <div class="install" id="install">
+        <div class="tabs" role="tablist" aria-label="설치 방법">
+          <button role="tab" aria-selected="true" data-cmd="curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh">macOS / Linux</button>
+          <button role="tab" aria-selected="false" data-cmd="brew tap CREE1116/lancet https://github.com/CREE1116/lancet && brew install CREE1116/lancet/lancet">Homebrew</button>
+          <button role="tab" aria-selected="false" data-cmd="irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex">Windows</button>
+          <button role="tab" aria-selected="false" data-cmd="cargo binstall --git https://github.com/CREE1116/lancet lancet">cargo</button>
+        </div>
+        <div class="cmd"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh</code><button class="copy" id="copy">복사</button></div>
+      </div>
+    </div>
+    <div class="term" aria-label="lancet 터미널 세션 (lancet 저장소에서 실제로 실행한 출력)">
+      <div class="term-bar"><i></i><i></i><i></i><span>~/lancet — 에이전트의 작업 세션</span></div>
+      <pre id="term" aria-live="off"></pre>
+    </div>
+  </div>
+</header>
+
+<section id="how">
+  <div class="wrap">
+    <div class="eyebrow">작동 원리</div>
+    <h2>세 가지 아이디어, 하나의 바이너리.</h2>
+    <p class="lede">인덱스는 어떤 파일을 <em>열지 않을지</em>만 정합니다. 검색·읽기·편집은 줄 번호가 모두 일치합니다. 모든 쓰기는 compare-and-swap입니다.</p>
+
+    <div class="explainer" id="explainer">
+      <div class="scene-tabs" role="tablist" aria-label="설명 장면">
+        <button class="scene-tab" role="tab" aria-selected="true" data-i="0"><b>01</b><span>인덱스 속도, 항상 최신 결과</span><i class="prog"></i></button>
+        <button class="scene-tab" role="tab" aria-selected="false" data-i="1"><b>02</b><span>하나의 좌표계</span><i class="prog"></i></button>
+        <button class="scene-tab" role="tab" aria-selected="false" data-i="2"><b>03</b><span>에이전트끼리 덮어쓰지 않음</span><i class="prog"></i></button>
+      </div>
+      <div class="stage">
+
+        <!-- Scene 1 -->
+        <div class="scene on" data-scene="0">
+          <div class="s-index">
+            <div>
+              <div class="q-pill"><span class="k">lancet</span> '"spin_lock"'</div><div style="font-size:12px;color:var(--text-3);margin-top:6px">Linux v6.12 실측</div>
+              <div class="grams" id="grams"></div>
+              <div class="counters">
+                <div class="counter"><span>전체 파일</span><b id="c-all">86,218</b></div>
+                <div class="counter"><span>열어서 검증한 파일 (9.1%)</span><b id="c-cand">0</b></div>
+                <div class="counter hit"><span>일치한 파일 (8.2%)</span><b id="c-hit">0</b></div>
+              </div>
+            </div>
+            <div>
+              <div class="files" id="files" aria-hidden="true"></div>
+              <div class="legend-row">
+                <span><i style="background:var(--bg-3)"></i>열지 않음</span>
+                <span><i style="background:color-mix(in srgb,var(--accent) 35%,var(--bg-3))"></i>열었지만 불일치</span>
+                <span><i style="background:var(--accent)"></i>일치</span>
+                <span><i style="background:var(--warn)"></i><code>lancet index</code> 이후 수정됨</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scene 2 -->
+        <div class="scene" data-scene="1">
+          <div class="s-coord">
+            <div class="panel fade" data-at="1">
+              <h4>1 · 검색</h4>
+<pre><span class="dim2">$</span> lancet rg -w retries src
+<span class="t-path">src/net.rs</span>:<span class="mark">2</span>:    let retries = 3;
+<span class="t-path">src/net.rs</span>:3:    retries</pre>
+            </div>
+            <div class="panel fade" data-at="2">
+              <h4>2 · 읽기 — 같은 줄 번호</h4>
+<pre><span class="dim2">$</span> lancet read src/net.rs --json
+<span class="dim2">rev</span> e70d5a898f122a62
+<span class="ln">1 |</span> pub fn retry_limit() -> u32 {
+<span class="mark"><span class="ln">2 |</span>     let retries = 3;</span>
+<span class="ln">3 |</span>     retries
+<span class="ln">4 |</span> }</pre>
+            </div>
+            <div class="panel fade" data-at="3">
+              <h4>3 · 편집 — rev로 보호</h4>
+<pre><span class="dim2">$</span> lancet edit src/net.rs \
+    --find 'let retries = 3;' \
+    --with 'let retries = 5;' \
+    --rev e70d5a898f122a62 --apply
+<span class="del">-    let retries = 3;</span>
+<span class="add">+    let retries = 5;</span>
+<span class="dim2">applied: lines 2-2, rev</span> 1486bdffbc06c68f</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scene 3 -->
+        <div class="scene" data-scene="2">
+          <div class="s-agents">
+            <div class="filebox">src/net.rs <span class="rev" id="filerev">rev e70d…</span></div>
+            <div class="lanes">
+              <div class="lane"><div class="who">에이전트 A</div><div class="track" id="laneA"></div></div>
+              <div class="lane"><div class="who">에이전트 B</div><div class="track" id="laneB"></div></div>
+            </div>
+            <div class="versus fade" data-at="5">
+              <div class="vs badv"><small>에이전트 4개, 읽기 → 수정 → 다시 쓰기 (일반 파일)</small><b>600 / 800</b><small>업데이트 유실, 모든 쓰기가 종료 코드 0</small></div>
+              <div class="vs goodv"><small>같은 에이전트 4개, <code>lancet edit --rev</code> 사용</small><b>0 / 800</b><small>업데이트 유실 — 경합에서 진 쪽은 <code>conflict</code>를 받고 재시도</small></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="caption" id="caption" aria-live="polite"></div>
+        <button class="play" id="play" aria-label="애니메이션 일시정지">❚❚ 일시정지</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="eyebrow">기능</div>
+    <h2>에이전트가 코드베이스에서 하는 모든 일.</h2>
+    <div class="grid3">
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div>
+        <h3>인덱스 속도, 낡은 결과 없음</h3>
+        <p>트라이그램 인덱스가 후보 파일을 고르고, 모든 후보는 전체 스캔과 같은 평가기로 검증합니다. 인덱싱 이후 바뀐 파일은 <code>mtime</code>/<code>size</code>/<code>ctime</code>/<code>inode</code>로 찾아 그 자리에서 스캔합니다. 띄워 둘 데몬이 없습니다.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
+        <h3>ripgrep과 바이트 단위로 동일</h3>
+        <p><code>lancet rg</code>는 ripgrep의 플래그를 받아 ripgrep과 같은 출력을 냅니다. 코드베이스 8개에서 바이트 단위로 대조했습니다. <code>.gitignore</code>, <code>.rgignore</code>, glob, <code>--type</code>도 똑같이 해석합니다.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/></svg></div>
+        <h3>구조 검색과 치환</h3>
+        <p>Tree-sitter 24개 언어에서 <code>lancet ast '$X.unwrap()' --rewrite '$X?'</code>. <code>$$$ARGS</code>와 문장 메타변수도 지원합니다. <code>--apply</code> 전까지 치환은 dry-run diff입니다.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 10v10"/></svg></div>
+        <h3>정확한 읽기, 작은 컨텍스트</h3>
+        <p><code>read --symbol</code>, 줄 범위, PDF 페이지, 스프레드시트 셀을 토큰 예산 안에서 읽습니다. 같은 조회에서 파일 전체를 읽을 때보다 컨텍스트를 5–30배 적게 썼습니다.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="4"/></svg></div>
+        <h3>여러 에이전트가 함께 써도 안전한 편집</h3>
+        <p><code>edit</code>, <code>patch</code>, AST 치환은 모두 잠금을 건 compare-and-swap 하나를 거쳐 씁니다. 낡은 <code>--rev</code>는 <code>conflict</code>를 받고 아무것도 쓰지 않습니다. 심볼릭 링크·하드 링크·파일 권한은 유지되고, 구문 오류를 늘리는 편집은 거부합니다.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/></svg></div>
+        <h3>문서까지 한 범위로</h3>
+        <p>PDF, DOCX, PPTX, XLSX, HWP, EPUB, ZIP, TAR를 압축 폭탄 상한을 두고 프로세스 안에서 추출합니다. <code>.docx</code>의 42번째 줄 검색 결과는 <code>read</code>에서도 42번째 줄입니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="bench">
+  <div class="wrap">
+    <div class="eyebrow">벤치마크</div>
+    <h2>코드베이스 8개, 언어 7개, ripgrep과 같은 출력.</h2>
+    <p class="lede">드문 리터럴 쿼리에서 ripgrep 대비 속도 향상. <b>auto</b>는 쿼리마다 최신 여부를 확인하고(기본값), <b>trust</b>는 인덱스만으로 답합니다(<code>--trust-index</code>). 모든 텍스트 결과를 ripgrep 출력과 바이트 단위로 대조했습니다.</p>
+
+    <div class="chart">
+      <div class="chart-head">
+        <h3>ripgrep 대비 속도 향상 (로그 축, 쿼리별 최소–최대)</h3>
+        <div class="legend"><span><i style="background:var(--series-1)"></i>auto (항상 최신)</span><span><i style="background:var(--series-2)"></i>trust (--trust-index)</span></div>
+      </div>
+      <div id="bench-chart" role="img" aria-label="코드베이스별 ripgrep 대비 lancet 속도 향상 범위 차트. 아래 표에 같은 수치가 있습니다."></div>
+      <div class="tip" id="tip"></div>
+      <details class="table">
+        <summary>표로 보기</summary>
+        <table>
+          <thead><tr><th>코드베이스</th><th>파일</th><th>인덱스 빌드 · 크기</th><th>auto 대 rg</th><th>trust 대 rg</th><th>AST 대 ast-grep</th></tr></thead>
+          <tbody id="bench-rows"></tbody>
+        </table>
+      </details>
+    </div>
+    <p class="honest"><b>lancet이 이기지 못하는 곳:</b> 리터럴이 없는 정규식(인덱스로 좁힐 수 없어 ripgrep과 같은 속도이거나 최대 1.4배 느림)과 리터럴이 없는 AST 패턴(ast-grep 속도의 0.6–1.0배). <a href="https://github.com/CREE1116/lancet/blob/main/bench/results/SUITE.md">전체 표와 측정 방법 →</a></p>
+  </div>
+</section>
+
+<section id="why">
+  <div class="wrap">
+    <div class="eyebrow">왜 하나의 도구인가</div>
+    <h2>도구 체인은 단계와 단계 사이에서 깨집니다.</h2>
+    <p class="lede">각 행은 실제 도구로 재현했습니다: <a href="https://github.com/CREE1116/lancet/blob/main/bench/failure_modes.py"><code>bench/failure_modes.py</code></a>.</p>
+    <table class="fail">
+      <thead><tr><th>도구 체인</th><th>실제로 일어난 일</th><th>lancet</th></tr></thead>
+      <tbody>
+        <tr><td><code>rg -n</code> → <code>sed -i</code> 편집 두 번</td><td>두 번째 편집이 <b class="bad">엉뚱한 줄</b>을 고침, 둘 다 종료 코드 0</td><td><code>edit --edits</code>는 원래 줄 번호 기준</td></tr>
+        <tr><td>에이전트 4개: 읽기 → 수정 → 다시 쓰기</td><td>업데이트 <b class="bad">800개 중 600개</b>가 조용히 유실</td><td><code>edit --rev</code>: <b class="good">800개 중 0개</b> 유실</td></tr>
+        <tr><td>낡은 hunk가 섞인 <code>patch -p1</code></td><td>한 파일은 바뀌고 한 파일은 거부: <b class="bad">절반만 적용</b></td><td><code>patch</code>: 아무것도 안 씀, <code>conflict</code></td></tr>
+        <tr><td><code>sed</code>로 이름 변경</td><td>주석과 문자열까지 바꿈 (출현의 <b class="bad">0.3–11.7%</b>)</td><td><code>refs</code> / <code>ast</code>는 코드만 건드림</td></tr>
+        <tr><td><code>.docx</code>에 <code>rga</code> → <code>pandoc</code></td><td>읽은 줄 <b class="bad">40개 중 0개</b>에만 검색어가 있음</td><td><b class="good">40개 중 40개</b>: 검색과 읽기가 같은 추출 결과를 씀</td></tr>
+        <tr><td>파일 20개 수정 직후의 zoekt</td><td>새 텍스트는 <b class="bad">0</b>개 파일에서 찾고, 지운 텍스트는 <b class="bad">20</b>개 파일에서 여전히 찾음</td><td>auto 모드: <b class="good">20</b>과 <b class="good">0</b></td></tr>
+        <tr><td><code>sed -i</code> / <code>perl -pi</code></td><td><b class="bad">하드 링크와 심볼릭 링크</b>를 깨고 권한 <code>0640</code>을 잃음</td><td>같은 파일 유지: 링크·권한·소유자 보존</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="start">
+  <div class="wrap">
+    <div class="eyebrow">시작하기</div>
+    <h2>설치하고, 한 번 인덱싱하고, 에이전트에게 맡기세요.</h2>
+    <div class="qs">
+      <div class="code">
+        <h4>터미널</h4>
+<pre><span class="c"># 선택: 인덱스를 한 번 만들어 두면 이후엔 알아서 갱신됩니다</span>
+lancet index .
+
+lancet fd --tree --max-depth 2 .
+lancet rg -w spin_lock src
+lancet read src/search.rs --symbol execute_one
+lancet refs SearchOptions src
+lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'
+lancet edit src/net.rs --find 'retries = 3' \
+  --with 'retries = 5' --rev &lt;REV&gt; --apply
+git diff | lancet patch --apply</pre>
+      </div>
+      <div class="code">
+        <h4>AGENTS.md / CLAUDE.md</h4>
+<pre><span class="c"># docs/agent-instructions.md를 에이전트 지침에 넣으세요.</span>
+<span class="c"># 핵심 흐름은 이렇습니다:</span>
+
+1. 검색:  lancet rg ... / lancet '...쿼리...'
+2. 읽기:  lancet read FILE --symbol NAME --json
+          → "rev"를 기억
+3. 수정:  lancet edit FILE ... --rev REV --apply
+4. conflict(종료 코드 2)면: 다시 읽고, 새 내용에
+   변경을 다시 적용해 새 rev로 재시도.</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>lancet · MIT OR Apache-2.0</div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap">
+      <a href="https://github.com/CREE1116/lancet">GitHub</a>
+      <a href="https://github.com/CREE1116/lancet/releases">릴리스</a>
+      <a href="https://github.com/CREE1116/lancet/blob/main/docs/grammar.md">쿼리 언어</a>
+      <a href="https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md">ripgrep 호환성</a>
+      <a href="https://github.com/CREE1116/lancet/blob/main/docs/why-one-tool.ko.md">왜 하나의 도구인가</a>
+      <a href="../" hreflang="en" lang="en">English</a>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/site.js"></script>
+</body>
+</html>
