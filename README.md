@@ -151,13 +151,15 @@ All charts above are measured on an Apple M4 Pro (warm cache, median of 5 `hyper
 
 Reproducible via [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_competitors.py`](./bench/bench_competitors.py), and [`bench/official_suite.sh`](./bench/official_suite.sh). Cold index build **1.17 s** (36.3 MiB, 8.0% of corpus); no-op sync **64.6 ms**.
 
-**Text search** (`lancet` vs `ripgrep 15.2.0`)
+**Text search** (`lancet rg` vs `ripgrep 16.0.0`; re-measured 2026-11-28 on the current crate-source tree, 29,792 files / 703.5 MiB, index 2.87 s / 41.2 MiB; case-insensitive file lists, `-i -l -F`)
 
-| Query | `rg` | lancet scan | lancet auto | lancet `--trust-index` |
+| Query | `rg` | lancet `--no-index` | lancet auto | lancet `--trust-index` |
 |---|---:|---:|---:|---:|
-| Rare literal (`ThreadPoolBuilder`, 32 hits) | 307.7 ms | 310.6 ms | **60.5 ms (5.1×)** | **5.1 ms (60.3×)** |
-| Medium literal (`unwrap_or_else`, 582 hits) | 311.3 ms | 314.6 ms | **65.4 ms (4.8×)** | **13.0 ms (23.9×)** |
-| Anchored regex (`pub unsafe fn \w+\(`) | 307.4 ms | 317.9 ms | **80.5 ms (3.8×)** | **26.9 ms (11.4×)** |
+| Rare literal (`ThreadPoolBuilder`, 32 files) | 432.0 ms | 487.3 ms | **77.6 ms (5.6×)** | **6.8 ms (63.5×)** |
+| Medium literal (`unwrap_or_else`, 590 files) | 439.9 ms | 492.8 ms | **89.2 ms (4.9×)** | **19.4 ms (22.7×)** |
+| Anchored regex (`pub unsafe fn \w+\(`, 1,452 files) | 438.9 ms | 491.3 ms | **105.2 ms (4.2×)** | **38.2 ms (11.5×)** |
+
+Without the index, case-insensitive literals are currently ~12% slower than ripgrep (tracked in `bench/results/baseline-step0.md`); every mode prints the same files as ripgrep.
 
 
 **File discovery** (`lancet fd` vs `fd 10.5.2`, `rg --files`, `find`)

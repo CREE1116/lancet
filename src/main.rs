@@ -430,7 +430,7 @@ fn main() -> ExitCode {
         Some("outline") => run_outline(OutlineCli::parse_from(&args[1..])),
         Some("refs") => run_refs(RefsCli::parse_from(&args[1..])),
         Some("index") => run_index(IndexCli::parse_from(&args[1..])),
-        Some("rg") => run_rg(RgCli::parse_from(&args[1..])),
+        Some("rg") => run_rg(parse_rg(&args[1..])),
         Some("patch") => run_patch(PatchCli::parse_from(&args[1..])),
         Some("rename") => run_rename(RenameCli::parse_from(&args[1..])),
         Some("write") => run_write(WriteCli::parse_from(&args[1..])),
@@ -850,6 +850,16 @@ struct EditCli {
 struct RgCli {
     /// PATTERN then PATH... (with -e/-f, every argument is a PATH)
     args: Vec<String>,
+    /// Also search the paths listed in FILE, one per line (`-` for stdin)
+    #[arg(long = "in", value_name = "INPUTFILE")]
+    in_files: Vec<PathBuf>,
+    /// Also search the paths listed in FILE, separated by NUL bytes
+    #[arg(long = "in0", value_name = "INPUTFILE")]
+    in0_files: Vec<PathBuf>,
+    /// Where each positional / --in / --in0 argument was on the command line, so
+    /// listed paths keep their place among the others (filled after parsing).
+    #[arg(skip)]
+    arg_order: Vec<(usize, ArgKind, usize)>,
     /// A pattern to search for (repeatable)
     #[arg(short = 'e', long = "regexp", allow_hyphen_values = true)]
     regexp: Vec<String>,
@@ -1104,6 +1114,9 @@ struct RgCli {
     /// Disable Unicode in the regex (\w, \d, case folding are ASCII-only)
     #[arg(long)]
     no_unicode: bool,
+    /// Search at most NUM bytes of each file
+    #[arg(long, value_name = "NUM")]
+    max_bytes: Option<u64>,
     /// Print lancet's version
     #[arg(short = 'V', long)]
     version: bool,
@@ -1147,6 +1160,8 @@ struct RgCli {
     pre: Option<String>,
     #[arg(long, hide = true, value_name = "GLOB")]
     pre_glob: Vec<String>,
+    #[arg(long, hide = true)]
+    no_pre: bool,
     #[arg(long, hide = true, value_name = "KIND")]
     generate: Option<String>,
     /// Accepted for compatibility; output never uses headings
@@ -1164,6 +1179,35 @@ struct RgCli {
     /// Custom index directory (default: PATH/.lancet or an ancestor)
     #[arg(long, hide = true)]
     index_dir: Option<PathBuf>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ArgKind {
+    Positional,
+    In,
+    In0,
+}
+
+/// Marks a path read from --in / --in0 while it sits among the positional arguments.
+const PATH_MARK: &str = "\u{0}in:";
+
+/// `RgCli` plus the command-line position of every positional / --in / --in0 value.
+fn parse_rg(args: &[OsString]) -> RgCli {
+    use clap::{CommandFactory, FromArgMatches};
+    let m = RgCli::command().get_matches_from(args);
+    let mut cli = RgCli::from_arg_matches(&m).unwrap_or_else(|e| e.exit());
+    for (id, kind) in [
+        ("args", ArgKind::Positional),
+        ("in_files", ArgKind::In),
+        ("in0_files", ArgKind::In0),
+    ] {
+        if let Some(ix) = m.indices_of(id) {
+            cli.arg_order
+                .extend(ix.enumerate().map(|(n, i)| (i, kind, n)));
+        }
+    }
+    cli.arg_order.sort_unstable_by_key(|a| a.0);
+    cli
 }
 
 fn run_rg(cli: RgCli) -> ExitCode {
@@ -1188,7 +1232,7 @@ fn run_rg(cli: RgCli) -> ExitCode {
         .is_some_and(|e| e != "default" && e != "auto")
     {
         Some("--engine: only the default (Rust regex) engine is available")
-    } else if cli.pre.is_some() || !cli.pre_glob.is_empty() {
+    } else if cli.pre.as_deref().is_some_and(|c| !c.is_empty()) && !cli.no_pre {
         Some("--pre/--pre-glob: lancet doesn't run a process per file; documents and archives are read in-process with --docs")
     } else if cli.generate.is_some() {
         Some("--generate: lancet has no man page or completion generator yet")
@@ -1245,15 +1289,43 @@ fn run_rg(cli: RgCli) -> ExitCode {
             Err(e) => return fail(&format!("{}: {e}", f.display())),
         }
     }
-    let mut args = cli.args.clone().into_iter();
+    // Positional arguments and the paths listed by --in / --in0, in command-line order.
+    let mut positional: Vec<String> = Vec::new();
+    for &(_, kind, n) in &cli.arg_order {
+        match kind {
+            ArgKind::Positional => positional.push(cli.args[n].clone()),
+            ArgKind::In | ArgKind::In0 => {
+                let f = if kind == ArgKind::In {
+                    &cli.in_files[n]
+                } else {
+                    &cli.in0_files[n]
+                };
+                let text = match read_text_arg(f) {
+                    Ok(t) => t,
+                    Err(e) => return fail(&format!("{}: {e}", f.display())),
+                };
+                let sep = if kind == ArgKind::In { '\n' } else { '\0' };
+                positional.extend(
+                    text.split(sep)
+                        .map(|l| l.strip_suffix('\r').unwrap_or(l))
+                        .filter(|l| !l.is_empty())
+                        .map(|l| format!("{PATH_MARK}{l}")),
+                );
+            }
+        }
+    }
     if patterns.is_empty() && cli.pattern_file.is_empty() && !cli.files {
-        match args.next() {
-            Some(p) => patterns.push(p),
+        // The first argument typed on the command line; a listed path is never the pattern.
+        match positional.iter().position(|a| !a.starts_with(PATH_MARK)) {
+            Some(i) => patterns.push(positional.remove(i)),
             None => return fail("a pattern is required (or use --files / --type-list)"),
         }
     }
     let mut o = RgOptions::new(patterns);
-    o.paths = args.map(PathBuf::from).collect();
+    o.paths = positional
+        .into_iter()
+        .map(|a| PathBuf::from(a.strip_prefix(PATH_MARK).unwrap_or(&a)))
+        .collect();
     o.fixed_strings = cli.fixed_strings;
     o.case = if cli.ignore_case {
         Case::Insensitive
@@ -1368,6 +1440,7 @@ fn run_rg(cli: RgCli) -> ExitCode {
     o.binary = cli.binary;
     o.search_zip = cli.search_zip;
     o.no_unicode = cli.no_unicode;
+    o.max_bytes = cli.max_bytes;
     o.walk = WalkOpts {
         hidden: cli.hidden || cli.unrestricted >= 2,
         no_ignore: cli.no_ignore || cli.unrestricted >= 1,

@@ -2,7 +2,7 @@
 
 ## 1. `lancet rg` (ripgrep Parity & Extensions)
 
-- **Flags:** all of ripgrep 15.2's, with the same output and exit codes, except `-P`/`--pcre2`, `--pre`/`--pre-glob` and `--generate` (refused with a reason); `-z` decompresses `.gz` only. Full table: `docs/rg-parity.md`.
+- **Flags:** all of ripgrep 16.0's, with the same output and exit codes, except `-P`/`--pcre2`, `--pre`/`--pre-glob` and `--generate` (refused with a reason); `-z` decompresses `.gz` only. Full table: `docs/rg-parity.md`.
 - **Lancet extensions:** `--no-index`, `--trust-index`, `--index-dir DIR`, `--docs` (searches inside PDF, DOCX/PPTX/ODT, HWP/HWPX, EPUB, XLSX/XLS/ODS, ZIP/TAR/GZ/TGZ in-process).
 - **Intentional differences:** always sorted by path, `-n` stays ON when piped (`-N` disables), no headings unless `--heading`/`--pretty`.
 

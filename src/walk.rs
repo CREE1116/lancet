@@ -68,6 +68,16 @@ pub struct FileFilter {
     rg_types: Option<ignore::types::Types>,
 }
 
+impl FileFilter {
+    /// A `-g` glob that whitelists files: like ripgrep, it overrides the hidden and
+    /// ignore rules, so it can add files the default walk skips.
+    pub fn whitelists(&self) -> bool {
+        self.overrides
+            .as_ref()
+            .is_some_and(|o| o.num_whitelists() > 0)
+    }
+}
+
 fn has_glob_meta(s: &str) -> bool {
     s.contains(['*', '?', '[', '{'])
 }

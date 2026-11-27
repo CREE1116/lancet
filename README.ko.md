@@ -151,14 +151,15 @@ lancet이 **이기지 못하는** 곳: 리터럴 없는 정규식(인덱스가 �
 
 [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_competitors.py`](./bench/bench_competitors.py), [`bench/official_suite.sh`](./bench/official_suite.sh)로 재현합니다. 콜드 인덱스 빌드 **1.17초** (36.3 MiB, 원본의 8.0%), 변경 없는 동기화 **64.6 ms**.
 
-**텍스트 검색** (`lancet` vs `ripgrep 15.2.0`)
+**텍스트 검색** (`lancet rg` vs `ripgrep 16.0.0`; 2026-11-28 현재 크레이트 소스 트리에서 다시 잼, 파일 29,792개 / 703.5 MiB, 인덱스 2.87초 / 41.2 MiB; 대소문자 무시 파일 목록 `-i -l -F`)
 
-| 쿼리 | `rg` | lancet scan | lancet auto | lancet `--trust-index` |
+| 쿼리 | `rg` | lancet `--no-index` | lancet auto | lancet `--trust-index` |
 |---|---:|---:|---:|---:|
-| 희귀 리터럴 (`ThreadPoolBuilder`, 32건) | 307.7 ms | 310.6 ms | **60.5 ms (5.1×)** | **5.1 ms (60.3×)** |
-| 일반 리터럴 (`unwrap_or_else`, 582건) | 311.3 ms | 314.6 ms | **65.4 ms (4.8×)** | **13.0 ms (23.9×)** |
-| 정규식 (`pub unsafe fn \w+\(`) | 307.4 ms | 317.9 ms | **80.5 ms (3.8×)** | **26.9 ms (11.4×)** |
+| 희귀 리터럴 (`ThreadPoolBuilder`, 파일 32개) | 432.0 ms | 487.3 ms | **77.6 ms (5.6×)** | **6.8 ms (63.5×)** |
+| 일반 리터럴 (`unwrap_or_else`, 파일 590개) | 439.9 ms | 492.8 ms | **89.2 ms (4.9×)** | **19.4 ms (22.7×)** |
+| 정규식 (`pub unsafe fn \w+\(`, 파일 1,452개) | 438.9 ms | 491.3 ms | **105.2 ms (4.2×)** | **38.2 ms (11.5×)** |
 
+인덱스 없이 대소문자를 무시한 리터럴 검색은 지금 ripgrep보다 약 12% 느립니다(`bench/results/baseline-step0.md`에 기록). 모든 모드가 ripgrep과 같은 파일을 출력합니다.
 
 **파일 탐색** (`lancet fd` vs `fd 10.5.2`, `rg --files`, `find`)
 

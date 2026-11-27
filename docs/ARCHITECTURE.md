@@ -40,7 +40,7 @@
 
 | 규칙 | 기준 도구 | lancet |
 |---|---|---|
-| 플래그, 출력, 종료 코드 | ripgrep 15.2 | `rg` (바이트 단위 동일, 차이 3가지는 `docs/rg-parity.md`) |
+| 플래그, 출력, 종료 코드 | ripgrep 16.0 | `rg` (바이트 단위 동일, 차이 3가지는 `docs/rg-parity.md`) |
 | 경로 여러 개 `[PATH]...` | rg, fd, ast-grep | 경로를 받는 모든 명령 |
 | 범위 없이 읽으면 2,000줄, 한 줄 2,000자 | Claude Code·OpenCode Read | `read` |
 | `old_string` / `new_string` / `replace_all` | Claude Code·OpenCode Edit | `edit` |
@@ -219,20 +219,21 @@ src/
 
 구조를 바꿀 때 이것들이 그대로 통과해야 한다.
 
-| 자산 | 지키는 것 | 위치 | 할 일 |
+| 자산 | 지키는 것 | 위치 | 언제 |
 |---|---|---|---|
-| 단위·통합 테스트 | 명령별 동작 | `tests/`, 모듈 안 | 계획 함수(④)별 단위 테스트를 늘림 |
-| rg 대조 138케이스 | ripgrep과 바이트 단위 동일 | `bench/rg_parity.py` | **CI에 넣기** |
-| 실제 저장소 대조 | 8개 저장소에서 rg와 동일, 속도 | `bench/suite.py` | 단계마다 실행 |
-| rename 오라클 (Rust·Python·Go) | 이름 바꾸기 후에도 의미가 같음 | 지금은 임시 폴더 | **`bench/`로 옮기기** |
-| diff ↔ patch 퍼즈 | 출력한 diff가 `patch`로 적용됨 | 임시 폴더 | **테스트로 옮기기** |
-| 에이전트 실행 비교 | 실제 사용의 마찰 | 임시 폴더 | **`bench/agents/`로 옮기기** |
+| 단위·통합 테스트 | 명령별 동작, 인덱스=스캔, 신선도, 퍼즈 | `tests/`, 모듈 안 | CI (모든 OS) |
+| rg 대조 150케이스 | ripgrep 16.0과 stdout·종료 코드가 바이트 단위로 같음 | `bench/rg_parity.py` | CI (ripgrep 16.0.0 고정) |
+| diff ↔ patch 왕복 | 출력한 diff를 lancet `patch`와 `patch(1)`이 그대로 적용함 (CRLF, 끝 줄바꿈, 큰 파일) | `tests/integration.rs` `printed_diffs_apply_back_with_patch` | CI |
+| 실제 저장소 대조 | 8개 저장소에서 rg와 동일, 속도 | `bench/suite.py` | 단계마다 |
+| rename 오라클 (Rust·Python·Go) | 이름 바꾸기 후에도 컴파일·심볼 표가 같음 | `bench/rename_oracle.py` | `rename`·`Syntax`를 바꿀 때 |
+| 명령별 시간 | 단계 전후 비교 (파싱 비용 포함) | `bench/baseline.py`, `bench/results/baseline-*.md` | 단계마다 |
+| 에이전트 A/B | 실제 사용에서 lancet과 기본 도구의 정확도·시간·왕복 | `bench/agents/` | 큰 변경 뒤 |
 
 ### 3.3 성능 기준
 
 - 실제 저장소 대조에서 ripgrep보다 느려지면 안 된다(Linux 트리 기준 지금 193ms, rg 동급).
 - 단계마다 `bench/suite.py`로 전후를 비교하고, 5% 넘게 느려지면 원인을 찾는다.
-- `refs`·`outline`·`ast`는 파싱 횟수와 시간을 따로 잰다(②의 효과 확인).
+- `refs`·`outline`·`ast`·`read --symbol`은 `bench/baseline.py`로 따로 잰다(②의 효과 확인). 기준값: `bench/results/baseline-step0.md`.
 
 ### 3.4 의존성
 
@@ -248,8 +249,8 @@ src/
 | 단계 | 내용 | 끝나는 조건 |
 |---|---|---|
 | 정리 (완료) | 쿼리 언어와 `parse`·`explain`·`batch` 삭제, `status` → `index --status`. 쿼리 실행기로 검사하던 엔진 테스트 7개(인덱스=스캔, 증분 갱신, LSM 병합, 신선도, 퍼즈, 문서 변환, 손상 문서)는 `rg`로 옮겨 유지. | 모든 테스트, rg 대조 138케이스 통과 |
-| 0. 기준선 | 오라클·퍼즈·에이전트 비교를 저장소로 옮기고, rg 대조를 CI에 넣고, 성능 기준값(파싱 횟수 포함)을 기록한다. README 성능 표를 `lancet rg` 기준으로 다시 잰다(지금 숫자는 지운 쿼리 엔진으로 잰 것). | CI에서 대조 138케이스 통과 |
-| 1. Scope + Pipeline + Matcher | 후보 계획 4벌을 하나로. rg, refs, ast를 `Matcher`로 옮긴다. ⑥의 이득을 측정한다. | 4벌 → 1벌, 모든 자산 통과, 성능 유지 |
+| 0. 기준선 (완료) | rename 오라클(`bench/rename_oracle.py`), diff ↔ patch 왕복 테스트, 에이전트 A/B(`bench/agents/`)를 저장소로 옮김. rg 대조를 ripgrep 16.0으로 올려 150케이스를 CI에서 실행(`--in`, `--in0`, `--max-bytes`, `--no-pre` 구현). 기준값 `bench/results/baseline-step0.md`, README 성능 표 재측정. 그 과정에서 diff(끝 줄바꿈, CRLF, 큰 파일 → Myers)와 trust 모드(인덱스 범위 밖 요청) 버그를 고침. | CI에서 대조 150케이스 통과 |
+| 1. Scope + Pipeline + Matcher | 후보 계획 4벌을 하나로. rg, refs, ast를 `Matcher`로 옮긴다. ⑥으로 걷기와 검색을 겹친다(걷기만 rg보다 40ms 느림). 인덱스 없는 대소문자 무시 리터럴이 rg보다 12% 느린 원인을 찾는다. | 4벌 → 1벌, 모든 자산 통과, 기준값보다 느려지지 않음 |
 | 2. LangSpec + Doc + Syntax | 언어 표, 한 번 파싱(②), 스코프 해석기 분리. | `match Lang::X` 대부분 제거, refs 파싱 4 → 1, rename 오라클 통과 |
 | 3. Change | `ChangeSet`으로 쓰기 명령 다섯 개를 옮긴다. | `ast --apply`도 전부 아니면 전무 |
 | 4. 인터페이스 | 명령 목록, 렌더러, `Refusal`, `main.rs`를 명령별로 나누기. | 도움말·MCP·스킬이 같은 목록에서 나옴 |

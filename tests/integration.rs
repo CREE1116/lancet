@@ -2871,3 +2871,100 @@ fn builtin_tool_syntax_write_and_codex_patches() {
         "*\n"
     );
 }
+
+#[test]
+fn printed_diffs_apply_back_with_patch() {
+    use lancet::patch::{apply_patch, PatchOptions};
+    use std::process::Command;
+    let mut x: u64 = 0x2545_F491_4F6C_DD1D;
+    let mut rnd = |n: usize| {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        (x % n.max(1) as u64) as usize
+    };
+    let dir = TempDir::new().unwrap();
+    let f = dir.path().join("f.txt");
+    let has_patch = Command::new("patch").arg("--version").output().is_ok();
+    // Both sizes: the small one goes through the LCS, the big one (more than
+    // 1414 lines on each side) through the trimmed / paired path.
+    for (case, size) in (0..60).map(|c| (c, if c % 2 == 0 { 40 } else { 2000 })) {
+        // Every third case is a CRLF file: the `\r`s must survive the diff.
+        let eol = if case % 3 == 0 { "\r\n" } else { "\n" };
+        let mut lines: Vec<String> = (0..size).map(|i| format!("line {i} {}", i % 7)).collect();
+        let old = lines.join(eol) + if case % 5 == 0 { "" } else { eol };
+        for _ in 0..1 + rnd(5) {
+            let at = rnd(lines.len());
+            match rnd(3) {
+                0 => lines[at] = format!("changed {}", rnd(1000)),
+                1 => {
+                    for k in 0..1 + rnd(3) {
+                        lines.insert(at, format!("new {k} {}", rnd(1000)));
+                    }
+                }
+                _ => {
+                    let n = (1 + rnd(3)).min(lines.len() - at);
+                    lines.drain(at..at + n);
+                }
+            }
+        }
+        let new = lines.join(eol) + if case % 7 == 0 { "" } else { eol };
+        let diff = lancet::edit::unified_diff("f.txt", &old, &new);
+        if old == new {
+            continue;
+        }
+        fs::write(&f, &old).unwrap();
+        let mut o = PatchOptions::new(diff.clone(), dir.path());
+        o.apply = true;
+        o.allow_syntax_errors = true;
+        let r = apply_patch(&o);
+        assert!(r.applied, "case {case}: {:?}\n{diff}", r.error);
+        assert_eq!(fs::read_to_string(&f).unwrap(), new, "case {case}:\n{diff}");
+        if has_patch {
+            fs::write(&f, &old).unwrap();
+            let pf = dir.path().join("d.patch");
+            fs::write(&pf, &diff).unwrap();
+            let st = Command::new("patch")
+                .args(["-s", "-p1", "-i"])
+                .arg(&pf)
+                .current_dir(dir.path())
+                .status()
+                .unwrap();
+            assert!(st.success(), "case {case}: patch(1) refused\n{diff}");
+            assert_eq!(
+                fs::read_to_string(&f).unwrap(),
+                new,
+                "case {case}: patch(1)\n{diff}"
+            );
+        }
+    }
+}
+
+#[test]
+fn trust_index_answers_only_for_the_files_it_holds() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    fs::write(root.join("a.toml"), "edition = 1\n").unwrap();
+    fs::write(root.join(".hidden.toml"), "edition = 2\n").unwrap();
+    let idx = index::default_dir(root);
+    let glob: RgMod = |o| o.globs = vec!["*.toml".into()];
+    let hidden: RgMod = |o| o.walk.hidden = true;
+    // Built without hidden files: a whitelisting glob still finds the hidden one.
+    index::rebuild(root, &idx, &WalkOpts::default()).unwrap();
+    let want = rg_probe(root, "edition", IndexMode::Off, glob);
+    assert!(want.contains(".hidden.toml"), "{want}");
+    assert_eq!(rg_probe(root, "edition", IndexMode::Trust, glob), want);
+    // Built with hidden files: a search without --hidden doesn't see them.
+    let wopts = WalkOpts {
+        hidden: true,
+        ..WalkOpts::default()
+    };
+    index::rebuild(root, &idx, &wopts).unwrap();
+    let want = rg_probe(root, "edition", IndexMode::Off, plain);
+    assert!(!want.contains(".hidden.toml"), "{want}");
+    assert_eq!(rg_probe(root, "edition", IndexMode::Trust, plain), want);
+    assert_eq!(
+        rg_probe(root, "edition", IndexMode::Trust, hidden),
+        rg_probe(root, "edition", IndexMode::Off, hidden)
+    );
+}

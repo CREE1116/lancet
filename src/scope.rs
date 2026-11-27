@@ -25,6 +25,20 @@ pub(crate) struct Target {
     pub rel: String,
 }
 
+/// Whether `--trust-index` may answer from the index alone: it must hold exactly the
+/// files this walk would visit (same hidden / ignore rules, no whitelisting glob
+/// reaching past them). Otherwise the files are walked, as without `--trust-index`.
+pub(crate) fn trust_covers(ix: &Index, walk: &WalkOpts, filter: &FileFilter) -> bool {
+    let s = ix.manifest.scope;
+    index_matches_walk(ix, walk) && (!filter.whitelists() || (s.hidden && s.no_ignore))
+}
+
+/// The index was synced with the same hidden / ignore rules as `walk`.
+pub(crate) fn index_matches_walk(ix: &Index, walk: &WalkOpts) -> bool {
+    let s = ix.manifest.scope;
+    s.hidden == walk.hidden && s.no_ignore == walk.no_ignore
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn plan_targets_with_req(
     ix: &Index,
@@ -55,6 +69,11 @@ pub(crate) fn plan_targets_with_req(
     let mut out = Vec::new();
     let mut cands = 0usize;
     let is_dir = root.is_dir();
+    let mode = if mode == IndexMode::Trust && !trust_covers(ix, walk_opts, filter) {
+        IndexMode::Auto
+    } else {
+        mode
+    };
     if mode == IndexMode::Trust {
         for (si, seg) in ix.segs.iter().enumerate() {
             let mut push_if_ok = |id: u32| {

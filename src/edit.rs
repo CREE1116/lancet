@@ -130,163 +130,173 @@ pub fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-/// Compute a standard unified diff (`--- a/...`, `+++ b/...`) with 3 context lines.
-pub fn unified_diff(rel: &str, old: &str, new: &str) -> String {
-    let d = line_diff(rel, old, new);
-    if d.contains("\n@@ ") || old == new {
-        return d;
-    }
-    // Same lines, different text: only the final newline changed. Show it the way
-    // `diff -u` does, or the change would be invisible in a dry run.
-    let last = old.lines().last().unwrap_or("");
-    let n = old.lines().count().max(1);
-    let marker = |text: &str| {
-        if text.ends_with('\n') {
-            ""
-        } else {
-            "\\ No newline at end of file\n"
-        }
-    };
-    format!(
-        "--- a/{rel}\n+++ b/{rel}\n@@ -{n},1 +{n},1 @@\n-{last}\n{}+{last}\n{}",
-        marker(old),
-        marker(new)
-    )
+/// One step of an edit script: keep, delete or insert a line. `old` / `new` are
+/// line indexes; for an insert `old` is the next old line, for a delete `new` is
+/// the next new line.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Op {
+    Keep,
+    Del,
+    Ins,
 }
 
-fn line_diff(rel: &str, old: &str, new: &str) -> String {
-    let old_lines: Vec<&str> = old.lines().collect();
-    let new_lines: Vec<&str> = new.lines().collect();
-    let n = old_lines.len();
-    let m = new_lines.len();
+/// A unified diff (`--- a/…`, `+++ b/…`, 3 lines of context) exactly as `diff -u`
+/// prints it: lines split on `\n` only (a `\r` stays part of its line) and
+/// `\ No newline at end of file` after a last line that has no newline.
+pub fn unified_diff(rel: &str, old: &str, new: &str) -> String {
+    let a: Vec<&str> = old.split_terminator('\n').collect();
+    let b: Vec<&str> = new.split_terminator('\n').collect();
+    let (n, m) = (a.len(), b.len());
+    let a_open = !old.is_empty() && !old.ends_with('\n');
+    let b_open = !new.is_empty() && !new.ends_with('\n');
+    // A last line without a newline is a different line from the same text with one.
+    let eq = |i: usize, j: usize| a[i] == b[j] && (a_open && i + 1 == n) == (b_open && j + 1 == m);
+    let ops = edit_script(n, m, &eq);
 
-    // Common prefix and suffix first, so the LCS only runs over the changed middle.
-    let mut ops: Vec<(char, usize, usize)> = Vec::new();
-    let mut pref = 0;
-    while pref < n && pref < m && old_lines[pref] == new_lines[pref] {
-        ops.push((' ', pref, pref));
-        pref += 1;
-    }
-    let mut suff = 0;
-    while suff + pref < n && suff + pref < m && old_lines[n - 1 - suff] == new_lines[m - 1 - suff] {
-        suff += 1;
-    }
-    let (a, b) = (&old_lines[pref..n - suff], &new_lines[pref..m - suff]);
-    let (an, bm) = (a.len(), b.len());
-    if an.saturating_mul(bm) <= 2_000_000 {
-        let mut dp = vec![0u32; (an + 1) * (bm + 1)];
-        let stride = bm + 1;
-        for i in (0..an).rev() {
-            for j in (0..bm).rev() {
-                dp[i * stride + j] = if a[i] == b[j] {
-                    dp[(i + 1) * stride + (j + 1)] + 1
-                } else {
-                    dp[(i + 1) * stride + j].max(dp[i * stride + (j + 1)])
-                };
-            }
-        }
-        let (mut i, mut j) = (0, 0);
-        while i < an && j < bm {
-            if a[i] == b[j] {
-                ops.push((' ', pref + i, pref + j));
-                i += 1;
-                j += 1;
-            } else if dp[(i + 1) * stride + j] >= dp[i * stride + (j + 1)] {
-                ops.push(('-', pref + i, pref + j));
-                i += 1;
-            } else {
-                ops.push(('+', pref + i, pref + j));
-                j += 1;
-            }
-        }
-        for i in i..an {
-            ops.push(('-', pref + i, pref + j));
-        }
-        for j in j..bm {
-            ops.push(('+', pref + an, pref + j));
-        }
-    } else if an == bm {
-        // Too big for the LCS, same line count (a rename, an in-place replace):
-        // pair lines up so only the changed ones show.
-        for i in 0..an {
-            if a[i] == b[i] {
-                ops.push((' ', pref + i, pref + i));
-            } else {
-                ops.push(('-', pref + i, pref + i));
-                ops.push(('+', pref + i + 1, pref + i));
-            }
-        }
-    } else {
-        for i in 0..an {
-            ops.push(('-', pref + i, pref));
-        }
-        for j in 0..bm {
-            ops.push(('+', pref + an, pref + j));
-        }
-    }
-    for k in 0..suff {
-        ops.push((' ', n - suff + k, m - suff + k));
-    }
-
-    let ctx = 3usize;
-    let change_idxs: Vec<usize> = ops
-        .iter()
-        .enumerate()
-        .filter_map(|(k, &(op, _, _))| (op != ' ').then_some(k))
-        .collect();
-    if change_idxs.is_empty() {
+    const CTX: usize = 3;
+    let changes: Vec<usize> = (0..ops.len()).filter(|&k| ops[k].0 != Op::Keep).collect();
+    let Some(&first) = changes.first() else {
         return String::new();
-    }
-
+    };
     let mut hunks: Vec<(usize, usize)> = Vec::new();
-    let mut h_start = change_idxs[0].saturating_sub(ctx);
-    let mut h_end = (change_idxs[0] + ctx + 1).min(ops.len());
-    for &ci in &change_idxs[1..] {
-        let s = ci.saturating_sub(ctx);
-        let e = (ci + ctx + 1).min(ops.len());
-        if s <= h_end {
-            h_end = e;
+    let (mut hs, mut he) = (first.saturating_sub(CTX), (first + CTX + 1).min(ops.len()));
+    for &c in &changes[1..] {
+        let (s, e) = (c.saturating_sub(CTX), (c + CTX + 1).min(ops.len()));
+        if s <= he {
+            he = e;
         } else {
-            hunks.push((h_start, h_end));
-            h_start = s;
-            h_end = e;
+            hunks.push((hs, he));
+            (hs, he) = (s, e);
         }
     }
-    hunks.push((h_start, h_end));
+    hunks.push((hs, he));
 
+    let no_newline = "\\ No newline at end of file\n";
     let mut out = format!("--- a/{rel}\n+++ b/{rel}\n");
     for (s, e) in hunks {
         let slice = &ops[s..e];
-        let old_start = slice.first().map_or(0, |&(_, oi, _)| oi) + 1;
-        let new_start = slice.first().map_or(0, |&(_, _, nj)| nj) + 1;
-        let old_cnt = slice.iter().filter(|&&(op, _, _)| op != '+').count();
-        let new_cnt = slice.iter().filter(|&&(op, _, _)| op != '-').count();
+        let old_cnt = slice.iter().filter(|o| o.0 != Op::Ins).count();
+        let new_cnt = slice.iter().filter(|o| o.0 != Op::Del).count();
+        // An empty range names the line before it, as `diff -u` does.
+        let start = |first: usize, cnt: usize| if cnt == 0 { first } else { first + 1 };
         out.push_str(&format!(
-            "@@ -{old_start},{old_cnt} +{new_start},{new_cnt} @@\n"
+            "@@ -{},{old_cnt} +{},{new_cnt} @@\n",
+            start(slice[0].1, old_cnt),
+            start(slice[0].2, new_cnt)
         ));
-        for &(op, oi, nj) in slice {
-            match op {
-                ' ' => {
-                    out.push(' ');
-                    out.push_str(old_lines[oi]);
-                    out.push('\n');
-                }
-                '-' => {
-                    out.push('-');
-                    out.push_str(old_lines[oi]);
-                    out.push('\n');
-                }
-                '+' => {
-                    out.push('+');
-                    out.push_str(new_lines[nj]);
-                    out.push('\n');
-                }
-                _ => {}
+        for &(op, i, j) in slice {
+            let (mark, text, open) = match op {
+                Op::Keep => (' ', a[i], a_open && i + 1 == n),
+                Op::Del => ('-', a[i], a_open && i + 1 == n),
+                Op::Ins => ('+', b[j], b_open && j + 1 == m),
+            };
+            out.push(mark);
+            out.push_str(text);
+            out.push('\n');
+            if open {
+                out.push_str(no_newline);
             }
         }
     }
     out
 }
+
+/// A shortest edit script from `n` old lines to `m` new lines (Myers' O(ND)
+/// algorithm, as `git diff` uses), after trimming the common prefix and suffix.
+/// Its cost grows with the size of the change, not of the file.
+fn edit_script(n: usize, m: usize, eq: &dyn Fn(usize, usize) -> bool) -> Vec<(Op, usize, usize)> {
+    let mut pre = 0;
+    while pre < n && pre < m && eq(pre, pre) {
+        pre += 1;
+    }
+    let mut suf = 0;
+    while suf + pre < n && suf + pre < m && eq(n - 1 - suf, m - 1 - suf) {
+        suf += 1;
+    }
+    let mut ops: Vec<(Op, usize, usize)> = (0..pre).map(|i| (Op::Keep, i, i)).collect();
+    let (an, bm) = (n - pre - suf, m - pre - suf);
+    match myers(an, bm, &|i, j| eq(pre + i, pre + j)) {
+        Some(mid) => ops.extend(mid.into_iter().map(|(op, i, j)| (op, pre + i, pre + j))),
+        // shortcut: past the memory cap (a huge rewrite) the middle is one replacement;
+        // still a correct diff, just not the smallest.
+        None => {
+            ops.extend((0..an).map(|i| (Op::Del, pre + i, pre)));
+            ops.extend((0..bm).map(|j| (Op::Ins, pre + an, pre + j)));
+        }
+    }
+    ops.extend((0..suf).map(|k| (Op::Keep, n - suf + k, m - suf + k)));
+    ops
+}
+
+/// Myers' greedy diff. Step `d` keeps only the furthest-reaching paths of diagonals
+/// `-d..=d` for the backtrack, so memory grows with the square of the change, not
+/// with the file. `None` past ~4M stored entries (about 2,000 changed lines).
+fn myers(n: usize, m: usize, eq: &dyn Fn(usize, usize) -> bool) -> Option<Vec<(Op, usize, usize)>> {
+    const MAX_ENTRIES: usize = 4 << 20;
+    let max = n + m;
+    let off = max as isize + 1;
+    let mut v = vec![0isize; 2 * max + 3];
+    let at = |k: isize| (k + off) as usize;
+    let mut trace: Vec<Vec<isize>> = Vec::new();
+    let mut stored = 0usize;
+    for d in 0..=max as isize {
+        stored += 2 * d as usize + 1;
+        if stored > MAX_ENTRIES {
+            return None;
+        }
+        trace.push(v[at(-d)..=at(d)].to_vec());
+        for k in (-d..=d).step_by(2) {
+            let mut x = if k == -d || (k != d && v[at(k - 1)] < v[at(k + 1)]) {
+                v[at(k + 1)]
+            } else {
+                v[at(k - 1)] + 1
+            };
+            let mut y = x - k;
+            while (x as usize) < n && (y as usize) < m && eq(x as usize, y as usize) {
+                x += 1;
+                y += 1;
+            }
+            v[at(k)] = x;
+            if x as usize >= n && y as usize >= m {
+                return Some(backtrack(&trace, n, m));
+            }
+        }
+    }
+    Some(Vec::new())
+}
+
+/// Walks the kept paths back from `(n, m)`. `trace[d][k + d]` is the furthest x on
+/// diagonal `k` before step `d`.
+fn backtrack(trace: &[Vec<isize>], n: usize, m: usize) -> Vec<(Op, usize, usize)> {
+    let (mut x, mut y) = (n as isize, m as isize);
+    let mut out = Vec::new();
+    for d in (0..trace.len() as isize).rev() {
+        let v = |k: isize| trace[d as usize][(k + d) as usize];
+        let k = x - y;
+        let pk = if k == -d || (k != d && v(k - 1) < v(k + 1)) {
+            k + 1
+        } else {
+            k - 1
+        };
+        let (px, py) = if d == 0 { (0, 0) } else { (v(pk), v(pk) - pk) };
+        while x > px && y > py {
+            out.push((Op::Keep, (x - 1) as usize, (y - 1) as usize));
+            x -= 1;
+            y -= 1;
+        }
+        if d > 0 {
+            if x == px {
+                out.push((Op::Ins, x as usize, (y - 1) as usize));
+            } else {
+                out.push((Op::Del, (x - 1) as usize, y as usize));
+            }
+            (x, y) = (px, py);
+        }
+    }
+    out.reverse();
+    out
+}
+
 /// Persist a rename by syncing its directory (Unix; best effort, a failure here
 /// does not undo the already-visible write).
 fn sync_dir(dir: &Path) {
@@ -442,6 +452,31 @@ fn same_file(_: &File, _: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn many_changes_in_a_big_file_stay_small_hunks() {
+        let old: String = (0..50_000).map(|i| format!("row {i}\n")).collect();
+        let mut lines: Vec<String> = old.lines().map(str::to_string).collect();
+        for k in 0..300 {
+            let at = 100 + k * 160;
+            if k % 2 == 0 {
+                lines[at] = format!("edited {k}");
+            } else {
+                lines.insert(at, format!("inserted {k}"));
+            }
+        }
+        let new = lines.join("\n") + "\n";
+        let t = std::time::Instant::now();
+        let d = unified_diff("f", &old, &new);
+        assert!(t.elapsed().as_secs_f64() < 2.0, "{:?}", t.elapsed());
+        assert_eq!(d.matches("\n@@ ").count(), 300);
+        assert_eq!(
+            d.lines()
+                .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
+                .count(),
+            300
+        );
+    }
 
     #[test]
     fn big_file_diff_shows_only_changed_lines() {

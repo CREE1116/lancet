@@ -108,6 +108,8 @@ pub struct RgOptions {
     pub search_zip: bool,
     /// `--no-unicode`: ASCII-only `\w`, `\d`, `\b` and case folding.
     pub no_unicode: bool,
+    /// `--max-bytes`: search at most this many bytes of each file.
+    pub max_bytes: Option<u64>,
     pub walk: WalkOpts,
     pub index: IndexMode,
     pub index_dir: Option<PathBuf>,
@@ -172,6 +174,7 @@ impl RgOptions {
             binary: false,
             search_zip: false,
             no_unicode: false,
+            max_bytes: None,
             walk: WalkOpts::default(),
             index: IndexMode::Auto,
             index_dir: None,
@@ -511,6 +514,14 @@ struct Ctx<'a> {
 
 /// Search one file and render its output.
 /// `explicit`: named on the command line (searched even if binary, like ripgrep).
+/// The first `--max-bytes` bytes of a file, as ripgrep reads them.
+fn head(o: &RgOptions, c: content::Content) -> content::Content {
+    match o.max_bytes {
+        Some(n) if (c.len() as u64) > n => content::Content::Owned(c[..n as usize].to_vec()),
+        _ => c,
+    }
+}
+
 fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Option<FileOut> {
     let o = cx.o;
     let gz = o.search_zip
@@ -520,11 +531,11 @@ fn search_file(cx: &Ctx<'_>, path: &Path, display: String, explicit: bool) -> Op
     let data = if (o.docs && crate::adapters::is_adapted_path(path, false)) || gz {
         // --docs: the text lancet's extractors see (PDF, Office, HWP, archives);
         // -z: the decompressed bytes of a .gz.
-        content::load_searchable(path, false).ok()??
+        head(o, content::load_searchable(path, false).ok()??)
     } else {
         // Raw bytes, as ripgrep sees them — PDFs and Office files included —
         // after ripgrep's BOM sniffing / `-E` transcoding.
-        let raw = decode(o, content::read(path).ok()?);
+        let raw = decode(o, head(o, content::read(path).ok()?));
         // Binary files are skipped unless -a: in directory searches ripgrep treats a
         // NUL anywhere as binary (lancet's 8 KiB sniff alone would let late-NUL
         // protobufs through); a file named explicitly is judged by its first bytes.

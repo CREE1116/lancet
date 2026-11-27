@@ -425,10 +425,13 @@ fn find_files_raw(opts: &FdOptions) -> FdResponse {
 
     if opts.index == IndexMode::Trust {
         match index::discover(&opts.root, opts.index_dir.as_deref()) {
-            Ok(Some((ix, rel_prefix))) => {
+            Ok(Some((ix, rel_prefix))) if crate::scope::index_matches_walk(&ix, &opts.walk) => {
                 mode = "index_trusted".into();
                 entries = Some(collect_from_index(&ix, &opts.root, &rel_prefix, &cf));
             }
+            Ok(Some(_)) => warnings.push(
+                "the index holds files for other --hidden / --no-ignore settings; walked the disk instead".into(),
+            ),
             Ok(None) => {
                 warnings
                     .push("no index found; fell back to a full scan (run `lancet index`)".into());
