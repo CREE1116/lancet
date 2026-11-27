@@ -1952,6 +1952,16 @@ fn run_read(cli: ReadCli) -> ExitCode {
     let _ = out.flush();
 
     if !cli.json {
+        for (resp, img) in resps
+            .iter()
+            .filter_map(|r| r.image.as_ref().map(|i| (r, i)))
+        {
+            eprintln!(
+                "[lancet read] {} is an image ({} KB). The CLI prints text: look at it with an image-capable tool (the `lancet` MCP tool returns it), or pass --ocr for its text",
+                resp.path,
+                img.bytes.div_ceil(1024)
+            );
+        }
         for resp in resps
             .iter()
             .filter(|r| r.status == Status::Empty && r.lines.is_empty())

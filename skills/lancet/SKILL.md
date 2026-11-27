@@ -14,6 +14,7 @@ Check it is installed with `lancet --version`. Results are always fresh; on larg
 | Built-in | Same thing with lancet |
 |---|---|
 | **Read** `file_path, offset, limit` | `lancet read src/x.rs --offset 120 --limit 60` · `lancet read src/x.rs:120-180 src/y.rs:10-40` · `--symbol handle_request` · `report.pdf --page 3` |
+| **Read** an image | Over MCP, `read` returns the image itself. The CLI prints only its type and size (a shell can't show pictures), so with the CLI view images with your own image-capable tool. `--ocr` gives an image's or a scanned PDF's text instead. |
 | **Grep** | `lancet rg -w spin_lock src` · `lancet rg -t py -C2 'def \w+_test'` (ripgrep's flags and output, byte for byte) |
 | **Glob** | `lancet fd '**/*.ts'` · `lancet fd 'src/**/mod.rs'` · `lancet fd -e proto` |
 | **Edit** `old_string, new_string, replace_all` | `lancet edit src/x.rs --old-string 'retries = 3' --new-string 'retries = 5' --apply` (`--replace-all`, `--expected-replacements N`) |

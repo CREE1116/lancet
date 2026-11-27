@@ -315,3 +315,41 @@ fn mcp_read_only_mode_blocks_all_mutations() {
     );
     assert!(!err && text.contains("+fn a() { new(1); }"), "{text}");
 }
+
+#[test]
+fn mcp_read_returns_images_themselves() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    // A real 1x1 PNG.
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0,
+        0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 0x1f, 0x15, 0xc4, 0x89, 0, 0, 0, 10, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9c, 0x63, 0, 1, 0, 0, 5, 0, 1, 0x0d, 0x0a, 0x2d, 0xb4, 0, 0, 0, 0, 0x49,
+        0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ];
+    fs::write(root.join("dot.png"), png).unwrap();
+    let mut m = McpProc::spawn(root, &[]);
+    m.request("initialize", json!({ "protocolVersion": "2025-03-26" }));
+    let reply = m.request(
+        "tools/call",
+        json!({"name": "lancet", "arguments": {"args": ["read", "dot.png"]}}),
+    );
+    let content = reply["result"]["content"].as_array().unwrap();
+    assert!(content[0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("image/png 1x1"));
+    assert_eq!(content[1]["type"], json!("image"));
+    assert_eq!(content[1]["mimeType"], json!("image/png"));
+    assert_eq!(content[1]["data"], json!("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg=="));
+    // With --ocr the text is asked for instead: no image block.
+    let reply = m.request(
+        "tools/call",
+        json!({"name": "lancet", "arguments": {"args": ["read", "dot.png", "--ocr"]}}),
+    );
+    assert!(reply["result"]["content"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|c| c["type"] == "text"));
+}

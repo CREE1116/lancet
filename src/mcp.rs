@@ -41,7 +41,8 @@ Orient:   [\"fd\",\"--tree\",\"--dirs\",\"-d\",\"2\",\".\"]  [\"outline\",\"src/
 Search:   [\"rg\",\"-w\",\"spin_lock\",\"src\"]  [\"refs\",\"SearchOptions\",\"src\"]  \
 [\"ast\",\"$X.unwrap()\",\"src\",\"--lang\",\"rs\"]  [\"near(\\\"retry\\\", \\\"timeout\\\", 20) in function\",\"src\"]\n\
 Read:     [\"read\",\"src/x.rs\",\"--symbol\",\"handle\"]  [\"read\",\"src/x.rs:120-180\",\"src/y.rs:10-40\"]  \
-— the first line is `# PATH rev REV`; keep REV for edits. Large files: add \"--budget-tokens\",\"800\".\n\
+— the first line is `# PATH rev REV`; keep REV for edits. Large files: add \"--budget-tokens\",\"800\". \
+An image comes back as the image (add \"--ocr\" for its text).\n\
 Change (preview unless \"--apply\"; pass the rev you read):\n\
   [\"edit\",\"src/x.rs\",\"--old-string\",\"retries = 3\",\"--new-string\",\"retries = 5\",\"--apply\"] \
 (fails unless the text occurs once; --replace-all, --rev REV)\n\
@@ -224,8 +225,73 @@ fn tool_definition(cfg: &McpConfig) -> Value {
     })
 }
 
-fn tool_result(text: String, is_error: bool) -> Value {
-    json!({ "content": [{ "type": "text", "text": text }], "isError": is_error })
+fn tool_result(content: Vec<Value>, is_error: bool) -> Value {
+    json!({ "content": content, "isError": is_error })
+}
+
+/// Images a client can display, up to this size each (larger ones stay as their description).
+const MAX_IMAGE_BYTES: u64 = 5 * 1024 * 1024;
+
+/// The image files a `read` command names (without `--ocr`), with their MIME types.
+fn read_images(argv: &[String], cfg: &McpConfig) -> Vec<(PathBuf, &'static str)> {
+    if subcommand(argv) != Some("read") || argv.iter().any(|a| a == "--ocr") {
+        return Vec::new();
+    }
+    const TAKES_VALUE: &[&str] = &[
+        "-l",
+        "--lines",
+        "--offset",
+        "--limit",
+        "-s",
+        "--symbol",
+        "-p",
+        "--page",
+        "--sheet",
+        "--rows",
+        "--cols",
+        "-e",
+        "--entry",
+        "--budget-tokens",
+    ];
+    let mut out = Vec::new();
+    let mut it = argv.iter().skip(1);
+    while let Some(a) = it.next() {
+        if TAKES_VALUE.contains(&a.as_str()) {
+            it.next();
+            continue;
+        }
+        if a.starts_with('-') || a.contains('!') {
+            continue;
+        }
+        let path = cfg.root.join(a);
+        let mime = crate::read_cmd::image_mime(&path)
+            .filter(|m| matches!(*m, "image/png" | "image/jpeg" | "image/gif" | "image/webp"));
+        if let Some(m) = mime {
+            if std::fs::metadata(&path).is_ok_and(|md| md.is_file() && md.len() <= MAX_IMAGE_BYTES)
+            {
+                out.push((path, m));
+            }
+        }
+    }
+    out
+}
+
+fn base64(data: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut s = String::with_capacity(data.len().div_ceil(3) * 4);
+    for c in data.chunks(3) {
+        let n = (c[0] as u32) << 16
+            | (*c.get(1).unwrap_or(&0) as u32) << 8
+            | *c.get(2).unwrap_or(&0) as u32;
+        for (i, shift) in [18, 12, 6, 0].into_iter().enumerate() {
+            s.push(if i <= c.len() {
+                T[(n >> shift & 63) as usize] as char
+            } else {
+                '='
+            });
+        }
+    }
+    s
 }
 
 fn handle_tools_call(req_id: Value, params: &Map<String, Value>, cfg: &McpConfig) -> Value {
@@ -243,8 +309,11 @@ fn handle_tools_call(req_id: Value, params: &Map<String, Value>, cfg: &McpConfig
         .cloned()
         .unwrap_or_default();
     let result = match run_tool(&args, cfg) {
-        Ok((text, is_error)) => tool_result(text, is_error),
-        Err(msg) => tool_result(format!("error: {msg}"), true),
+        Ok((content, is_error)) => tool_result(content, is_error),
+        Err(msg) => tool_result(
+            vec![json!({ "type": "text", "text": format!("error: {msg}") })],
+            true,
+        ),
     };
     rpc_ok(req_id, result)
 }
@@ -268,7 +337,7 @@ fn read_only_refusal(args: &[String]) -> Option<String> {
         .then(|| "`--apply` writes files; this MCP server is read-only".to_string())
 }
 
-fn run_tool(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(String, bool), String> {
+fn run_tool(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Vec<Value>, bool), String> {
     let argv: Vec<String> = match args.get("args") {
         Some(Value::Array(xs)) if !xs.is_empty() => xs
             .iter()
@@ -379,7 +448,14 @@ fn run_tool(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(String, bool)
             if code == 1 { ": nothing found" } else { "" }
         ));
     }
-    Ok((text, code >= 2))
+    // `read` of an image: give the client the image itself, as its own Read would.
+    let mut content = vec![json!({ "type": "text", "text": text })];
+    for (path, mime) in read_images(&argv, cfg) {
+        if let Ok(data) = std::fs::read(&path) {
+            content.push(json!({ "type": "image", "data": base64(&data), "mimeType": mime }));
+        }
+    }
+    Ok((content, code >= 2))
 }
 
 #[cfg(test)]
@@ -388,6 +464,19 @@ mod tests {
 
     fn v(xs: &[&str]) -> Vec<String> {
         xs.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn base64_matches_rfc4648() {
+        for (raw, enc) in [
+            ("", ""),
+            ("f", "Zg=="),
+            ("fo", "Zm8="),
+            ("foo", "Zm9v"),
+            ("foobar", "Zm9vYmFy"),
+        ] {
+            assert_eq!(base64(raw.as_bytes()), enc);
+        }
     }
 
     #[test]

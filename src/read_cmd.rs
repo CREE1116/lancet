@@ -70,9 +70,93 @@ pub struct ReadResponse {
     pub next_line: Option<usize>,
     pub estimated_tokens: usize,
     pub lines: Vec<ReadLine>,
+    /// An image read without `--ocr`: what it is (MCP clients also get the image).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<ImageInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<ErrorInfo>,
     pub elapsed_ms: f64,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct ImageInfo {
+    pub mime: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+    pub bytes: u64,
+}
+
+/// The MIME type of an image file, by extension.
+pub fn image_mime(path: &Path) -> Option<&'static str> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    Some(match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "tif" | "tiff" => "image/tiff",
+        _ => return None,
+    })
+}
+
+/// Width and height from an image header (PNG, GIF, JPEG, WebP, BMP).
+fn image_size(d: &[u8]) -> Option<(u32, u32)> {
+    let be16 = |i: usize| Some(u16::from_be_bytes(d.get(i..i + 2)?.try_into().ok()?) as u32);
+    let le16 = |i: usize| Some(u16::from_le_bytes(d.get(i..i + 2)?.try_into().ok()?) as u32);
+    let be32 = |i: usize| Some(u32::from_be_bytes(d.get(i..i + 4)?.try_into().ok()?));
+    let le32 = |i: usize| Some(i32::from_le_bytes(d.get(i..i + 4)?.try_into().ok()?));
+    let le24 = |i: usize| {
+        Some(u32::from_le_bytes([
+            *d.get(i)?,
+            *d.get(i + 1)?,
+            *d.get(i + 2)?,
+            0,
+        ]))
+    };
+    if d.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Some((be32(16)?, be32(20)?));
+    }
+    if d.starts_with(b"GIF8") {
+        return Some((le16(6)?, le16(8)?));
+    }
+    if d.starts_with(b"BM") {
+        return Some((le32(18)?.unsigned_abs(), le32(22)?.unsigned_abs()));
+    }
+    if d.starts_with(b"RIFF") && d.get(8..12) == Some(b"WEBP") {
+        return match d.get(12..16)? {
+            b"VP8X" => Some((le24(24)? + 1, le24(27)? + 1)),
+            b"VP8 " => Some((le16(26)? & 0x3fff, le16(28)? & 0x3fff)),
+            b"VP8L" => {
+                let b = d.get(21..25)?;
+                let w = 1 + (((b[1] as u32 & 0x3f) << 8) | b[0] as u32);
+                let h = 1
+                    + (((b[3] as u32 & 0x0f) << 10)
+                        | ((b[2] as u32) << 2)
+                        | ((b[1] as u32 & 0xc0) >> 6));
+                Some((w, h))
+            }
+            _ => None,
+        };
+    }
+    if d.starts_with(&[0xff, 0xd8]) {
+        // Walk the JPEG segments to the first start-of-frame marker.
+        let mut i = 2;
+        while i + 9 < d.len() {
+            if d[i] != 0xff {
+                i += 1;
+                continue;
+            }
+            let m = d[i + 1];
+            if (0xc0..=0xcf).contains(&m) && ![0xc4, 0xc8, 0xcc].contains(&m) {
+                return Some((be16(i + 7)?, be16(i + 5)?));
+            }
+            i += 2 + be16(i + 2)? as usize;
+        }
+    }
+    None
 }
 
 impl ReadResponse {
@@ -90,6 +174,7 @@ impl ReadResponse {
             next_line: None,
             estimated_tokens: 0,
             lines: Vec::new(),
+            image: None,
             error: Some(ErrorInfo { message, pos: None }),
             elapsed_ms,
         }
@@ -467,6 +552,31 @@ pub fn read_file_range(opts: &ReadOptions) -> ReadResponse {
         );
     }
 
+    // An image is an image unless its text is asked for (`--ocr`).
+    if let (false, Some(mime)) = (opts.ocr, image_mime(&path)) {
+        let bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        let head = std::fs::File::open(&path)
+            .and_then(|f| {
+                let mut buf = Vec::new();
+                std::io::Read::read_to_end(&mut std::io::Read::take(f, 256 * 1024), &mut buf)?;
+                Ok(buf)
+            })
+            .unwrap_or_default();
+        let (width, height) = image_size(&head).map_or((None, None), |(w, h)| (Some(w), Some(h)));
+        let mut r = ReadResponse::failure(Status::Complete, path_str, String::new(), ms(t0));
+        r.error = None;
+        r.section = Some(match (width, height) {
+            (Some(w), Some(h)) => format!("{mime} {w}x{h}"),
+            _ => mime.to_string(),
+        });
+        r.image = Some(ImageInfo {
+            mime,
+            width,
+            height,
+            bytes,
+        });
+        return r;
+    }
     let data = match content::load_searchable(&path, opts.ocr) {
         Ok(Some(c)) => c,
         Ok(None) => {
@@ -620,6 +730,7 @@ pub fn read_file_range(opts: &ReadOptions) -> ReadResponse {
         next_line,
         estimated_tokens: used_tokens,
         lines: out_lines,
+        image: None,
         error: None,
         elapsed_ms: ms(t0),
     }
