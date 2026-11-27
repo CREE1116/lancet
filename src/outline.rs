@@ -301,6 +301,14 @@ fn extract_single_file(path: &Path, rel: String, ocr: bool) -> Option<FileOutlin
 }
 
 pub fn build_outline(opts: &OutlineOptions) -> OutlineResponse {
+    let mut r = build_outline_raw(opts);
+    for f in &mut r.files {
+        f.path = crate::walk::display_path(&opts.path, &f.path);
+    }
+    r
+}
+
+fn build_outline_raw(opts: &OutlineOptions) -> OutlineResponse {
     let t0 = Instant::now();
     if !opts.path.exists() {
         return OutlineResponse::failure(

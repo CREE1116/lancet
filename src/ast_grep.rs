@@ -1246,6 +1246,18 @@ mod imp {
     }
 
     pub fn search_ast(opts: &AstOptions) -> AstResponse {
+        let mut r = search_ast_raw(opts);
+        for m in &mut r.matches {
+            m.path = crate::walk::display_path(&opts.root, &m.path);
+        }
+        for d in &mut r.diffs {
+            d.diff = crate::walk::display_diff(&opts.root, &d.path, &d.diff);
+            d.path = crate::walk::display_path(&opts.root, &d.path);
+        }
+        r
+    }
+
+    fn search_ast_raw(opts: &AstOptions) -> AstResponse {
         let t0 = Instant::now();
         let lang = match resolve_lang(opts) {
             Ok(l) => l,

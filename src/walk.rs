@@ -178,6 +178,41 @@ impl FileFilter {
     }
 }
 
+/// How a path relative to the search root is shown to the caller: joined onto the
+/// root they gave (as `rg` and `fd` do), so every command's output can be passed
+/// straight to `read`, `edit` or `rename` from the same directory.
+pub fn display_path(root: &Path, rel: &str) -> String {
+    let given = root.to_string_lossy().replace('\\', "/");
+    if root.is_file() {
+        return given;
+    }
+    let base = given.trim_end_matches('/');
+    match (base, rel) {
+        ("" | ".", _) if !given.starts_with('/') => rel.to_string(),
+        (_, "") => given,
+        ("", _) => format!("/{rel}"),
+        _ => format!("{base}/{rel}"),
+    }
+}
+
+/// Re-points the `--- a/…` / `+++ b/…` headers of a unified diff made from a
+/// root-relative path at the caller's path (see [`display_path`]).
+pub fn display_diff(root: &Path, rel: &str, diff: &str) -> String {
+    let shown = display_path(root, rel);
+    if shown == rel {
+        return diff.to_string();
+    }
+    let mut out = String::with_capacity(diff.len() + 2 * shown.len());
+    for (i, line) in diff.split_inclusive('\n').enumerate() {
+        match (i, line.strip_prefix("--- a/"), line.strip_prefix("+++ b/")) {
+            (0, Some(_), _) => out.push_str(&format!("--- a/{shown}\n")),
+            (1, _, Some(_)) => out.push_str(&format!("+++ b/{shown}\n")),
+            _ => out.push_str(line),
+        }
+    }
+    out
+}
+
 pub fn rel_path(root: &Path, path: &Path) -> String {
     match path.strip_prefix(root) {
         Ok(r) if !r.as_os_str().is_empty() => r.to_string_lossy().replace('\\', "/"),

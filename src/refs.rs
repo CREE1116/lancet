@@ -227,6 +227,14 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
 }
 
 pub fn find_refs(opts: &RefsOptions) -> RefsResponse {
+    let mut r = find_refs_raw(opts);
+    for h in r.definitions.iter_mut().chain(r.references.iter_mut()) {
+        h.path = crate::walk::display_path(&opts.root, &h.path);
+    }
+    r
+}
+
+fn find_refs_raw(opts: &RefsOptions) -> RefsResponse {
     let t0 = Instant::now();
     let sym = opts.symbol.trim();
     if sym.is_empty() {

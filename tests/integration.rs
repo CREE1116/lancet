@@ -13,6 +13,18 @@ use std::path::Path;
 use std::time::{Duration, UNIX_EPOCH};
 use tempfile::TempDir;
 
+/// lancet shows paths joined onto the root it was given (like `rg`/`fd`); tests
+/// compare the part below the temporary directory.
+fn rel(p: &str) -> String {
+    match p.find("/.tmp") {
+        Some(i) => p[i + 1..]
+            .split_once('/')
+            .map(|x| x.1.to_string())
+            .unwrap_or_default(),
+        None => p.to_string(),
+    }
+}
+
 fn opts(root: &Path, mode: IndexMode) -> SearchOptions {
     let mut o = SearchOptions::new(root);
     o.index = mode;
@@ -222,7 +234,7 @@ fn ast_functions_and_symbols_across_languages() {
     );
     assert_eq!(r_py.status, Status::Complete);
     assert_eq!(r_py.matched, 1);
-    assert_eq!(r_py.results[0].path, "src/train.py");
+    assert_eq!(rel(&r_py.results[0].path), "src/train.py");
     assert_eq!(r_py.results[0].symbol.as_deref(), Some("train_step"));
     assert!(r_py.results[0]
         .text
@@ -270,11 +282,11 @@ fn semantics_matchers_units_filters_and_pipes() {
     let r = search("\"kelvin\" in line", &opts(root, IndexMode::Off));
     assert_eq!(r.status, Status::Complete);
     assert_eq!(r.matched, 1);
-    assert_eq!(r.results[0].path, "src/sub/engine.rs");
+    assert_eq!(rel(&r.results[0].path), "src/sub/engine.rs");
 
     let r_kr = search("\"학습률\"", &opts(root, IndexMode::Off));
     assert_eq!(r_kr.matched, 1);
-    assert_eq!(r_kr.results[0].path, "docs/notes.md");
+    assert_eq!(rel(&r_kr.results[0].path), "docs/notes.md");
 
     let r_short = search("\"ab\" in ext:rs", &opts(root, IndexMode::Off));
     assert_eq!(r_short.matched, 1);
@@ -347,7 +359,7 @@ fn semantics_matchers_units_filters_and_pipes() {
 
     let r_latin = search("\"optimizer_nonutf8\"", &opts(root, IndexMode::Off));
     assert_eq!(r_latin.matched, 1);
-    assert_eq!(r_latin.results[0].path, "docs/latin.txt");
+    assert_eq!(rel(&r_latin.results[0].path), "docs/latin.txt");
 
     let r_not_file = search(
         "NOT \"absent_xyz_999\" in path:\"docs/empty.txt\"",
@@ -755,7 +767,11 @@ fn adapters_extract_and_index_oracle_equivalence() {
         let auto = search(q, &opts(r, IndexMode::Auto));
         let trust = search(q, &opts(r, IndexMode::Trust));
         assert_eq!(scan.status, Status::Complete, "expected match for `{q}`");
-        assert_eq!(scan.results[0].path, expected_path, "wrong path for `{q}`");
+        assert_eq!(
+            rel(&scan.results[0].path),
+            expected_path,
+            "wrong path for `{q}`"
+        );
         assert_eq_responses(&scan, &auto, &format!("adapter scan vs auto ({q})"));
         assert_eq_responses(&scan, &trust, &format!("adapter scan vs trust ({q})"));
     }
@@ -804,7 +820,7 @@ fn line_fast_path_matches_full_path_and_context() {
             let fast_lines_a: Vec<_> = fast
                 .results
                 .iter()
-                .filter(|it| it.path == "a.txt")
+                .filter(|it| rel(&it.path) == "a.txt")
                 .flat_map(|it| it.lines.clone())
                 .collect();
             let mut dedup_fast = fast_lines_a.clone();
@@ -941,17 +957,23 @@ fn fd_filters_tree_and_trust_index() {
     // 1. Default respects .gitignore & excludes hidden .git
     let base = find_files(&FdOptions::new(root));
     assert_eq!(base.status, Status::Complete);
-    assert!(base.entries.iter().all(|e| !e.path.contains("ignored_dir")));
-    assert!(base.entries.iter().all(|e| e.path != "skip.tmp"));
-    assert!(base.entries.iter().all(|e| !e.path.starts_with(".git")));
     assert!(base
         .entries
         .iter()
-        .any(|e| e.path == "src" && e.kind == "dir"));
+        .all(|e| !rel(&e.path).contains("ignored_dir")));
+    assert!(base.entries.iter().all(|e| rel(&e.path) != "skip.tmp"));
     assert!(base
         .entries
         .iter()
-        .any(|e| e.path == "src/sub/engine.rs" && e.kind == "file"));
+        .all(|e| !rel(&e.path).starts_with(".git")));
+    assert!(base
+        .entries
+        .iter()
+        .any(|e| rel(&e.path) == "src" && e.kind == "dir"));
+    assert!(base
+        .entries
+        .iter()
+        .any(|e| rel(&e.path) == "src/sub/engine.rs" && e.kind == "file"));
 
     // 2. Glob & Regex & extension & FileType filters
     let mut glob_rs = FdOptions::new(root);
@@ -962,7 +984,7 @@ fn fd_filters_tree_and_trust_index() {
         r_glob
             .entries
             .iter()
-            .map(|e| e.path.as_str())
+            .map(|e| rel(&e.path))
             .collect::<Vec<_>>(),
         vec!["src/sub/engine.rs"]
     );
@@ -974,7 +996,7 @@ fn fd_filters_tree_and_trust_index() {
     assert_eq!(
         r_rx.entries
             .iter()
-            .map(|e| e.path.as_str())
+            .map(|e| rel(&e.path))
             .collect::<Vec<_>>(),
         vec!["src/train.py", "src/worker.go"]
     );
@@ -982,16 +1004,16 @@ fn fd_filters_tree_and_trust_index() {
     let mut tc_doc = FdOptions::new(root);
     tc_doc.file_types = vec![FileType::Document];
     let r_doc = find_files(&tc_doc);
-    let doc_paths: Vec<&str> = r_doc.entries.iter().map(|e| e.path.as_str()).collect();
-    assert!(doc_paths.contains(&"docs/notes.md"));
-    assert!(doc_paths.contains(&"docs/big.txt"));
-    assert!(!doc_paths.contains(&"src/train.py"));
+    let doc_paths: Vec<String> = r_doc.entries.iter().map(|e| rel(&e.path)).collect();
+    assert!(doc_paths.iter().any(|p| p == "docs/notes.md"));
+    assert!(doc_paths.iter().any(|p| p == "docs/big.txt"));
+    assert!(!doc_paths.iter().any(|p| p == "src/train.py"));
 
     // 3. Max-depth & size & changed-within
     let mut depth1 = FdOptions::new(root);
     depth1.max_depth = Some(1);
     let r_d1 = find_files(&depth1);
-    assert!(r_d1.entries.iter().all(|e| !e.path.contains('/')));
+    assert!(r_d1.entries.iter().all(|e| !rel(&e.path).contains('/')));
 
     let mut big_only = FdOptions::new(root);
     big_only.min_size = Some(parse_size("5k").unwrap());
@@ -1000,7 +1022,7 @@ fn fd_filters_tree_and_trust_index() {
         r_big
             .entries
             .iter()
-            .map(|e| e.path.as_str())
+            .map(|e| rel(&e.path))
             .collect::<Vec<_>>(),
         vec!["docs/big.txt"]
     );
@@ -1009,8 +1031,11 @@ fn fd_filters_tree_and_trust_index() {
     recent.include_files = true;
     recent.changed_within_ns = Some(parse_duration("7d").unwrap());
     let r_rec = find_files(&recent);
-    assert!(r_rec.entries.iter().any(|e| e.path == "src/train.py"));
-    assert!(!r_rec.entries.iter().any(|e| e.path == "docs/empty.txt"));
+    assert!(r_rec.entries.iter().any(|e| rel(&e.path) == "src/train.py"));
+    assert!(!r_rec
+        .entries
+        .iter()
+        .any(|e| rel(&e.path) == "docs/empty.txt"));
 
     // 4. Tree rendering & Trust-index parity (including ancestor discovery on subdir)
     let tree = render_tree(root, &base.entries);
@@ -1189,7 +1214,8 @@ fn demo(a: i32, b: i32, opt: Option<i32>) -> i32 {
     let res_sub = search_ast(&o_sub);
     assert_eq!(res_sub.mode, "index_trusted");
     assert_eq!(res_sub.matches.len(), 1);
-    assert_eq!(res_sub.matches[0].path, "main.rs");
+    // Paths are shown under the root that was searched (`src`).
+    assert_eq!(rel(&res_sub.matches[0].path), "src/main.rs");
 }
 
 #[cfg(feature = "ast")]
@@ -1218,7 +1244,10 @@ fn ast_rewrite_dry_run_and_apply() {
     assert_eq!(r_dry.diffs[0].replacements, 2);
     assert_eq!(r_dry.diffs[0].skipped_overlaps, 1);
     assert_eq!(r_dry.diffs[0].rev, lancet::edit::rev(orig.as_bytes()));
-    assert!(r_dry.diffs[0].diff.contains("--- a/sample.rs"));
+    assert!(r_dry.diffs[0]
+        .diff
+        .contains(&format!("--- a/{}", r_dry.diffs[0].path)));
+    assert!(r_dry.diffs[0].path.ends_with("/sample.rs"));
     assert!(r_dry.diffs[0].diff.contains("-    let v = a.unwrap();"));
     assert!(r_dry.diffs[0].diff.contains("+    let v = a?;"));
     assert_eq!(fs::read_to_string(&rs_path).unwrap(), orig);
@@ -1376,10 +1405,10 @@ pub fn invoke_engine() -> f64 {
         let refs_scan = find_refs(&ro_scan);
         assert_eq!(refs_scan.status, Status::Complete);
         assert_eq!(refs_scan.definitions.len(), 1);
-        assert_eq!(refs_scan.definitions[0].path, "src/sub/engine.rs");
+        assert_eq!(rel(&refs_scan.definitions[0].path), "src/sub/engine.rs");
         assert_eq!(refs_scan.definitions[0].kind, "struct");
         assert_eq!(refs_scan.references.len(), 1);
-        assert_eq!(refs_scan.references[0].path, "src/caller.rs");
+        assert_eq!(rel(&refs_scan.references[0].path), "src/caller.rs");
         assert_eq!(
             refs_scan.references[0].enclosing.as_deref(),
             Some("invoke_engine")
@@ -2546,7 +2575,9 @@ fn corrupt_documents_are_skipped_safely() {
         let r = search(&format!("\"{token}\""), &opts(root, IndexMode::Off));
         assert_eq!(r.status, Status::Complete, "{ext}");
         assert!(
-            r.results.iter().any(|h| h.path == format!("ok.{ext}")),
+            r.results
+                .iter()
+                .any(|h| rel(&h.path) == format!("ok.{ext}")),
             "intact ok.{ext} must still be found"
         );
     }

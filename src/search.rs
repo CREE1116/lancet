@@ -271,6 +271,20 @@ fn expr_has_symbol(e: &Expr) -> bool {
 fn execute_one(
     q: &Query,
     opts: &SearchOptions,
+    ix: Result<Option<&Index>, &str>,
+    walk_cache: Option<&[FileEntry]>,
+    t0: Instant,
+) -> Response {
+    let mut r = execute_one_raw(q, opts, ix, walk_cache, t0);
+    for it in &mut r.results {
+        it.path = crate::walk::display_path(&opts.root, &it.path);
+    }
+    r
+}
+
+fn execute_one_raw(
+    q: &Query,
+    opts: &SearchOptions,
     ix_res: Result<Option<&Index>, &str>,
     walk_cache: Option<&[FileEntry]>,
     t0: Instant,

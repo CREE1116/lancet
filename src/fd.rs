@@ -326,6 +326,17 @@ impl CompiledFdFilter {
 }
 
 pub fn find_files(opts: &FdOptions) -> FdResponse {
+    let mut r = find_files_raw(opts);
+    if !opts.tree {
+        // The tree view draws root-relative paths under the root's own label.
+        for e in &mut r.entries {
+            e.path = crate::walk::display_path(&opts.root, &e.path);
+        }
+    }
+    r
+}
+
+fn find_files_raw(opts: &FdOptions) -> FdResponse {
     let t0 = Instant::now();
     let pat = match PatMatcher::compile(
         opts.pattern.as_deref(),
