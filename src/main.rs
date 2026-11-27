@@ -1032,8 +1032,9 @@ fn cli_invalid(json: bool, msg: &str) -> ExitCode {
     group(ArgGroup::new("op").args(["with", "with_file", "delete", "insert_before", "insert_after"]).conflicts_with("edits"))
 )]
 struct EditCli {
-    /// File to edit (plain-text files; documents and archives are read-only)
-    path: PathBuf,
+    /// File to edit (plain-text files; documents and archives are read-only).
+    /// Optional with --edits when every hunk names its own "path"
+    path: Option<PathBuf>,
     /// 1-based line range, as in `lancet read` (`10:50`, `42`, `100:`)
     #[arg(short = 'l', long)]
     lines: Option<String>,
@@ -1063,7 +1064,8 @@ struct EditCli {
     /// Insert TEXT after the addressed lines
     #[arg(long, allow_hyphen_values = true)]
     insert_after: Option<String>,
-    /// Several hunks in one atomic call, from a JSON file (`-` reads stdin):
+    /// Several hunks in one atomic call, from a JSON file (`-` reads stdin). Hunks may
+    /// name their file (`"path"`, with that file's `"rev"`) to change several files at once:
     /// `[{"lines": "10:12", "with": "…"}, {"symbol": "f", "delete": true}]`.
     /// All hunks use the original file's line numbers.
     #[arg(long)]
@@ -1609,19 +1611,33 @@ fn read_text_arg(f: &Path) -> io::Result<String> {
 
 fn run_edit(cli: EditCli) -> ExitCode {
     if let Some(f) = &cli.edits {
-        let hunks = match read_text_arg(f)
+        let files = match read_text_arg(f)
             .map_err(|e| format!("cannot read {}: {e}", f.display()))
-            .and_then(|j| lancet::edit_cmd::parse_hunks(&j))
-        {
-            Ok(h) => h,
+            .and_then(|j| {
+                lancet::edit_cmd::parse_file_hunks(&j, cli.path.as_deref(), cli.rev.as_deref())
+            }) {
+            Ok(fs) => fs,
             Err(msg) => return cli_invalid(cli.json, &msg),
         };
-        let mut opts = EditOptions::multi(cli.path.clone(), hunks);
-        opts.rev = cli.rev.clone();
-        opts.apply = cli.apply;
-        opts.allow_syntax_errors = cli.allow_syntax_errors;
-        return report_edit(&edit_file(&opts), cli.json);
+        if let ([one], Some(p)) = (files.as_slice(), &cli.path) {
+            if one.path == *p {
+                // Every hunk is for PATH: the single-file edit, same output as before.
+                let mut opts = EditOptions::multi(p.clone(), one.hunks.clone());
+                opts.rev = one.rev.clone();
+                opts.apply = cli.apply;
+                opts.allow_syntax_errors = cli.allow_syntax_errors;
+                return report_edit(&edit_file(&opts), cli.json);
+            }
+        }
+        let resp = lancet::edit_cmd::edit_files(&files, cli.apply, cli.allow_syntax_errors);
+        return report_multi_edit(&resp, cli.json);
     }
+    let Some(path) = cli.path.clone() else {
+        return cli_invalid(
+            cli.json,
+            "give the file to edit (or --edits with a \"path\" in every hunk)",
+        );
+    };
     let target = match (&cli.lines, cli.symbol, cli.find) {
         (Some(l), _, _) => match parse_line_spec(l) {
             Ok((a, b)) => Target::Lines(a, b),
@@ -1651,11 +1667,59 @@ fn run_edit(cli: EditCli) -> ExitCode {
         );
     };
 
-    let mut opts = EditOptions::new(cli.path, target, op);
+    let mut opts = EditOptions::new(path, target, op);
     opts.rev = cli.rev;
     opts.apply = cli.apply;
     opts.allow_syntax_errors = cli.allow_syntax_errors;
     report_edit(&edit_file(&opts), cli.json)
+}
+
+fn report_multi_edit(resp: &lancet::edit_cmd::MultiEditResponse, json: bool) -> ExitCode {
+    let stdout = io::stdout();
+    let mut out = io::BufWriter::new(stdout.lock());
+    if json {
+        let _ = serde_json::to_writer(&mut out, resp)
+            .map_err(io::Error::other)
+            .and_then(|_| writeln!(out));
+    } else {
+        for f in &resp.files {
+            let _ = write!(out, "{}", f.diff);
+        }
+        let _ = out.flush();
+        if let Some(err) = &resp.error {
+            eprintln!("error: {}", err.message);
+        } else if resp.status == Status::Empty {
+            eprintln!("[lancet edit] no change");
+        } else {
+            eprintln!(
+                "[lancet edit] {}: {} file(s){}",
+                resp.mode,
+                resp.files.len(),
+                if resp.applied {
+                    " (pass each file's new rev to its next edit)"
+                } else {
+                    " — re-run with --apply; put each file's rev in its hunks' \"rev\" field"
+                }
+            );
+            for f in &resp.files {
+                let (r, a) = (
+                    f.rev.as_deref().unwrap_or("-"),
+                    f.rev_after.as_deref().unwrap_or("-"),
+                );
+                if resp.applied {
+                    eprintln!("  {}: rev {r} -> {a}", f.path);
+                } else {
+                    eprintln!("  {}: at rev {r} (afterwards {a})", f.path);
+                }
+            }
+        }
+    }
+    let _ = out.flush();
+    match resp.status {
+        Status::Complete => ExitCode::SUCCESS,
+        Status::Empty => ExitCode::from(1),
+        _ => ExitCode::from(2),
+    }
 }
 
 fn report_edit(resp: &lancet::edit_cmd::EditResponse, json: bool) -> ExitCode {

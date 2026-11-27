@@ -40,6 +40,7 @@ Add `--json` to any command when you need to parse the result.
 - `edit` targets one of `--lines 10:20` (as `read` numbers them), `--symbol NAME` (the span `read --symbol` shows, **including doc comments and attributes above it** — keep them in the replacement or they are deleted), or `--find 'exact text'` (must occur once; the error lists the lines if it doesn't — add context, or pass `--all`).
 - The operation is one of `--with TEXT`, `--with-file FILE` (`-` = stdin), `--delete`, `--insert-before TEXT`, `--insert-after TEXT`.
 - **Several changes to one file = one call:** `lancet edit FILE --edits - --rev REV --apply` with a JSON array on stdin, e.g. `[{"lines": "10:12", "with": "…"}, {"find": "old(", "with": "new(", "all": true}]`. All hunks use the line numbers you read; they never shift each other.
+- **Changes across several files = one call too:** give each hunk a `"path"` and that file's `"rev"`, and leave out the PATH argument: `lancet edit --edits - --apply` with `[{"path": "src/a.rs", "rev": "…", "find": "old(", "with": "new("}, {"path": "src/b.rs", "rev": "…", "find": "old(", "with": "new(", "all": true}]`. Every file is checked first; if any rev is stale or any hunk fails, no file is written. Prefer this over hand-writing a diff for `patch`.
 - Edits that add syntax errors are refused. Fix the replacement; don't reach for `--allow-syntax-errors`.
 - PDFs, Office files, HWP and archive entries are read-only.
 

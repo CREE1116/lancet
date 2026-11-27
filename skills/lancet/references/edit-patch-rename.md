@@ -46,6 +46,21 @@ Pick **exactly one** operation:
 
 Rules: each element requires **exactly one** of `lines`, `symbol`, or `find` (`all` is valid only with `find`) and **exactly one** of `with`, `delete`, `insert_before`, or `insert_after`.
 
+### Several Files in One Call
+
+Hunks may carry `"path"` (and that file's `"rev"`); then PATH is optional, and hunks without `"path"` go to PATH:
+
+```json
+[
+  {"path": "src/a.rs", "rev": "7b476d63ee94a701", "find": "old_call(", "with": "new_call("},
+  {"path": "src/b.rs", "rev": "895c30e2166206c7", "find": "old_call(", "with": "new_call(", "all": true}
+]
+```
+
+- All files are planned and checked (rev, targets, overlaps, syntax) before anything is written; one failure means no file changes.
+- Writes are locked compare-and-swaps per file; if one loses a race, files already written are put back (best effort, like `patch`).
+- `--json` returns `{status, mode, applied, files: [per-file edit result], error}`; a single-file call keeps the single-file shape.
+
 ### Safety & Concurrency Guarantees
 
 - **Locked CAS on `--rev`:** takes an exclusive OS file lock, checks `inode` + `rev`, and refuses (`conflict`, exit `2`) with 0 bytes written if anything changed. A preview prints `file is at rev X: re-run with --rev X --apply`; after applying, `rev X -> Y` — pass `Y` to the next edit (JSON: `rev_after`).

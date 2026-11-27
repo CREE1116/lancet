@@ -2977,3 +2977,63 @@ fn cli_missing_paths_are_errors_and_fd_read_take_several_targets() {
     let (code, _, _) = run(&["read", "a/x.rs:1", "b/missing.rs"]);
     assert_eq!(code, 2);
 }
+
+#[test]
+fn multi_file_edits_are_all_or_nothing() {
+    use lancet::edit_cmd::{edit_files, parse_file_hunks, parse_hunks};
+    let dir = TempDir::new().unwrap();
+    let a = dir.path().join("a.rs");
+    let sub = dir.path().join("sub");
+    fs::create_dir_all(&sub).unwrap();
+    let b = sub.join("b.rs");
+    fs::write(&a, "fn a() { old(1); }\n").unwrap();
+    fs::write(&b, "fn b() { old(2); old(3); }\n").unwrap();
+    let rev = |p: &Path| lancet::edit::rev(&fs::read(p).unwrap());
+    // serde_json builds the JSON so Windows paths (backslashes) are escaped.
+    let json = |ra: &str, rb: &str| {
+        serde_json::json!([
+            {"path": a, "rev": ra, "find": "old(", "with": "new("},
+            {"path": b, "rev": rb, "find": "old(", "with": "new(", "all": true},
+        ])
+        .to_string()
+    };
+    // A single-file parser refuses hunks that name a file instead of misapplying them.
+    assert!(parse_hunks(&json("x", "y")).is_err());
+
+    // One stale rev: nothing is written anywhere.
+    let files = parse_file_hunks(&json(&rev(&a), "0000000000000000"), None, None).unwrap();
+    let r = edit_files(&files, true, false);
+    assert_eq!(r.status, Status::Conflict);
+    assert!(!r.applied);
+    assert_eq!(fs::read_to_string(&a).unwrap(), "fn a() { old(1); }\n");
+
+    // Fresh revs: both files change together.
+    let files = parse_file_hunks(&json(&rev(&a), &rev(&b)), None, None).unwrap();
+    let r = edit_files(&files, true, false);
+    assert!(r.applied, "{:?}", r.error);
+    assert_eq!(fs::read_to_string(&a).unwrap(), "fn a() { new(1); }\n");
+    assert_eq!(
+        fs::read_to_string(&b).unwrap(),
+        "fn b() { new(2); new(3); }\n"
+    );
+    assert_eq!(r.files[1].rev_after.as_deref(), Some(rev(&b).as_str()));
+
+    // A write that fails after the first file landed puts the first file back.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let spec = serde_json::json!([
+            {"path": a, "find": "new(1)", "with": "x(1)"},
+            {"path": b, "find": "new(2)", "with": "x(2)"},
+        ]);
+        let files = parse_file_hunks(&spec.to_string(), None, None).unwrap();
+        fs::set_permissions(&sub, fs::Permissions::from_mode(0o555)).unwrap();
+        let r = edit_files(&files, true, false);
+        fs::set_permissions(&sub, fs::Permissions::from_mode(0o755)).unwrap();
+        if !r.applied {
+            // (Running as root ignores the read-only directory; then both land.)
+            assert_eq!(fs::read_to_string(&a).unwrap(), "fn a() { new(1); }\n");
+            assert!(r.error.unwrap().message.contains("nothing applied"));
+        }
+    }
+}
