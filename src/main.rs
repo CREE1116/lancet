@@ -923,6 +923,16 @@ fn run_fd(cli: FdCli) -> ExitCode {
         PatternMode::Regex
     } else if cli.glob {
         PatternMode::Glob
+    } else if opts
+        .pattern
+        .as_deref()
+        .is_some_and(|p| p.contains(['*', '?', '[']))
+    {
+        // `*.md` as a substring matches nothing; nobody means that.
+        if !cli.json {
+            eprintln!("[lancet fd] pattern looks like a glob; matching it as one (-g)");
+        }
+        PatternMode::Glob
     } else {
         PatternMode::Substring
     };

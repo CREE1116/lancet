@@ -14,7 +14,7 @@ Check it is installed with `lancet --version`. Searches are always fresh; on lar
 | To… | Run |
 |---|---|
 | See the layout | `lancet fd --tree --dirs -d 2 .` (folders only) · `lancet fd --tree -d 2 src` |
-| Find files by name | `lancet fd config src` (substring) · `lancet fd -e proto` · `lancet fd -g '*_test.go'` (a glob needs `-g`) |
+| Find files by name | `lancet fd config src` (substring) · `lancet fd -e proto` · `lancet fd '*_test.go'` (glob) |
 | Grep (same flags and output as ripgrep) | `lancet rg -w spin_lock src` · `lancet rg -t py -C2 'def \w+_test'` |
 | Boolean / proximity / fuzzy / in-function search | `lancet '"OOM" AND "batch" NOT "CPU" in line' src` · `lancet 'near("retry", "timeout", 20) in function' src` |
 | Skeleton of a file or folder | `lancet outline src/server.rs` · `lancet outline docs/spec.pdf` |
