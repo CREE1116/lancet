@@ -96,32 +96,8 @@ Use \`lancet\` as your unified CLI replacement for \`rg\`, \`fd\`, \`ast-grep\`,
     startAgentBtn.addEventListener('click', () => copyAgent(startAgentBtn, lbl));
   }
 
-  /* GitHub Star count + click tracking */
-  $$('.star-btn').forEach(el => el.addEventListener('click', () => track('github_star_click')));
-  const fmtStars = n => (n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(n));
-  const applyStars = count => {
-    if (!count || count <= 0) return;
-    const text = fmtStars(count);
-    $$('[data-gh-stars]').forEach(el => { el.textContent = text; el.hidden = false; });
-  };
-  try {
-    const cached = sessionStorage.getItem('lancet_stars');
-    if (cached) {
-      const { n, ts } = JSON.parse(cached);
-      if (Date.now() - ts < 600000) applyStars(n);
-    }
-    if (!cached || Date.now() - JSON.parse(cached).ts >= 600000) {
-      fetch('https://api.github.com/repos/CREE1116/lancet')
-        .then(r => (r.ok ? r.json() : null))
-        .then(d => {
-          if (d && typeof d.stargazers_count === 'number') {
-            sessionStorage.setItem('lancet_stars', JSON.stringify({ n: d.stargazers_count, ts: Date.now() }));
-            applyStars(d.stargazers_count);
-          }
-        })
-        .catch(() => {});
-    }
-  } catch {}
+  /* GitHub click tracking */
+  $$('.gh, .github-button').forEach(el => el.addEventListener('click', () => track('github_star_click')));
 
   /* hero terminal: real output, recorded from the lancet repository */
   const session = [

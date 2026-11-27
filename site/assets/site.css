@@ -59,12 +59,9 @@ nav .wrap { display: flex; align-items: center; gap: 28px; height: 58px; }
 nav .links { display: flex; gap: 22px; margin-left: auto; font-size: 14px; color: var(--text-2); white-space: nowrap; }
 nav .links a { text-decoration: none; }
 nav .links a:hover { color: var(--text); }
-.nav-actions { display: inline-flex; align-items: center; gap: 8px; }
-.gh, .star-btn { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; text-decoration: none; white-space: nowrap; }
-.gh:hover, .star-btn:hover { border-color: var(--text-3); background: var(--bg-2); }
-.star-btn svg { color: var(--warn); flex: none; }
-.star-count { font: 600 12px/1 var(--mono); color: var(--text-2); background: var(--bg-3); border: 1px solid var(--line); border-radius: 999px; padding: 3px 7px; }
-.star-count[hidden] { display: none; }
+.nav-actions { display: inline-flex; align-items: center; gap: 10px; }
+.gh { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; text-decoration: none; white-space: nowrap; }
+.gh:hover { border-color: var(--text-3); background: var(--bg-2); }
 
 /* hero */
 .hero { padding: 72px 0 80px; border-top: 0; }
