@@ -85,6 +85,7 @@ git diff | lancet patch --apply                             # unified diff를 �
 | `lancet read` | 정확한 줄 범위, `--symbol`, PDF/PPTX `--page`, 엑셀 `--sheet --rows --cols`, `archive.zip!항목`, 이어읽기 커서가 있는 `--budget-tokens` |
 | `lancet edit` | `read`와 같은 좌표(`--lines`, `--symbol`, 유일해야 하는 정확한 텍스트 `--find`, 여러 구간은 `--edits`)로 줄 교체·삭제·삽입. `--rev` 기준 잠금 compare-and-swap이라 여러 에이전트가 동시에 고쳐도 서로 덮어쓰지 않음. 구문 오류가 늘어나면 거부, `--apply` 전에는 dry-run |
 | `lancet patch` | unified diff(`git diff`, `diff -u`, rename·모드 변경·빈 파일 포함, 바이너리 변경은 거부) 적용: 정확한 hunk 매칭(줄 번호가 밀렸으면 가장 가까운 고유 위치 탐색, 퍼지 추측 없음), 전체 파일 검증 및 동시 쓰기 충돌 시 롤백, 구문 오류 증가 거부, `--apply` 전에는 dry-run |
+| `lancet mcp` | 내장 Model Context Protocol(`stdio`) 서버 실행: 검색·`rg`·AST·`read`·`edit`·`patch`·인덱스 툴 제공(`--root`, `--read-only`, `--trust-index`) |
 | `lancet outline` | 코드 선언 골격, Markdown 목차, 워크북 스키마, 압축 파일 목록 |
 | `lancet refs` | 주석·문자열 리터럴을 건너뛰는 인덱스 가속 `[def]` / `[ref]` 추적 |
 | `lancet batch` | 여러 쿼리를 인덱스 한 번 열고 디렉터리 한 번 훑어 처리 |
@@ -238,7 +239,9 @@ lancet이 **이기지 못하는** 곳: 리터럴 없는 정규식(인덱스가 �
 
 ## AI 에이전트와 함께 쓰기
 
-[`docs/agent-instructions.md`](./docs/agent-instructions.md)를 `AGENTS.md`, `CLAUDE.md`, 시스템 규칙에 넣으세요. 에이전트가 여러 도구를 엮은 셸 명령 대신 구조화되고 토큰 예산이 걸린 `lancet` 호출을 쓰게 됩니다.
+- **MCP 서버 (`lancet mcp`):** Claude Code, Cursor, Claude Desktop, Codex, Antigravity에서 바로 연결하는 내장 stdio 서버 — **[docs/mcp.md](./docs/mcp.md)** 참고.
+- **공식 에이전트 스킬:** [`skills/lancet/SKILL.md`](./skills/lancet/SKILL.md)(과 [`skills/lancet/references/mcp-config.json`](./skills/lancet/references/mcp-config.json))를 `~/.claude/skills`, `~/.codex/skills`, `~/.gemini/config/skills` 또는 `.agents/skills`에 설치하세요.
+- **시스템 규칙 / `AGENTS.md`:** [`docs/agent-instructions.md`](./docs/agent-instructions.md)를 `AGENTS.md`나 `CLAUDE.md`에 넣어 셸 체인 대신 구조화되고 토큰 예산이 걸린 `lancet` 호출을 쓰게 할 수 있습니다.
 
 ## 설치 옵션
 

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "lancet": {
+      "command": "lancet",
+      "args": ["mcp", "--root", "."]
+    },
+    "lancet-readonly": {
+      "command": "lancet",
+      "args": ["mcp", "--root", ".", "--read-only"]
+    }
+  }
+}
