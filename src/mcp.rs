@@ -21,13 +21,13 @@ const DEFAULT_MAX_BYTES: usize = 131_072;
 const HARD_MAX_BYTES: usize = 4_194_304;
 
 /// Commands that change files (or the on-disk index).
-const WRITING_COMMANDS: &[&str] = &["edit", "patch", "rename", "index"];
+const WRITING_COMMANDS: &[&str] = &["edit", "write", "patch", "rename", "index"];
 /// Commands that accept `--trust-index` and `-j`.
 const SEARCHING_COMMANDS: &[&str] = &["rg", "fd", "ast", "refs", "batch"];
 /// First words that are subcommands rather than a query (`lancet '"x" in line'`).
 const SUBCOMMANDS: &[&str] = &[
-    "fd", "ast", "rg", "read", "edit", "patch", "rename", "outline", "refs", "index", "status",
-    "parse", "explain", "batch", "mcp",
+    "fd", "ast", "rg", "read", "edit", "write", "patch", "rename", "outline", "refs", "index",
+    "status", "parse", "explain", "batch", "mcp",
 ];
 
 const TOOL_DESCRIPTION: &str = "\
@@ -43,11 +43,14 @@ Search:   [\"rg\",\"-w\",\"spin_lock\",\"src\"]  [\"refs\",\"SearchOptions\",\"s
 Read:     [\"read\",\"src/x.rs\",\"--symbol\",\"handle\"]  [\"read\",\"src/x.rs:120-180\",\"src/y.rs:10-40\"]  \
 — the first line is `# PATH rev REV`; keep REV for edits. Large files: add \"--budget-tokens\",\"800\".\n\
 Change (preview unless \"--apply\"; pass the rev you read):\n\
-  [\"edit\",\"src/x.rs\",\"--find\",\"retries = 3\",\"--with\",\"retries = 5\",\"--rev\",\"REV\",\"--apply\"]\n\
+  [\"edit\",\"src/x.rs\",\"--old-string\",\"retries = 3\",\"--new-string\",\"retries = 5\",\"--apply\"] \
+(fails unless the text occurs once; --replace-all, --rev REV)\n\
+  [\"write\",\"src/new.rs\",\"--with-file\",\"-\",\"--apply\"] with `stdin` = the content (an existing file needs --rev)\n\
   [\"edit\",\"--edits\",\"-\",\"--apply\"] with `stdin` = a JSON array of hunks, each with \
-\"path\", \"rev\", one of \"lines\"/\"symbol\"/\"find\", and one of \"with\"/\"delete\"/\"insert_before\"/\"insert_after\": \
+\"path\" (+ \"rev\"), one of \"old_string\"/\"lines\"/\"symbol\", and one of \"new_string\"/\"delete\"/\"insert_before\"/\"insert_after\" \
+(or {\"path\", \"content\"} for a whole file): \
 several files change together or not at all.\n\
-  [\"patch\",\"-\",\"--apply\"] with `stdin` = a unified diff.  [\"rename\",\"src/x.rs:42\",\"count\",\"total\",\"--rev\",\"REV\",\"--apply\"] (local variables).\n\
+  [\"patch\",\"-\",\"--apply\"] with `stdin` = a unified diff or a Codex `*** Begin Patch`.  [\"rename\",\"src/x.rs:42\",\"count\",\"total\",\"--rev\",\"REV\",\"--apply\"] (local variables).\n\
 On a conflict (file changed since REV): read again, redo the change, retry with the new rev. \
 Add \"--json\" when you need structured output. `lancet --help` / `lancet <cmd> --help` list everything.";
 
@@ -167,7 +170,7 @@ fn handle_initialize(params: &Map<String, Value>, cfg: &McpConfig) -> Value {
     );
     if cfg.read_only {
         instructions.push_str(
-            " This server is read-only: edit, patch, rename, index and --apply are refused.",
+            " This server is read-only: edit, write, patch, rename, index and --apply are refused.",
         );
     }
     json!({
@@ -181,8 +184,9 @@ fn handle_initialize(params: &Map<String, Value>, cfg: &McpConfig) -> Value {
 fn tool_definition(cfg: &McpConfig) -> Value {
     let mut description = TOOL_DESCRIPTION.to_string();
     if cfg.read_only {
-        description
-            .push_str(" (Read-only server: edit, patch, rename, index and --apply are refused.)");
+        description.push_str(
+            " (Read-only server: edit, write, patch, rename, index and --apply are refused.)",
+        );
     }
     json!({
         "name": "lancet",
@@ -392,6 +396,7 @@ mod tests {
             &["edit", "a.rs", "--find", "x", "--with", "y"][..],
             &["patch", "-"],
             &["rename", "a.rs:1", "a", "b"],
+            &["write", "a.rs", "--content", "x"],
             &["index", "."],
             &["ast", "$X", "--rewrite", "$X", "--apply"],
         ] {
