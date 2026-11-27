@@ -2766,3 +2766,95 @@ fn rg_passthru_and_type_add_match_ripgrep() {
     );
     assert!(!out.contains("k.weird") && out.contains("x.txt:2"));
 }
+
+#[test]
+fn rename_local_bindings_exactly_or_refuses() {
+    use lancet::rename::{rename, RenameOptions};
+    let dir = TempDir::new().unwrap();
+    let run = |file: &str, body: &str, line: usize, col: Option<usize>, old: &str, new: &str| {
+        let p = dir.path().join(file);
+        fs::write(&p, body).unwrap();
+        let o = RenameOptions {
+            path: p.clone(),
+            line,
+            col,
+            old: old.into(),
+            new: new.into(),
+            rev: None,
+            apply: true,
+        };
+        let r = rename(&o);
+        (r, fs::read_to_string(&p).unwrap())
+    };
+
+    // Rust: shadowing picks the right binding; struct shorthand is expanded.
+    let src = "fn f(c: u32) -> u32 {\n    let t = c;\n    let t = t * 2;\n    let p = P { t };\n    t + c\n}\n";
+    let (r, out) = run("a.rs", src, 3, Some(9), "t", "acc");
+    assert!(r.applied, "{:?}", r.error);
+    assert_eq!(out, "fn f(c: u32) -> u32 {\n    let t = c;\n    let acc = t * 2;\n    let p = P { t: acc };\n    acc + c\n}\n");
+    // Capture: `c` -> `t` would make `t + c` mean something else.
+    let (r, out) = run("a.rs", src, 1, None, "c", "t");
+    assert_eq!(r.status, Status::Conflict);
+    assert_eq!(out, src);
+    // Macros are opaque; module-level items need a compiler.
+    let (r, _) = run(
+        "m.rs",
+        "fn h() { let x = 1; println!(\"{x}\"); }\n",
+        1,
+        None,
+        "x",
+        "y",
+    );
+    assert_eq!(r.status, Status::Unsupported);
+    let (r, _) = run(
+        "s.rs",
+        "fn lim() -> u32 { 1 }\nfn k() -> u32 { lim() }\n",
+        1,
+        None,
+        "lim",
+        "limit",
+    );
+    assert_eq!(r.status, Status::Unsupported);
+
+    // Python: one local across a for-loop target; the comprehension's own `x` is untouched.
+    let src = "def f(xs):\n    x = 0\n    for x in xs:\n        pass\n    ys = [x for x in xs]\n    return x, g(x=1), o.x\n";
+    let (r, out) = run("a.py", src, 2, None, "x", "acc");
+    assert!(r.applied, "{:?}", r.error);
+    assert_eq!(out, "def f(xs):\n    acc = 0\n    for acc in xs:\n        pass\n    ys = [x for x in xs]\n    return acc, g(x=1), o.x\n");
+    // Parameters can be passed by keyword from elsewhere.
+    let (r, _) = run("a.py", src, 1, None, "xs", "items");
+    assert_eq!(r.status, Status::Unsupported);
+
+    // TypeScript: block scoping and object shorthand.
+    let src =
+        "function f(a: number) {\n  let x = a;\n  { const x = 2; use(x); }\n  return { x };\n}\n";
+    let (r, out) = run("a.ts", src, 2, None, "x", "v");
+    assert!(r.applied, "{:?}", r.error);
+    assert_eq!(out, "function f(a: number) {\n  let v = a;\n  { const x = 2; use(x); }\n  return { x: v };\n}\n");
+
+    // Go: `x, err :=` re-assigns an existing err; xs[i](…) parses like a generic but is an index.
+    let src = "package p\n\nfunc f(fs []func()) {\n\ta, err := g()\n\tb, err := g()\n\tfor i := range fs {\n\t\tgo fs[i]()\n\t}\n\t_, _, _ = a, b, err\n}\n";
+    let (r, out) = run("a.go", src, 4, None, "err", "e");
+    assert!(r.applied, "{:?}", r.error);
+    assert!(
+        out.contains("a, e := g()\n\tb, e := g()") && out.contains("a, b, e\n"),
+        "{out}"
+    );
+    let (r, out) = run("a.go", src, 6, None, "i", "j");
+    assert!(r.applied, "{:?}", r.error);
+    assert!(out.contains("for j := range fs {\n\t\tgo fs[j]()"), "{out}");
+
+    // A stale rev writes nothing.
+    let p = dir.path().join("a.rs");
+    fs::write(&p, "fn f() { let a = 1; let _ = a; }\n").unwrap();
+    let o = RenameOptions {
+        path: p.clone(),
+        line: 1,
+        col: None,
+        old: "a".into(),
+        new: "b".into(),
+        rev: Some("0000000000000000".into()),
+        apply: true,
+    };
+    assert_eq!(rename(&o).status, Status::Conflict);
+}
