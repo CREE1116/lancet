@@ -97,7 +97,7 @@ Use \`lancet\` as your unified CLI replacement for \`rg\`, \`fd\`, \`ast-grep\`,
   }
 
   /* GitHub Star count + click tracking */
-  $$('.gh, .btn-star').forEach(el => el.addEventListener('click', () => track('github_star_click')));
+  $$('.star-btn').forEach(el => el.addEventListener('click', () => track('github_star_click')));
   const fmtStars = n => (n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(n));
   const applyStars = count => {
     if (!count || count <= 0) return;
