@@ -5,3 +5,11 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# Generated documentation site (built automatically by CI and scripts/build_docs.py)
+/site/docs/
+/site/ko/docs/
+/site/assets/diagrams/
+/site/assets/docs-search.json
+/site/assets/docs-search.js
+/site/sitemap.xml

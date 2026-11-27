@@ -2,7 +2,7 @@
 
 **Official Documentation Website:** [English Docs](https://cree1116.github.io/lancet/docs/) · [한국어 공식 문서](https://cree1116.github.io/lancet/ko/docs/)
 
-This directory contains the source Markdown guides and SVG diagrams for **Lancet**. For the full structured documentation with interactive search, side-by-side migration tables, recipes, JSON schemas, and troubleshooting, visit the live documentation site above.
+This directory contains the source Markdown guides and SVG diagrams for **Lancet**. The official documentation website is auto-built from [`docs/site/`](./site/nav.json) via `python3 scripts/build_docs.py` in CI. For the full structured documentation with interactive search, side-by-side migration tables, recipes, JSON schemas, and troubleshooting, visit the live documentation site above.
 
 ## Guides & References
 

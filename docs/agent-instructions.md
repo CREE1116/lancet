@@ -7,7 +7,7 @@ Use `lancet` as your unified, deterministic CLI replacement for `rg`, `fd`, `ast
 
 - Map an unfamiliar directory first instead of blind globbing:
   - `lancet fd --tree --dirs --max-depth 2 .` (folders-only project layout)
-  - `lancet fd --tree --max-depth 2 .`
+  - `lancet fd --tree --max-depth 2 src docs` (`fd` takes several paths)
   - `lancet fd -t f -e rs src --changed-within 7d`
   - `lancet fd --trust-index --type-class document --json`
 - Inspect a file's symbol/heading/sheet/archive skeleton before reading the whole file:
@@ -32,6 +32,7 @@ Use `lancet` as your unified, deterministic CLI replacement for `rg`, `fd`, `ast
 
 - Line numbers match `lancet` search output 1-to-1 across code AND binary documents:
   - `lancet read src/search.rs --symbol execute_one`
+  - `lancet read src/search.rs:100-160 src/main.rs:1-40` (several targets in one call)
   - `lancet read src/search.rs:100-160 --budget-tokens 800`
   - `lancet read docs/paper.pdf --page 2:3`
   - `lancet read finance/budget.xlsx --sheet 1 --rows 1:30 --cols A:E`

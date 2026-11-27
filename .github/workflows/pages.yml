@@ -1,10 +1,15 @@
 name: Site
 
-# Publishes site/ (the product page, English and /ko/) to GitHub Pages.
+# Builds docs from docs/site/ Markdown and publishes site/ to GitHub Pages.
 on:
   push:
     branches: [main]
-    paths: [site/**, .github/workflows/pages.yml]
+    paths:
+      - site/**
+      - docs/site/**
+      - docs/assets/**
+      - scripts/build_docs.py
+      - .github/workflows/pages.yml
   workflow_dispatch:
 
 permissions:
@@ -24,6 +29,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Build documentation site
+        run: python3 scripts/build_docs.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

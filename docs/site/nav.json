@@ -1,0 +1,39 @@
+{
+  "groups": {
+    "en": [
+      {"key": "start", "label": "Getting Started"},
+      {"key": "search", "label": "Search & Discovery"},
+      {"key": "edit", "label": "Editing & Agents"},
+      {"key": "internals", "label": "Architecture & Internals"},
+      {"key": "reference", "label": "Reference"}
+    ],
+    "ko": [
+      {"key": "start", "label": "시작하기"},
+      {"key": "search", "label": "탐색과 검색"},
+      {"key": "edit", "label": "편집과 에이전트"},
+      {"key": "internals", "label": "아키텍처와 내부 구조"},
+      {"key": "reference", "label": "레퍼런스"}
+    ]
+  },
+  "pages": [
+    {"group": "start", "path": "index.md"},
+    {"group": "start", "path": "migration.md"},
+    {"group": "start", "path": "filtering.md"},
+    {"group": "search", "path": "guides/explore.md"},
+    {"group": "search", "path": "guides/search.md"},
+    {"group": "search", "path": "guides/ast.md"},
+    {"group": "search", "path": "guides/read-and-documents.md"},
+    {"group": "edit", "path": "guides/edit.md"},
+    {"group": "edit", "path": "guides/patch.md"},
+    {"group": "edit", "path": "guides/rename.md"},
+    {"group": "edit", "path": "guides/agents-mcp.md"},
+    {"group": "internals", "path": "concepts/index-and-freshness.md"},
+    {"group": "internals", "path": "concepts/write-safety.md"},
+    {"group": "internals", "path": "concepts/benchmarks.md"},
+    {"group": "reference", "path": "reference/cli.md"},
+    {"group": "reference", "path": "reference/rg-parity.md"},
+    {"group": "reference", "path": "reference/lql-and-ast.md"},
+    {"group": "reference", "path": "reference/json-and-mcp.md"},
+    {"group": "reference", "path": "reference/troubleshooting.md"}
+  ]
+}

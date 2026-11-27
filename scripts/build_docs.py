@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Build Lancet's bilingual (EN + KO) official documentation site into site/."""
+"""Zero-dependency Markdown documentation compiler for Lancet (`docs/site/` -> `site/`)."""
 
 from __future__ import annotations
 
+import html
 import json
 import os
 import posixpath
@@ -13,6 +14,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+MD_ROOT = ROOT / "docs" / "site"
+NAV_FILE = MD_ROOT / "nav.json"
 SITE_DIR = ROOT / "site"
 ASSETS_DIR = SITE_DIR / "assets"
 DIAGRAMS_DST = ASSETS_DIR / "diagrams"
@@ -37,44 +40,12 @@ DIAGRAM_FILES = [
     "bench-workload-profile.ko.svg",
 ]
 
-GROUPS = {
-    "en": [
-        ("start", "Getting Started"),
-        ("search", "Search & Discovery"),
-        ("edit", "Editing & Agents"),
-        ("internals", "Architecture & Internals"),
-        ("reference", "Reference"),
-    ],
-    "ko": [
-        ("start", "시작하기"),
-        ("search", "탐색과 검색"),
-        ("edit", "편집과 에이전트"),
-        ("internals", "아키텍처와 내부 구조"),
-        ("reference", "레퍼런스"),
-    ],
+CALLOUT_KINDS = {
+    "TIP": "tip",
+    "NOTE": "note",
+    "WARNING": "warn",
+    "CAUTION": "danger",
 }
-
-NAV_ORDER = [
-    ("start", "index.html"),
-    ("start", "migration.html"),
-    ("start", "filtering.html"),
-    ("search", "guides/explore.html"),
-    ("search", "guides/search.html"),
-    ("search", "guides/ast.html"),
-    ("search", "guides/read-and-documents.html"),
-    ("edit", "guides/edit.html"),
-    ("edit", "guides/patch.html"),
-    ("edit", "guides/rename.html"),
-    ("edit", "guides/agents-mcp.html"),
-    ("internals", "concepts/index-and-freshness.html"),
-    ("internals", "concepts/write-safety.html"),
-    ("internals", "concepts/benchmarks.html"),
-    ("reference", "reference/cli.html"),
-    ("reference", "reference/rg-parity.html"),
-    ("reference", "reference/lql-and-ast.html"),
-    ("reference", "reference/json-and-mcp.html"),
-    ("reference", "reference/troubleshooting.html"),
-]
 
 
 class ArticleExtractor(HTMLParser):
@@ -91,7 +62,7 @@ class ArticleExtractor(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         amap = dict(attrs)
-        if "id" in amap and amap["id"]:
+        if amap.get("id"):
             self.ids.add(amap["id"])
         if tag == "a" and amap.get("class") == "heading-anchor":
             self._skip_depth += 1
@@ -140,6 +111,295 @@ class LinkValidator(HTMLParser):
                 self.refs.append((attr, val))
 
 
+def esc(s: str) -> str:
+    return html.escape(s, quote=True)
+
+
+def md_href_to_html(href: str) -> str:
+    if href.startswith(("http://", "https://", "mailto:", "#")):
+        return href
+    return re.sub(r"\.md(#|$)", r".html\1", href)
+
+
+def render_inline(text: str) -> str:
+    tokens: dict[str, str] = {}
+
+    def put_token(val: str) -> str:
+        key = f"\x00T{len(tokens)}\x00"
+        tokens[key] = val
+        return key
+
+    # 1. Protect inline code spans
+    s = re.sub(r"`([^`]+)`", lambda m: put_token(f"<code>{esc(m.group(1))}</code>"), text)
+
+    # 2. Protect safe inline spans used in reference tables
+    s = re.sub(
+        r"(<span class=['\"]tag-(?:yes|no|ext)['\"]>.*?</span>)",
+        lambda m: put_token(m.group(1)),
+        s,
+    )
+
+    # 3. Escape remaining HTML characters
+    s = html.escape(s, quote=False)
+
+    # 4. Markdown links `[label](href)`
+    def repl_link(m: re.Match[str]) -> str:
+        label = m.group(1)
+        href = md_href_to_html(html.unescape(m.group(2)).strip())
+        return put_token(f'<a href="{esc(href)}">{label}</a>')
+
+    s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", repl_link, s)
+
+    # 5. Bold and italic
+    s = re.sub(r"\*\*([^\n*]+?)\*\*", r"<strong>\1</strong>", s)
+    s = re.sub(r"(?<![\w*])\*([^\n*]+?)\*(?![\w*])", r"<em>\1</em>", s)
+
+    # Restore tokens cleanly (links may wrap code spans, so restore until fixed point)
+    for _ in range(3):
+        if "\x00T" not in s:
+            break
+        s = re.sub(r"\x00T\d+\x00", lambda m: tokens[m.group(0)], s)
+    return s
+
+
+def split_table_row(line: str) -> list[str]:
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|") and not stripped.endswith("\\|"):
+        stripped = stripped[:-1]
+    cells: list[str] = []
+    cur: list[str] = []
+    in_code = False
+    i = 0
+    while i < len(stripped):
+        ch = stripped[i]
+        if ch == "\\" and i + 1 < len(stripped) and stripped[i + 1] == "|":
+            cur.append("|")
+            i += 2
+            continue
+        if ch == "`":
+            in_code = not in_code
+            cur.append(ch)
+        elif ch == "|" and not in_code:
+            cells.append("".join(cur).strip())
+            cur = []
+        else:
+            cur.append(ch)
+        i += 1
+    cells.append("".join(cur).strip())
+    return cells
+
+
+def slugify(text: str) -> str:
+    slug = re.sub(r"[^a-z0-9가-힣]+", "-", text.lower()).strip("-")
+    return slug or "section"
+
+
+def parse_frontmatter(raw: str) -> tuple[dict[str, str], str]:
+    if not raw.startswith("---\n"):
+        return {}, raw
+    end = raw.find("\n---\n", 4)
+    if end == -1:
+        return {}, raw
+    meta_raw = raw[4:end]
+    body = raw[end + 5 :]
+    meta: dict[str, str] = {}
+    for line in meta_raw.splitlines():
+        if not line.strip() or line.strip().startswith("#"):
+            continue
+        k, _, v = line.partition(":")
+        val = v.strip()
+        if len(val) >= 2 and val[0] == '"' and val[-1] == '"':
+            val = json.loads(val)
+        meta[k.strip()] = val
+    return meta, body
+
+
+def render_blocks(lines: list[str], rel_diag: str, lang: str) -> str:
+    out: list[str] = []
+    i = 0
+    n = len(lines)
+    copy_lbl = "복사" if lang == "ko" else "Copy"
+
+    while i < n:
+        line = lines[i]
+        stripped = line.strip()
+        if not stripped:
+            i += 1
+            continue
+
+        # 1. Fenced code block: ```lang title="Label"
+        m_fence = re.match(r'^```([^\s`]*)(?:\s+title="([^"]+)")?\s*$', stripped)
+        if m_fence:
+            info = m_fence.group(1) or "text"
+            label = m_fence.group(2) or info
+            code_lines: list[str] = []
+            i += 1
+            while i < n and lines[i].strip() != "```":
+                code_lines.append(lines[i])
+                i += 1
+            i += 1
+            body = esc("\n".join(code_lines).strip("\n"))
+            out.append(
+                f'<div class="doc-code">'
+                f'<div class="doc-code-head"><span>{esc(label)}</span>'
+                f'<button class="copy-btn" type="button">{copy_lbl}</button></div>'
+                f"<pre><code>{body}</code></pre></div>"
+            )
+            continue
+
+        # 2. Cards block :::cards ... :::
+        if stripped == ":::cards":
+            i += 1
+            card_parts = ['<div class="doc-cards">']
+            while i < n and lines[i].strip() != ":::":
+                row = lines[i].strip()
+                if row.startswith("- "):
+                    parts = [p.strip() for p in row[2:].split("|")]
+                    if len(parts) == 4:
+                        eye, title, desc, href = parts
+                        href_html = md_href_to_html(href)
+                        card_parts.append(
+                            f'<a class="doc-card" href="{esc(href_html)}">'
+                            f"<small>{esc(eye)}</small>"
+                            f"<b>{esc(title)}</b>"
+                            f"<span>{render_inline(desc)}</span>"
+                            f"</a>"
+                        )
+                i += 1
+            i += 1
+            card_parts.append("</div>")
+            out.append("".join(card_parts))
+            continue
+
+        # 3. Headings `## Title {#id}` / `### Title {#id}`
+        m_head = re.match(r"^(#{2,3})\s+(.+?)(?:\s+\{#([A-Za-z0-9_-]+)\})?\s*$", stripped)
+        if m_head:
+            lvl = len(m_head.group(1))
+            title = m_head.group(2).strip()
+            hid = m_head.group(3) or slugify(title)
+            out.append(
+                f'<h{lvl} id="{esc(hid)}">{render_inline(title)}'
+                f'<a class="heading-anchor" href="#{esc(hid)}" aria-label="Link to section">#</a>'
+                f"</h{lvl}>"
+            )
+            i += 1
+            continue
+
+        # 4. Diagrams `![alt](diagram:file.svg "caption")`
+        m_diag = re.match(r'^!\[(.*?)\]\(diagram:([^)\s]+)\s+"(.*)"\)\s*$', stripped)
+        if m_diag:
+            alt, fname, caption = m_diag.groups()
+            out.append(
+                f'<figure class="diagram-fig">'
+                f'<img src="{esc(rel_diag)}/{esc(fname)}" alt="{esc(alt)}" loading="lazy">'
+                f"<figcaption>{render_inline(caption)}</figcaption>"
+                f"</figure>"
+            )
+            i += 1
+            continue
+
+        # 5. Callouts / Blockquotes `> [!TIP] Title`
+        if stripped.startswith(">"):
+            qlines: list[str] = []
+            while i < n and lines[i].strip().startswith(">"):
+                q = lines[i].lstrip()
+                q = q[1:]
+                if q.startswith(" "):
+                    q = q[1:]
+                qlines.append(q)
+                i += 1
+            first = qlines[0].strip() if qlines else ""
+            m_call = re.match(r"^\[!(TIP|NOTE|WARNING|CAUTION)\]\s*(.*)$", first)
+            if m_call:
+                kind = CALLOUT_KINDS[m_call.group(1)]
+                title = m_call.group(2).strip() or m_call.group(1).title()
+                inner_html = render_blocks(qlines[1:], rel_diag, lang)
+                out.append(
+                    f'<div class="callout {kind}">'
+                    f'<div class="callout-title">{esc(title)}</div>'
+                    f"{inner_html}</div>"
+                )
+            else:
+                out.append(f"<blockquote>{render_blocks(qlines, rel_diag, lang)}</blockquote>")
+            continue
+
+        # 6. GFM Pipe Tables
+        if stripped.startswith("|") and i + 1 < n and re.match(r"^\|[\s:|-]+\|\s*$", lines[i + 1].strip()):
+            headers = split_table_row(lines[i])
+            aligns_raw = split_table_row(lines[i + 1])
+            num_cols = {idx for idx, a in enumerate(aligns_raw) if a.endswith(":")}
+            i += 2
+            rows_html: list[str] = []
+            while i < n and lines[i].strip().startswith("|"):
+                cells = split_table_row(lines[i])
+                tds = "".join(
+                    f'<td class="num">{render_inline(c)}</td>' if ci in num_cols else f"<td>{render_inline(c)}</td>"
+                    for ci, c in enumerate(cells)
+                )
+                rows_html.append(f"<tr>{tds}</tr>")
+                i += 1
+            ths = "".join(f"<th>{render_inline(h)}</th>" for h in headers)
+            out.append(
+                f'<div class="table-wrap"><table><thead><tr>{ths}</tr></thead>'
+                f"<tbody>{''.join(rows_html)}</tbody></table></div>"
+            )
+            continue
+
+        # 7. Unordered list `- `
+        if stripped.startswith("- "):
+            items: list[str] = []
+            while i < n and lines[i].strip().startswith("- "):
+                item_lines = [lines[i].strip()[2:]]
+                i += 1
+                while i < n and lines[i].strip() and not lines[i].strip().startswith(("- ", "#", ">", "```", "|", ":::")):
+                    if re.match(r"^\d+\.\s+", lines[i].strip()):
+                        break
+                    item_lines.append(lines[i].strip())
+                    i += 1
+                items.append(f"<li>{render_inline(' '.join(item_lines))}</li>")
+            out.append(f"<ul>{''.join(items)}</ul>")
+            continue
+
+        # 8. Ordered list `1. `
+        if re.match(r"^\d+\.\s+", stripped):
+            items = []
+            while i < n and re.match(r"^\d+\.\s+", lines[i].strip()):
+                text_part = re.sub(r"^\d+\.\s+", "", lines[i].strip(), count=1)
+                item_lines = [text_part]
+                i += 1
+                while i < n and lines[i].strip() and not lines[i].strip().startswith(("- ", "#", ">", "```", "|", ":::")):
+                    if re.match(r"^\d+\.\s+", lines[i].strip()):
+                        break
+                    item_lines.append(lines[i].strip())
+                    i += 1
+                items.append(f"<li>{render_inline(' '.join(item_lines))}</li>")
+            out.append(f"<ol>{''.join(items)}</ol>")
+            continue
+
+        # 9. Paragraph
+        para: list[str] = []
+        while i < n:
+            cur = lines[i].strip()
+            if (
+                not cur
+                or cur.startswith(("#", ">", "```", "- ", "|", ":::", "!["))
+                or re.match(r"^\d+\.\s+", cur)
+            ):
+                break
+            para.append(cur)
+            i += 1
+        if para:
+            out.append(f"<p>{render_inline(' '.join(para))}</p>")
+
+    return "\n".join(out)
+
+
+def rel_url(from_file: Path, to_file: Path) -> str:
+    return os.path.relpath(to_file, from_file.parent).replace(os.sep, "/")
+
+
 def copy_diagrams() -> None:
     DIAGRAMS_DST.mkdir(parents=True, exist_ok=True)
     for name in DIAGRAM_FILES:
@@ -149,16 +409,37 @@ def copy_diagrams() -> None:
         shutil.copy2(src, DIAGRAMS_DST / name)
 
 
-def rel_url(from_file: Path, to_file: Path) -> str:
-    rel = os.path.relpath(to_file, from_file.parent)
-    return rel.replace(os.sep, "/")
+def clean_docs_dirs() -> None:
+    for d in (SITE_DIR / "docs", SITE_DIR / "ko" / "docs"):
+        if d.exists():
+            shutil.rmtree(d)
 
 
-def render_page(
-    lang: str,
-    page: dict,
-    all_pages: dict[str, dict],
-) -> tuple[Path, str, dict]:
+def load_pages(nav: dict, lang: str) -> list[dict]:
+    pages: list[dict] = []
+    for entry in nav["pages"]:
+        md_rel = entry["path"]
+        md_file = MD_ROOT / lang / md_rel
+        if not md_file.exists():
+            raise FileNotFoundError(f"Missing Markdown doc: {md_file}")
+        meta, body = parse_frontmatter(md_file.read_text(encoding="utf-8"))
+        html_rel = re.sub(r"\.md$", ".html", md_rel)
+        pages.append({
+            "path": html_rel,
+            "md_rel": md_rel,
+            "group": entry["group"],
+            "nav_title": meta["nav_title"],
+            "title": meta["title"],
+            "description": meta["description"],
+            "lede": meta["lede"],
+            "keywords": meta.get("keywords", ""),
+            "source": meta.get("source", f"https://github.com/CREE1116/lancet/blob/main/docs/site/{lang}/{md_rel}"),
+            "body_md": body,
+        })
+    return pages
+
+
+def render_page(lang: str, page: dict, nav_order: list[str], groups: list[dict], by_path: dict[str, dict]) -> tuple[Path, str, dict]:
     rel_path = page["path"]
     docs_base = SITE_DIR / ("docs" if lang == "en" else "ko/docs")
     out_file = docs_base / rel_path
@@ -167,21 +448,16 @@ def render_page(
     other_lang = "ko" if lang == "en" else "en"
     other_base = SITE_DIR / ("ko/docs" if lang == "en" else "docs")
     other_file = other_base / rel_path
-
     home_file = SITE_DIR / ("index.html" if lang == "en" else "ko/index.html")
-    css_file = ASSETS_DIR / "docs.css"
-    js_file = ASSETS_DIR / "docs.js"
-    search_file = ASSETS_DIR / "docs-search.json"
-    search_js_file = ASSETS_DIR / "docs-search.js"
 
     rel_home = rel_url(out_file, home_file)
     rel_docs_root = rel_url(out_file, docs_base) + "/"
     if rel_docs_root == "./":
         rel_docs_root = ""
-    rel_css = rel_url(out_file, css_file)
-    rel_js = rel_url(out_file, js_file)
-    rel_search = rel_url(out_file, search_file)
-    rel_search_js = rel_url(out_file, search_js_file)
+    rel_css = rel_url(out_file, ASSETS_DIR / "docs.css")
+    rel_js = rel_url(out_file, ASSETS_DIR / "docs.js")
+    rel_search = rel_url(out_file, ASSETS_DIR / "docs-search.json")
+    rel_search_js = rel_url(out_file, ASSETS_DIR / "docs-search.js")
     rel_switch = rel_url(out_file, other_file)
     rel_diag = rel_url(out_file, DIAGRAMS_DST)
 
@@ -190,50 +466,41 @@ def render_page(
     canon_url = en_url if lang == "en" else ko_url
     og_img = f"{BASE_URL}/assets/{'og-image.png' if lang == 'en' else 'og-image-ko.png'}"
 
-    body_html = page["render"](rel_diag)
+    body_html = render_blocks(page["body_md"].splitlines(), rel_diag, lang)
     ext = ArticleExtractor()
     ext.feed(body_html)
     plain_text = re.sub(r"\s+", " ", " ".join(ext.text_parts)).strip()
 
-    # Sidebar HTML
-    group_map = dict(GROUPS[lang])
+    group_map = {g["key"]: g["label"] for g in groups}
     sidebar_parts: list[str] = []
-    for g_key, g_label in GROUPS[lang]:
-        items = [p for gk, p in NAV_ORDER if gk == g_key]
+    for g in groups:
         lis: list[str] = []
-        for p_path in items:
-            target_file = docs_base / p_path
-            href = rel_url(out_file, target_file)
+        for p_path in nav_order:
+            p = by_path[p_path]
+            if p["group"] != g["key"]:
+                continue
+            href = rel_url(out_file, docs_base / p_path)
             cls = ' class="active"' if p_path == rel_path else ""
-            short_title = all_pages[p_path]["nav_title"]
-            lis.append(f'<li><a href="{href}"{cls}>{short_title}</a></li>')
+            lis.append(f'<li><a href="{href}"{cls}>{esc(p["nav_title"])}</a></li>')
         sidebar_parts.append(
-            f'<div class="nav-group"><div class="nav-group-title">{g_label}</div>'
+            f'<div class="nav-group"><div class="nav-group-title">{esc(g["label"])}</div>'
             f'<ul class="nav-list">{"".join(lis)}</ul></div>'
         )
     sidebar_html = "".join(sidebar_parts)
 
-    # Prev / Next pager
-    order_paths = [p for _, p in NAV_ORDER]
-    idx = order_paths.index(rel_path)
+    idx = nav_order.index(rel_path)
     prev_html = "<div></div>"
     next_html = "<div></div>"
     if idx > 0:
-        pp = order_paths[idx - 1]
+        pp = nav_order[idx - 1]
         href = rel_url(out_file, docs_base / pp)
         lbl = "이전" if lang == "ko" else "Previous"
-        prev_html = (
-            f'<a class="pager-card prev" href="{href}">'
-            f"<small>← {lbl}</small><b>{all_pages[pp]['nav_title']}</b></a>"
-        )
-    if idx + 1 < len(order_paths):
-        np = order_paths[idx + 1]
+        prev_html = f'<a class="pager-card prev" href="{href}"><small>← {lbl}</small><b>{esc(by_path[pp]["nav_title"])}</b></a>'
+    if idx + 1 < len(nav_order):
+        np = nav_order[idx + 1]
         href = rel_url(out_file, docs_base / np)
         lbl = "다음" if lang == "ko" else "Next"
-        next_html = (
-            f'<a class="pager-card next" href="{href}">'
-            f"<small>{lbl} →</small><b>{all_pages[np]['nav_title']}</b></a>"
-        )
+        next_html = f'<a class="pager-card next" href="{href}"><small>{lbl} →</small><b>{esc(by_path[np]["nav_title"])}</b></a>'
 
     switch_label = "한국어" if lang == "en" else "English"
     home_label = "홈" if lang == "ko" else "Home"
@@ -241,23 +508,17 @@ def render_page(
     search_ph = "문서 검색…" if lang == "ko" else "Search docs…"
     toc_label = "이 페이지 목차" if lang == "ko" else "On this page"
     menu_aria = "문서 메뉴 열기" if lang == "ko" else "Open documentation menu"
-    source_note = (
-        "MIT OR Apache-2.0 · Rust 단일 바이너리"
-        if lang == "ko"
-        else "MIT OR Apache-2.0 · Single Rust binary"
-    )
-    edit_note = (
-        "GitHub에서 소스 보기" if lang == "ko" else "View source on GitHub"
-    )
-    gh_source = page.get("source", "https://github.com/CREE1116/lancet/tree/main/docs")
+    source_note = "MIT OR Apache-2.0 · Rust 단일 바이너리" if lang == "ko" else "MIT OR Apache-2.0 · Single Rust binary"
+    edit_note = "GitHub에서 Markdown 소스 보기" if lang == "ko" else "View Markdown source on GitHub"
+    md_gh_url = f"https://github.com/CREE1116/lancet/blob/main/docs/site/{lang}/{page['md_rel']}"
 
     html_doc = f"""<!doctype html>
 <html lang="{lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{page['title']} — lancet {docs_label}</title>
-<meta name="description" content="{page['description']}">
+<title>{esc(page['title'])} — lancet {docs_label}</title>
+<meta name="description" content="{esc(page['description'])}">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
@@ -269,8 +530,8 @@ def render_page(
 <meta property="og:site_name" content="lancet">
 <meta property="og:locale" content="{'ko_KR' if lang == 'ko' else 'en_US'}">
 <meta property="og:url" content="{canon_url}">
-<meta property="og:title" content="{page['title']} — lancet {docs_label}">
-<meta property="og:description" content="{page['description']}">
+<meta property="og:title" content="{esc(page['title'])} — lancet {docs_label}">
+<meta property="og:description" content="{esc(page['description'])}">
 <meta property="og:image" content="{og_img}">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
@@ -313,14 +574,14 @@ def render_page(
 
   <main class="doc-main">
     <article class="doc-article">
-      <div class="crumb">{group_map[page['group']]}</div>
-      <h1>{page['title']}</h1>
-      <p class="lede">{page['lede']}</p>
+      <div class="crumb">{esc(group_map[page['group']])}</div>
+      <h1>{esc(page['title'])}</h1>
+      <p class="lede">{render_inline(page['lede'])}</p>
       {body_html}
       <div class="pager">{prev_html}{next_html}</div>
       <div class="meta-foot">
         <span>{source_note}</span>
-        <a href="{gh_source}" target="_blank" rel="noopener">{edit_note} →</a>
+        <a href="{esc(md_gh_url)}" target="_blank" rel="noopener">{edit_note} →</a>
       </div>
     </article>
   </main>
@@ -352,11 +613,39 @@ def render_page(
         "group": group_map[page["group"]],
         "title": page["title"],
         "description": page["description"],
-        "keywords": page.get("keywords", ""),
+        "keywords": page["keywords"],
         "headings": ext.headings,
         "text": plain_text[:6000],
     }
     return out_file, html_doc, search_entry
+
+
+def write_sitemap(nav_order: list[str]) -> int:
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
+        '        xmlns:xhtml="http://www.w3.org/1999/xhtml">',
+    ]
+    pairs = [("", "ko/")]
+    for p_path in nav_order:
+        suffix = "" if p_path == "index.html" else p_path
+        pairs.append((f"docs/{suffix}", f"ko/docs/{suffix}"))
+
+    for en_rel, ko_rel in pairs:
+        en_url = f"{BASE_URL}/{en_rel}"
+        ko_url = f"{BASE_URL}/{ko_rel}"
+        for loc in (en_url, ko_url):
+            lines.extend([
+                "  <url>",
+                f"    <loc>{loc}</loc>",
+                f'    <xhtml:link rel="alternate" hreflang="en" href="{en_url}"/>',
+                f'    <xhtml:link rel="alternate" hreflang="ko" href="{ko_url}"/>',
+                f'    <xhtml:link rel="alternate" hreflang="x-default" href="{en_url}"/>',
+                "  </url>",
+            ])
+    lines.append("</urlset>")
+    (SITE_DIR / "sitemap.xml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return len(pairs) * 2
 
 
 def validate_site(generated_files: list[Path]) -> list[str]:
@@ -393,44 +682,9 @@ def validate_site(generated_files: list[Path]) -> list[str]:
     return errors
 
 
-def write_sitemap() -> int:
-    lines = [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
-        '        xmlns:xhtml="http://www.w3.org/1999/xhtml">',
-    ]
-    pairs = [("", "ko/")]
-    for _, p_path in NAV_ORDER:
-        suffix = "" if p_path == "index.html" else p_path
-        pairs.append((f"docs/{suffix}", f"ko/docs/{suffix}"))
-
-    for en_rel, ko_rel in pairs:
-        en_url = f"{BASE_URL}/{en_rel}"
-        ko_url = f"{BASE_URL}/{ko_rel}"
-        for loc in (en_url, ko_url):
-            lines.extend([
-                "  <url>",
-                f"    <loc>{loc}</loc>",
-                f'    <xhtml:link rel="alternate" hreflang="en" href="{en_url}"/>',
-                f'    <xhtml:link rel="alternate" hreflang="ko" href="{ko_url}"/>',
-                f'    <xhtml:link rel="alternate" hreflang="x-default" href="{en_url}"/>',
-                "  </url>",
-            ])
-    lines.append("</urlset>")
-    (SITE_DIR / "sitemap.xml").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return len(pairs) * 2
-
-
-def clean_docs_dirs() -> None:
-    for d in (SITE_DIR / "docs", SITE_DIR / "ko" / "docs"):
-        if d.exists():
-            shutil.rmtree(d)
-
-
 def main() -> int:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from docs_en import PAGES_EN  # noqa: PLC0415
-    from docs_ko import PAGES_KO  # noqa: PLC0415
+    nav = json.loads(NAV_FILE.read_text(encoding="utf-8"))
+    nav_order = [re.sub(r"\.md$", ".html", e["path"]) for e in nav["pages"]]
 
     clean_docs_dirs()
     copy_diagrams()
@@ -438,10 +692,13 @@ def main() -> int:
     search_index = {"en": [], "ko": []}
     generated: list[Path] = []
 
-    for lang, pages in (("en", PAGES_EN), ("ko", PAGES_KO)):
+    for lang in ("en", "ko"):
+        pages = load_pages(nav, lang)
         by_path = {p["path"]: p for p in pages}
-        for _, p_path in NAV_ORDER:
-            out_file, content, entry = render_page(lang, by_path[p_path], by_path)
+        for p_path in nav_order:
+            out_file, content, entry = render_page(
+                lang, by_path[p_path], nav_order, nav["groups"][lang], by_path
+            )
             out_file.write_text(content, encoding="utf-8")
             generated.append(out_file)
             search_index[lang].append(entry)
@@ -452,7 +709,7 @@ def main() -> int:
         f"window.__LANCET_DOCS_SEARCH__ = {json.dumps(search_index, ensure_ascii=False)};\n",
         encoding="utf-8",
     )
-    sitemap_count = write_sitemap()
+    sitemap_count = write_sitemap(nav_order)
 
     errors = validate_site(generated)
     if errors:
@@ -461,7 +718,7 @@ def main() -> int:
         return 1
 
     print(
-        f"Built {len(generated)} documentation pages, copied {len(DIAGRAM_FILES)} diagrams, "
+        f"Built {len(generated)} Markdown documentation pages, copied {len(DIAGRAM_FILES)} diagrams, "
         f"wrote docs-search.json/js and {sitemap_count} sitemap URLs, 0 broken links."
     )
     return 0
