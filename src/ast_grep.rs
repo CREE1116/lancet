@@ -374,96 +374,10 @@ mod imp {
         lang: Lang,
         ends_with_semi: bool,
     ) -> &'static [(&'static str, &'static str)] {
-        match lang {
-            Lang::Rust => {
-                if ends_with_semi {
-                    &[
-                        ("fn __lancet_wrap__() { ", " }"),
-                        ("fn __lancet_wrap__() { let _ = ", "; }"),
-                        ("", ""),
-                        ("impl __LancetWrap__ { ", " }"),
-                        ("type __LancetWrap__ = ", ";"),
-                    ]
-                } else {
-                    &[
-                        ("fn __lancet_wrap__() { let _ = ", "; }"),
-                        ("fn __lancet_wrap__() { ", " }"),
-                        ("", ""),
-                        ("impl __LancetWrap__ { ", " }"),
-                        ("type __LancetWrap__ = ", ";"),
-                    ]
-                }
-            }
-            Lang::Python => &[("", "")],
-            Lang::Js | Lang::Ts | Lang::Tsx => &[
-                ("", ""),
-                ("const __lancet_wrap__ = (", ");"),
-                ("class __LancetWrap__ { ", " }"),
-            ],
-            Lang::Go => &[
-                ("package p\nfunc __lancet_wrap__() { _ = ", " }"),
-                ("package p\nfunc __lancet_wrap__() {\n", "\n}"),
-                ("package p\n", ""),
-                ("package p\ntype __LancetWrap__ ", ""),
-            ],
-            Lang::C => &[
-                ("void __lancet_wrap__(void) { int __lv = (", "); }"),
-                ("void __lancet_wrap__(void) {\n", "\n}"),
-                ("", ""),
-            ],
-            Lang::Cpp => &[
-                ("void __lancet_wrap__() { auto __lv = (", "); }"),
-                ("void __lancet_wrap__() {\n", "\n}"),
-                ("class __LancetWrap__ {\n", "\n};"),
-                ("", ""),
-            ],
-            Lang::Zig => &[
-                ("fn __lancet_wrap__() void { _ = ", "; }"),
-                ("fn __lancet_wrap__() void {\n", "\n}"),
-                ("", ""),
-            ],
-            Lang::Java => &[
-                ("class __LW { Object __lf() { return (", "); } }"),
-                ("class __LW { void __lf() {\n", "\n} }"),
-                ("class __LW {\n", "\n}"),
-                ("", ""),
-            ],
-            Lang::CSharp => &[
-                ("class __LW { object __lf() { return (", "); } }"),
-                ("class __LW { void __lf() {\n", "\n} }"),
-                ("class __LW {\n", "\n}"),
-                ("", ""),
-            ],
-            Lang::Kotlin => &[
-                ("fun __lw(): Any? = (", ")"),
-                ("fun __lw() {\n", "\n}"),
-                ("", ""),
-            ],
-            Lang::Scala => &[
-                ("object __LW { def __lf() = (", ") }"),
-                ("object __LW {\n", "\n}"),
-                ("", ""),
-            ],
-            Lang::Swift => &[
-                ("", ""),
-                ("func __lw() -> Any { return (", ") }"),
-                ("struct __LW {\n", "\n}"),
-            ],
-            Lang::Ruby => &[("", "")],
-            Lang::Php => &[
-                ("<?php\n$__lv = (", ");"),
-                ("<?php\n", ";"),
-                ("<?php\n", ""),
-                ("<?php\nclass __LW {\n", "\n}"),
-            ],
-            Lang::Bash => &[("", "")],
-            Lang::Lua => &[("local __lv = (", ")"), ("", "")],
-            Lang::Hcl => &[("", ""), ("__lancet_attr = ", "")],
-            Lang::Html => &[("", "")],
-            Lang::Css => &[("", ""), (".__lw { ", " }")],
-            Lang::Json => &[("", ""), ("{ ", " }")],
-            Lang::Yaml => &[("", "")],
-            Lang::Toml => &[("", "")],
+        let spec = lang.spec();
+        match spec.pattern_wrappers_semi {
+            Some(semi) if ends_with_semi => semi,
+            _ => spec.pattern_wrappers,
         }
     }
 
