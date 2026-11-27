@@ -2,7 +2,7 @@
 
 # Lancet (란셋)
 
-**코드와 문서를 찾고, 읽고, 고치는 일을 — 하나의 좌표계 위에서, 인덱스 속도로.**
+**코드와 문서를 찾고, 읽고, 고치는 일을 — 하나의 좌표계 위에서, 인덱스로 훨씬 빠르게.**
 
 [![CI](https://github.com/CREE1116/lancet/actions/workflows/ci.yml/badge.svg)](https://github.com/CREE1116/lancet/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#라이선스)
@@ -23,7 +23,7 @@ Lancet은 `rg` + `fd` + `ast-grep` + `cat` + `pdftotext`로 이어지던 도구 
 
 ## 두 가지 핵심
 
-### 1 · 인덱스 속도, 기본은 최신 결과
+### 1 · 인덱스로 빠르게, 결과는 기본적으로 최신
 
 <p align="center"><img src="docs/assets/pipeline.ko.svg" width="100%" alt="쿼리는 필수 트라이그램으로 컴파일되어 인덱스에서 교집합되고, 인덱싱 이후 바뀐 파일은 즉시 스캔되며, 모든 후보는 풀스캔과 같은 평가기로 검증됩니다: 파일 86,218개 중 7,814개(9.1%)만 열어 7,073개 매치."></p>
 
