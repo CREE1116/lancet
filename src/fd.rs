@@ -4,7 +4,7 @@
 use crate::index::{self, Index};
 use crate::output::{ErrorInfo, Status};
 use crate::query::FileType;
-use crate::search::IndexMode;
+use crate::scope::IndexMode;
 use crate::walk::{mtime_ns, rel_path, WalkOpts};
 use globset::{GlobBuilder, GlobMatcher};
 use ignore::{WalkBuilder, WalkState};

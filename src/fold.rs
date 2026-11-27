@@ -25,19 +25,6 @@ fn fold_slow(c: char) -> char {
     }
 }
 
-/// True iff `b` is an ASCII byte whose Unicode simple-case-folding orbit
-/// contains only ASCII characters (e.g. false for `'k'`/`'s'` because of
-/// `\u{212A}` and `\u{017F}`).
-pub fn is_ascii_only_orbit(b: u8) -> bool {
-    if !b.is_ascii_alphabetic() {
-        return true;
-    }
-    let c = b as char;
-    let mut cls = ClassUnicode::new([ClassUnicodeRange::new(c, c)]);
-    cls.case_fold_simple();
-    cls.ranges().iter().all(|r| r.end().is_ascii())
-}
-
 #[inline]
 pub fn fold_char(c: char) -> char {
     if c.is_ascii() {
@@ -187,10 +174,6 @@ mod tests {
         assert_eq!(fold_char('Σ'), fold_char('σ'));
         assert_eq!(fold_char('Σ'), fold_char('ς'));
         assert_eq!(fold_char('학'), '학');
-        assert!(!is_ascii_only_orbit(b'k'));
-        assert!(!is_ascii_only_orbit(b's'));
-        assert!(is_ascii_only_orbit(b'a'));
-        assert!(is_ascii_only_orbit(b'_'));
     }
 
     #[test]

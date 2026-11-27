@@ -1,39 +1,6 @@
-# Query Language, `lancet rg`, and `lancet ast` Reference
+# `lancet rg` and `lancet ast` Reference
 
-## 1. Lancet Query Language (LQL)
-
-Strict parser — unknown operators, filters, types, or trailing tokens return `status: "invalid_query"` with a byte offset (`lancet parse <QUERY>` shows canonical form + IR; `lancet explain <QUERY>` shows required trigrams).
-
-### Grammar & Precedence
-
-- **Precedence:** `NOT` > `AND` (explicit or whitespace-adjacent implicit `AND`) > `OR`.
-- **Primaries:**
-  - `"text"` or bare `token` — **case-insensitive** (Unicode simple case folding) substring match.
-  - `regex("pat")` — Rust `regex` in multi-line mode (`^`/`$` per line), **case-sensitive** by default (add `(?i)` for case-insensitive).
-  - `fuzzy("word", k)` — token match within char Levenshtein distance `k` (`0 <= k <= 3`, default `1`), index-accelerated via q-gram threshold.
-  - `symbol("name")` / `symbol:name` — exact (case-insensitive) Tree-sitter symbol definition (`.rs`, `.py`, `.js`, `.ts`, `.tsx`, `.go`).
-  - `near(m1, m2, d)` / `before(m1, m2, d)` — token distance `<= d` within the unit (`before` requires strictly ascending token order).
-- **Scopes (`in ...` / filter terms):**
-  - Unit scopes: `in file` (default), `in block` (non-blank line run), `in line`, `in function` (Tree-sitter function/method in `.rs`, `.py`, `.js`, `.ts`, `.tsx`, `.go` — sets `symbol` on hits).
-  - File filters: `type:CLASS`, `ext:EXT`, `path:GLOB` (multiple values via `ext:(rs,toml)` are OR-ed; distinct categories are AND-ed).
-  - `type:` classes: `code`, `document`, `spreadsheet`, `config`, `log`, `data`, `archive`, `image`, `other`.
-- **Pipe stages (`| stage`):**
-  - `limit N` (`N >= 1`)
-  - `count`
-  - `files` (compact path-only result per file)
-  - `group file`
-  - `expand parent` | `expand unit` | `expand context:N`
-  - `sort count [asc|desc]` | `sort path`
-  - `terms [top:N]` (`1..=100`, default `15` — top co-occurring tokens)
-  - `budget [tokens:]N` (estimated token cap; populates `budget`)
-
-### Multi-Query Batching (`lancet batch`)
-
-Use `lancet batch [PATH] -q 'Q1' -q 'Q2' [--name n1 --name n2]` or `--queries-json '{"q1": "...", "q2": "..."}'` to evaluate multiple LQL queries in one shared index open and directory walk.
-
----
-
-## 2. `lancet rg` (ripgrep Parity & Extensions)
+## 1. `lancet rg` (ripgrep Parity & Extensions)
 
 - **Flags:** all of ripgrep 15.2's, with the same output and exit codes, except `-P`/`--pcre2`, `--pre`/`--pre-glob` and `--generate` (refused with a reason); `-z` decompresses `.gz` only. Full table: `docs/rg-parity.md`.
 - **Lancet extensions:** `--no-index`, `--trust-index`, `--index-dir DIR`, `--docs` (searches inside PDF, DOCX/PPTX/ODT, HWP/HWPX, EPUB, XLSX/XLS/ODS, ZIP/TAR/GZ/TGZ in-process).
@@ -41,7 +8,7 @@ Use `lancet batch [PATH] -q 'Q1' -q 'Q2' [--name n1 --name n2]` or `--queries-js
 
 ---
 
-## 3. Discovery & Ranked Declarations (`fd --dirs`, `refs --rank`)
+## 2. Discovery & Ranked Declarations (`fd --dirs`, `refs --rank`)
 
 - **Directory-only tree (`lancet fd --tree --dirs`):** lists folders only (same as `-t d`) for compact architecture overviews.
 - **Usage-ranked declarations (`lancet refs --rank '<GLOB>' [--kind K,...]`):**
@@ -50,7 +17,7 @@ Use `lancet batch [PATH] -q 'Q1' -q 'Q2' [--name n1 --name n2]` or `--queries-js
 
 ---
 
-## 4. `lancet ast` (24 Languages & Metavariables)
+## 3. `lancet ast` (24 Languages & Metavariables)
 
 ### `--lang` Identifiers
 

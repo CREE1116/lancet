@@ -7,7 +7,7 @@
 [![CI](https://github.com/CREE1116/lancet/actions/workflows/ci.yml/badge.svg)](https://github.com/CREE1116/lancet/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-[Docs](https://cree1116.github.io/lancet/docs/) · [한국어](./README.ko.md) · [Query language](./docs/grammar.md) · [ripgrep parity](./docs/rg-parity.md) · [Agent instructions](./docs/agent-instructions.md) · [Benchmarks](#benchmarks)
+[Docs](https://cree1116.github.io/lancet/docs/) · [한국어](./README.ko.md) · [ripgrep parity](./docs/rg-parity.md) · [Agent instructions](./docs/agent-instructions.md) · [Benchmarks](#benchmarks)
 
 </div>
 
@@ -62,13 +62,12 @@ lancet index .
 
 ```bash
 lancet fd --tree --max-depth 2 .                            # orient
-lancet 'near("gradient", "clip", 30) in function' src       # search: boolean, proximity, fuzzy, AST scope
 lancet rg -w spin_lock src                                  # ripgrep-compatible CLI on lancet's index
-lancet read src/search.rs --symbol execute_one              # read one symbol, doc comments included
+lancet read src/rg.rs --symbol run                           # read one symbol, doc comments included
 lancet refs SearchOptions src                               # definitions + references, comments/strings excluded
 lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'      # preview a structural rewrite …
 lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply   # … and apply it atomically
-lancet edit src/search.rs --symbol execute_one --with-file new.rs --rev <REV> --apply  # edit by read's coordinates
+lancet edit src/rg.rs --symbol run --with-file new.rs --rev <REV> --apply  # edit by read's coordinates
 git diff | lancet patch --apply                             # apply a unified diff atomically across files
 ```
 
@@ -78,7 +77,6 @@ git diff | lancet patch --apply                             # apply a unified di
 
 | Command | What it does |
 |---|---|
-| `lancet <QUERY> [PATH]` | `AND` / `OR` / `NOT`, `near` / `before`, `fuzzy("term", k)`, `regex(...)`, `in function`, `symbol(...)`, pipes like `\| expand parent \| limit 5 \| budget tokens:1500` — see the [query language](./docs/grammar.md) |
 | `lancet rg [FLAGS] PATTERN [PATH...]` | ripgrep-compatible flags (`-L`, `--max-depth`, `--max-filesize`, `--color`, `-U`, `-w`, `-A`/`-B`/`-C`, `--json`, etc.) on lancet's index & document extractors (`-n` stays on when piped; `-N` disables) — see [ripgrep parity](./docs/rg-parity.md) |
 | `lancet fd` | `.gitignore`-aware file & folder finder, `--tree` (`--dirs` for folders only), size / recency filters, `--trust-index` lookups |
 | `lancet ast` | Tree-sitter structural search & `--rewrite` (`$X`, `$_`, `$$$ARGS`, plus statement metavariables like `if ($C) $S` and `{ $$$B }` in C-like languages) across **24 languages** |
@@ -89,8 +87,7 @@ git diff | lancet patch --apply                             # apply a unified di
 | `lancet mcp` | Built-in Model Context Protocol (`stdio`) server with one `lancet` tool that takes CLI arguments, for clients without a shell (`--root`, `--read-only`, `--trust-index`) |
 | `lancet outline` | Declaration skeletons, Markdown headings, workbook schemas, archive manifests |
 | `lancet refs` | Index-accelerated `[def]` / `[ref]` lookup that skips comments and string literals; `--rank '*Service' --kind class` lists the most-used declarations first |
-| `lancet batch` | Many queries over one shared index open and directory walk |
-| `lancet index` · `status` · `explain` | Build / update the index, inspect it, see which trigrams a query needs |
+| `lancet index` | Build / update the index (`--status` shows its state) |
 
 **AST languages:** Rust, Python, JavaScript, TypeScript, TSX, Go, C, C++, Zig, Java, C#, Kotlin, Scala, Swift, Ruby, PHP, Bash, Lua, HCL, HTML, CSS, JSON, YAML, TOML.
 **Documents & archives** (default `adapters` feature): `.pdf`, `.docx`, `.pptx`, `.odt`, `.hwp` (5.0), `.hwpx`, `.epub`, `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.ods`, `.zip`, `.tar`, `.gz`, `.tgz` — extracted in-process with 16 MiB bomb caps, plus opt-in `--ocr`.
@@ -160,13 +157,8 @@ Reproducible via [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_com
 |---|---:|---:|---:|---:|
 | Rare literal (`ThreadPoolBuilder`, 32 hits) | 307.7 ms | 310.6 ms | **60.5 ms (5.1×)** | **5.1 ms (60.3×)** |
 | Medium literal (`unwrap_or_else`, 582 hits) | 311.3 ms | 314.6 ms | **65.4 ms (4.8×)** | **13.0 ms (23.9×)** |
-| Boolean (`"unsafe" AND "transmute" NOT "miri"`) | 469.8 ms¹ | **304.8 ms** | **62.6 ms (7.5×)** | **10.1 ms (46.5×)** |
 | Anchored regex (`pub unsafe fn \w+\(`) | 307.4 ms | 317.9 ms | **80.5 ms (3.8×)** | **26.9 ms (11.4×)** |
-| Proximity (`near("unsafe", "transmute", 15)`) | *unsupported* | 307.1 ms | **65.9 ms** | **13.6 ms** |
-| Typo fuzzy (`fuzzy("transmte", 1)`) | *unsupported* | 334.7 ms | **156.7 ms** | **107.4 ms** |
-| Shared 6-query batch (`lancet batch`) | ~1,850 ms | 1,570.6 ms | **93.1 ms** | **30.7 ms (5.1 ms/q)** |
 
-*¹ `rg` needs two passes for a file-level `AND`.*
 
 **File discovery** (`lancet fd` vs `fd 10.5.2`, `rg --files`, `find`)
 
@@ -210,9 +202,8 @@ Reproducible via [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_com
 
 ### 2 · Sound candidate filtering & exact re-verification
 
-- **Conservative trigram lower bounds.** Queries and regex HIRs compile into a boolean trigram formula (`Req`) that every match must satisfy. Posting lists are intersected rarest-first (skipping ultra-common trigrams present in > 85% of files); the formula is sound, so the index narrows files without ever dropping a match.
+- **Conservative trigram lower bounds.** Every search pattern (a literal, a regex HIR, the literals of an AST pattern) compiles into a boolean trigram formula (`Req`) that every match must satisfy. Posting lists are intersected rarest-first (skipping ultra-common trigrams present in > 85% of files); the formula is sound, so the index narrows files without ever dropping a match.
 - **Full-scan evaluator on every candidate.** Surviving files — plus any file whose `(mtime, size, ctime, inode)` or racy-timestamp window changed since indexing — are checked by the exact same evaluator a full scan uses. Indexed output is **byte-identical to ripgrep** across all 8 corpora.
-- **Fuzzy search on the index & Unicode orbits.** By the q-gram lemma, a word with `|G|` trigrams at edit distance `k` retains at least `|G| − 3k` trigrams (`|G| − k` for Hangul syllables), so `fuzzy(...)` runs as a `k`-of-`n` posting count instead of a full scan. Case-equivalent characters fold to canonical orbits in both index and evaluator, while ASCII literals use `memchr2` dual-case scans instead of regex automata.
 
 ### 3 · Multi-agent concurrent edits & patch safety
 

@@ -23,11 +23,10 @@ const HARD_MAX_BYTES: usize = 4_194_304;
 /// Commands that change files (or the on-disk index).
 const WRITING_COMMANDS: &[&str] = &["edit", "write", "patch", "rename", "index"];
 /// Commands that accept `--trust-index` and `-j`.
-const SEARCHING_COMMANDS: &[&str] = &["rg", "fd", "ast", "refs", "batch"];
-/// First words that are subcommands rather than a query (`lancet '"x" in line'`).
+const SEARCHING_COMMANDS: &[&str] = &["rg", "fd", "ast", "refs"];
 const SUBCOMMANDS: &[&str] = &[
     "fd", "ast", "rg", "read", "edit", "write", "patch", "rename", "outline", "refs", "index",
-    "status", "parse", "explain", "batch", "mcp",
+    "mcp",
 ];
 
 const TOOL_DESCRIPTION: &str = "\
@@ -39,7 +38,7 @@ error), 2 = refused or invalid (message on stderr).\n\
 Orient:   [\"fd\",\"--tree\",\"--dirs\",\"-d\",\"2\",\".\"]  [\"outline\",\"src/server.rs\"]  \
 [\"refs\",\"--rank\",\"*Service\",\"--kind\",\"class\",\".\"]\n\
 Search:   [\"rg\",\"-w\",\"spin_lock\",\"src\"]  [\"refs\",\"SearchOptions\",\"src\"]  \
-[\"ast\",\"$X.unwrap()\",\"src\",\"--lang\",\"rs\"]  [\"near(\\\"retry\\\", \\\"timeout\\\", 20) in function\",\"src\"]\n\
+[\"ast\",\"$X.unwrap()\",\"src\",\"--lang\",\"rs\"]\n\
 Read:     [\"read\",\"src/x.rs\",\"--symbol\",\"handle\"]  [\"read\",\"src/x.rs:120-180\",\"src/y.rs:10-40\"]  \
 — the first line is `# PATH rev REV`; keep REV for edits. Large files: add \"--budget-tokens\",\"800\". \
 An image comes back as the image (add \"--ocr\" for its text).\n\
@@ -318,7 +317,7 @@ fn handle_tools_call(req_id: Value, params: &Map<String, Value>, cfg: &McpConfig
     rpc_ok(req_id, result)
 }
 
-/// The subcommand an argument list runs (`None` for a query).
+/// The subcommand an argument list runs (`None` if it isn't one).
 fn subcommand(args: &[String]) -> Option<&str> {
     args.first()
         .map(String::as_str)
@@ -327,7 +326,8 @@ fn subcommand(args: &[String]) -> Option<&str> {
 
 /// Why `args` is refused on a read-only server, if it is.
 fn read_only_refusal(args: &[String]) -> Option<String> {
-    if let Some(cmd) = subcommand(args).filter(|c| WRITING_COMMANDS.contains(c)) {
+    let status_only = subcommand(args) == Some("index") && args.iter().any(|a| a == "--status");
+    if let Some(cmd) = subcommand(args).filter(|c| WRITING_COMMANDS.contains(c) && !status_only) {
         return Some(format!(
             "`{cmd}` writes files; this MCP server is read-only"
         ));
@@ -376,10 +376,7 @@ fn run_tool(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Vec<Value>, b
     };
 
     let mut full = argv.clone();
-    let searching = match subcommand(&argv) {
-        Some(c) => SEARCHING_COMMANDS.contains(&c),
-        None => true, // a query
-    };
+    let searching = subcommand(&argv).is_some_and(|c| SEARCHING_COMMANDS.contains(&c));
     if searching {
         let has = |f: &str| argv.iter().any(|a| a == f);
         if cfg.trust_index && !has("--trust-index") && !has("--no-index") {
@@ -494,9 +491,8 @@ mod tests {
         for r in [
             &["rg", "edit"][..],
             &["read", "a.rs"],
-            &["\"edit\" in line"],
             &["ast", "$X", "--rewrite", "$X"],
-            &["status"],
+            &["index", "--status"],
         ] {
             assert!(read_only_refusal(&v(r)).is_none(), "{r:?}");
         }

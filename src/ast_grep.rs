@@ -2,7 +2,7 @@
 //! automatically accelerated by the `.lancet` trigram index when available.
 
 use crate::output::{ErrorInfo, Status};
-use crate::search::IndexMode;
+use crate::scope::IndexMode;
 use crate::walk::WalkOpts;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -137,7 +137,7 @@ mod imp {
     use crate::index::{self, Req};
     use crate::output::{Stats, Status};
     use crate::query::{Expr, Filters, Matcher};
-    use crate::search::{plan_targets_with_req, IndexMode, Target};
+    use crate::scope::{plan_targets_with_req, IndexMode, Target};
     use crate::walk::{walk, FileFilter};
     use memchr::memmem;
     use rayon::prelude::*;

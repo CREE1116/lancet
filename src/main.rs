@@ -4,15 +4,14 @@ use lancet::edit_cmd::{edit_file, EditOptions, Op, Target};
 use lancet::fd::{find_files, parse_duration, parse_size, print_fd_human, FdOptions, PatternMode};
 use lancet::index::{self, Index};
 use lancet::outline::{build_outline, print_outline_human, OutlineOptions, OutlineResponse};
-use lancet::output::{print_human, Status};
-use lancet::query::{parse, FileType};
+use lancet::output::Status;
+use lancet::query::FileType;
 use lancet::read_cmd::{
     parse_col_spec, parse_line_spec, print_read_human, read_file_range, ReadOptions,
 };
 use lancet::refs::{find_refs, print_refs_human, RefsOptions};
-use lancet::search::{explain, search, search_batch, IndexMode, SearchOptions};
+use lancet::scope::IndexMode;
 use lancet::walk::WalkOpts;
-use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
@@ -33,7 +32,6 @@ Examples:
   lancet edit src/net.rs --old-string 'retries = 3' --new-string 'retries = 5' --apply
   lancet refs --rank '*Service' --kind class .
   lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'
-  lancet 'near(\"retry\", \"timeout\", 20) in function' src     (query language)
 
 Commands:
   lancet fd [PATTERN] [PATH...]      find files and folders (`--tree`, globs like '**/*.ts')
@@ -42,56 +40,20 @@ Commands:
   lancet edit PATH                   replace / delete / insert by lines, symbol or exact text (`--old-string`)
   lancet write PATH                  create a file, or replace one you have read (`--rev`)
   lancet patch [DIFF|-]              apply a unified diff or a Codex patch, all files or none
-  lancet refs SYMBOL [PATH]          definitions and references (`--rank` for the most used)
-  lancet outline [PATH]              declarations, headings, sheets, archive contents
-  lancet ast PATTERN [PATH]          structural search and rewrite (24 languages)
+  lancet refs SYMBOL [PATH...]       definitions and references (`--rank` for the most used)
+  lancet outline [PATH...]           declarations, headings, sheets, archive contents
+  lancet ast PATTERN [PATH...]       structural search and rewrite (24 languages)
   lancet rename FILE:LINE OLD NEW    rename a local variable and its uses
-  lancet index [PATH]                build or update the index (optional; results are always fresh)
-  lancet mcp                         MCP server with one `lancet` tool taking these arguments
-
-Advanced: lancet status, parse, explain, batch (see `lancet <command> --help`)";
+  lancet index [PATH]                build or update the index (optional; results are always fresh; `--status`)
+  lancet mcp                         MCP server with one `lancet` tool taking these arguments";
 
 #[derive(Parser)]
-#[command(name = "lancet", version, about = ABOUT)]
-struct SearchCli {
-    /// Query (see examples above)
-    query: String,
-    /// Directory or file to search
-    #[arg(default_value = ".")]
-    path: PathBuf,
-    /// Print machine-readable JSON
-    #[arg(long)]
-    json: bool,
-    /// Ignore the index and scan files directly
-    #[arg(long, hide = true)]
-    no_index: bool,
-    /// Use the index without checking for changed files (fastest, may be stale)
-    #[arg(long, conflicts_with = "no_index", hide = true)]
-    trust_index: bool,
-    /// Index directory (default: PATH/.lancet)
-    #[arg(long, hide = true)]
-    index_dir: Option<PathBuf>,
-    /// Search hidden files and directories
-    #[arg(long)]
-    hidden: bool,
-    /// Don't respect .gitignore/.ignore files
-    #[arg(long)]
-    no_ignore: bool,
-    /// Worker threads (default: number of CPUs)
-    #[arg(short = 'j', long)]
-    threads: Option<usize>,
-    /// Max matching lines shown per result
-    #[arg(long, default_value_t = 20)]
-    max_lines: usize,
-    /// Max characters per shown line
-    #[arg(long, default_value_t = 240)]
-    max_cols: usize,
-    /// Print statistics to stderr
-    #[arg(long, hide = true)]
-    stats: bool,
-    /// Enable external OCR (tesseract/pdftoppm) for images and scanned PDFs
-    #[arg(long)]
-    ocr: bool,
+#[command(name = "lancet", version, about = ABOUT, arg_required_else_help = true)]
+struct TopCli {
+    /// One of the commands above
+    command: String,
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true, hide = true)]
+    rest: Vec<OsString>,
 }
 
 #[derive(Parser)]
@@ -116,83 +78,9 @@ struct IndexCli {
     /// Force LSM segment merge & tombstone compaction
     #[arg(long, conflicts_with = "rebuild")]
     compact: bool,
-    /// Enable external OCR (tesseract/pdftoppm) for images and scanned PDFs
-    #[arg(long)]
-    ocr: bool,
-}
-
-#[derive(Parser)]
-#[command(name = "lancet status", about = "Show index status")]
-struct StatusCli {
-    #[arg(default_value = ".")]
-    path: PathBuf,
-    #[arg(long)]
-    index_dir: Option<PathBuf>,
-}
-
-#[derive(Parser)]
-#[command(
-    name = "lancet parse",
-    about = "Print the canonical query and IR as JSON"
-)]
-struct ParseCli {
-    query: String,
-}
-
-#[derive(Parser)]
-#[command(
-    name = "lancet explain",
-    about = "Explain query execution plan and index selectivity"
-)]
-struct ExplainCli {
-    query: String,
-    #[arg(default_value = ".")]
-    path: PathBuf,
-    #[arg(long, hide = true)]
-    index_dir: Option<PathBuf>,
-    #[arg(long, hide = true)]
-    no_index: bool,
-    #[arg(long, conflicts_with = "no_index", hide = true)]
-    trust_index: bool,
-    #[arg(long)]
-    hidden: bool,
-    #[arg(long)]
-    no_ignore: bool,
-}
-
-#[derive(Parser)]
-#[command(
-    name = "lancet batch",
-    about = "Run multiple queries sharing a single walk and index"
-)]
-struct BatchCli {
-    #[arg(default_value = ".")]
-    path: PathBuf,
-    /// Query strings (repeatable)
-    #[arg(short = 'q', long = "query")]
-    queries: Vec<String>,
-    /// Optional names corresponding to -q entries
-    #[arg(long = "name")]
-    names: Vec<String>,
-    /// JSON object {"name": "query", ...} or array ["query1", ...]
-    #[arg(long)]
-    queries_json: Option<String>,
-    #[arg(long, hide = true)]
-    no_index: bool,
-    #[arg(long, conflicts_with = "no_index", hide = true)]
-    trust_index: bool,
-    #[arg(long, hide = true)]
-    index_dir: Option<PathBuf>,
-    #[arg(long)]
-    hidden: bool,
-    #[arg(long)]
-    no_ignore: bool,
-    #[arg(short = 'j', long)]
-    threads: Option<usize>,
-    #[arg(long, default_value_t = 20)]
-    max_lines: usize,
-    #[arg(long, default_value_t = 240)]
-    max_cols: usize,
+    /// Print the index's state (segments, files, size) as JSON and change nothing
+    #[arg(long, conflicts_with_all = ["rebuild", "compact"])]
+    status: bool,
     /// Enable external OCR (tesseract/pdftoppm) for images and scanned PDFs
     #[arg(long)]
     ocr: bool,
@@ -542,16 +430,20 @@ fn main() -> ExitCode {
         Some("outline") => run_outline(OutlineCli::parse_from(&args[1..])),
         Some("refs") => run_refs(RefsCli::parse_from(&args[1..])),
         Some("index") => run_index(IndexCli::parse_from(&args[1..])),
-        Some("status") => run_status(StatusCli::parse_from(&args[1..])),
-        Some("parse") => run_parse(ParseCli::parse_from(&args[1..])),
-        Some("explain") => run_explain(ExplainCli::parse_from(&args[1..])),
-        Some("batch") => run_batch(BatchCli::parse_from(&args[1..])),
         Some("rg") => run_rg(RgCli::parse_from(&args[1..])),
         Some("patch") => run_patch(PatchCli::parse_from(&args[1..])),
         Some("rename") => run_rename(RenameCli::parse_from(&args[1..])),
         Some("write") => run_write(WriteCli::parse_from(&args[1..])),
         Some("mcp") => run_mcp(McpCli::parse_from(&args[1..])),
-        _ => run_search(SearchCli::parse_from(&args)),
+        _ => {
+            // Only --help / --version / no arguments get here without an error.
+            let cli = TopCli::parse_from(&args);
+            eprintln!(
+                "error: unknown command `{}` (run `lancet --help` for the list)",
+                cli.command
+            );
+            ExitCode::from(2)
+        }
     }
 }
 
@@ -565,74 +457,15 @@ fn index_mode(no_index: bool, trust_index: bool) -> IndexMode {
     }
 }
 
-fn run_search(cli: SearchCli) -> ExitCode {
-    init_threads(cli.threads);
-    let mut opts = SearchOptions::new(&cli.path);
-    opts.index_dir = cli.index_dir;
-    opts.walk = WalkOpts {
-        hidden: cli.hidden,
-        no_ignore: cli.no_ignore,
-        threads: cli.threads.unwrap_or(0),
-        ..WalkOpts::default()
-    };
-    opts.index = index_mode(cli.no_index, cli.trust_index);
-    opts.ocr = cli.ocr;
-    opts.max_lines = cli.max_lines;
-    opts.max_cols = cli.max_cols;
-    let r = search(&cli.query, &opts);
-    let stdout = io::stdout();
-    let mut out = io::BufWriter::new(stdout.lock());
-    let _ = if cli.json {
-        serde_json::to_writer(&mut out, &r)
-            .map_err(io::Error::other)
-            .and_then(|_| writeln!(out))
-    } else {
-        print_human(&r, &mut out)
-    };
-    let _ = out.flush();
-    if !cli.json && r.truncated {
-        if let Some(b) = &r.budget {
-            eprintln!(
-                "[lancet] showing {} of {}{} results (~{}/{} tokens)",
-                r.returned,
-                r.matched,
-                if r.matched_is_lower_bound { "+" } else { "" },
-                b.used_tokens,
-                b.limit_tokens
-            );
-        } else {
-            eprintln!(
-                "[lancet] showing {} of {}{} results",
-                r.returned,
-                r.matched,
-                if r.matched_is_lower_bound { "+" } else { "" }
-            );
-        }
-    }
-    for w in &r.warnings {
-        eprintln!("[lancet] warning: {w}");
-    }
-    if cli.stats {
-        eprintln!(
-            "[lancet] mode={} query={} {}",
-            r.mode,
-            r.query.as_deref().unwrap_or("-"),
-            serde_json::to_string(&r.stats).unwrap_or_default()
-        );
-    }
-    match r.status {
-        Status::Complete => ExitCode::SUCCESS,
-        Status::Empty => ExitCode::from(1),
-        _ => ExitCode::from(2),
-    }
-}
-
 fn run_index(cli: IndexCli) -> ExitCode {
     init_threads(cli.threads);
     let dir = cli
         .index_dir
         .clone()
         .unwrap_or_else(|| index::default_dir(&cli.path));
+    if cli.status {
+        return index_status(dir);
+    }
     let wopts = WalkOpts {
         hidden: cli.hidden,
         no_ignore: cli.no_ignore,
@@ -670,10 +503,7 @@ fn run_index(cli: IndexCli) -> ExitCode {
     }
 }
 
-fn run_status(cli: StatusCli) -> ExitCode {
-    let dir = cli
-        .index_dir
-        .unwrap_or_else(|| index::default_dir(&cli.path));
+fn index_status(dir: PathBuf) -> ExitCode {
     match Index::open(&dir) {
         Ok(Some(ix)) => {
             let bytes: usize = ix.segs.iter().map(|s| s.disk_bytes()).sum();
@@ -700,95 +530,6 @@ fn run_status(cli: StatusCli) -> ExitCode {
             eprintln!("error: {e:#}");
             ExitCode::from(2)
         }
-    }
-}
-
-fn run_parse(cli: ParseCli) -> ExitCode {
-    match parse(&cli.query) {
-        Ok(q) => {
-            println!(
-                "{}",
-                serde_json::json!({ "canonical": q.to_string(), "ir": q })
-            );
-            ExitCode::SUCCESS
-        }
-        Err(e) => {
-            println!("{}", serde_json::json!({ "error": e }));
-            ExitCode::from(2)
-        }
-    }
-}
-
-fn run_explain(cli: ExplainCli) -> ExitCode {
-    let mut opts = SearchOptions::new(&cli.path);
-    opts.index_dir = cli.index_dir;
-    opts.walk = WalkOpts {
-        hidden: cli.hidden,
-        no_ignore: cli.no_ignore,
-        threads: 0,
-        ..WalkOpts::default()
-    };
-    opts.index = index_mode(cli.no_index, cli.trust_index);
-    let rep = explain(&cli.query, &opts);
-    println!("{}", serde_json::to_string_pretty(&rep).unwrap());
-    match rep.status {
-        Status::Complete => ExitCode::SUCCESS,
-        _ => ExitCode::from(2),
-    }
-}
-
-fn run_batch(cli: BatchCli) -> ExitCode {
-    init_threads(cli.threads);
-    let mut pairs: Vec<(String, String)> = Vec::new();
-    if let Some(raw) = &cli.queries_json {
-        if let Ok(map) = serde_json::from_str::<BTreeMap<String, String>>(raw) {
-            pairs.extend(map);
-        } else if let Ok(arr) = serde_json::from_str::<Vec<String>>(raw) {
-            for (i, q) in arr.into_iter().enumerate() {
-                pairs.push((format!("q{}", i + 1), q));
-            }
-        } else {
-            eprintln!("error: --queries-json must be a JSON object {{\"name\": \"query\"}} or array [\"query\"]");
-            return ExitCode::from(2);
-        }
-    }
-    for (i, q) in cli.queries.into_iter().enumerate() {
-        let name = cli
-            .names
-            .get(i)
-            .cloned()
-            .unwrap_or_else(|| format!("q{}", pairs.len() + 1));
-        pairs.push((name, q));
-    }
-    if pairs.is_empty() {
-        eprintln!("error: provide at least one -q <QUERY> or --queries-json");
-        return ExitCode::from(2);
-    }
-
-    let mut opts = SearchOptions::new(&cli.path);
-    opts.index_dir = cli.index_dir;
-    opts.walk = WalkOpts {
-        hidden: cli.hidden,
-        no_ignore: cli.no_ignore,
-        threads: cli.threads.unwrap_or(0),
-        ..WalkOpts::default()
-    };
-    opts.index = index_mode(cli.no_index, cli.trust_index);
-    opts.ocr = cli.ocr;
-    opts.max_lines = cli.max_lines;
-    opts.max_cols = cli.max_cols;
-
-    let rep = search_batch(&pairs, &opts);
-    println!("{}", serde_json::to_string(&rep).unwrap());
-    if rep.results.iter().any(|r| {
-        matches!(
-            r.response.status,
-            Status::InvalidQuery | Status::Unsupported
-        )
-    }) {
-        ExitCode::from(2)
-    } else {
-        ExitCode::SUCCESS
     }
 }
 

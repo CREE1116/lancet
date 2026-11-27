@@ -11,29 +11,26 @@ Use `lancet` as your unified, deterministic CLI replacement for `rg`, `fd`, `ast
   - `lancet fd -t f -e rs src --changed-within 7d`
   - `lancet fd --trust-index --type-class document --json`
 - Inspect a file's symbol/heading/sheet/archive skeleton before reading the whole file:
-  - `lancet outline src/search.rs`
+  - `lancet outline src/rg.rs`
   - `lancet outline docs/spec.md`
   - `lancet outline report.xlsx`
 
-## 2. Search Code, Docs & Archives (`lancet` — replaces `rg` / `rga`)
+## 2. Search Code, Docs & Archives (`lancet rg` — replaces `rg` / `rga` / Grep)
 
-- Express boolean, proximity, fuzzy, regex, and AST-scoped queries in a single pass:
-  - `lancet '"exact_symbol" in ext:rs'`
-  - `lancet 'near("gradient", "clip", 30) in function | expand parent'`
-  - `lancet '("OOM" OR "out of memory") NOT "CPU" in line'`
-  - `lancet 'fuzzy("transmte", 1) | limit 10 | budget tokens:1500'`
-- Need familiar `ripgrep` flags or output (`-w`, `-i`/`-S`, `-A`/`-B`/`-C`, `-g`, `-t`, `--json`, `--vimgrep`, `--files`)? Use `lancet rg` as a drop-in entrypoint:
-  - `lancet rg -w -t rs 'execute_one' src`
-  - Uses `.lancet` automatically (always fresh), always sorts output by path, and enables line numbers (`-n`) by default. See [ripgrep parity](./rg-parity.md) for the flag table and differences (unsupported: `-P`/`--pcre2` and `--pre`).
+- `lancet rg` takes ripgrep's flags and prints ripgrep's output (`-w`, `-i`/`-S`, `-A`/`-B`/`-C`, `-g`, `-t`, `-U`, `--json`, `--vimgrep`, `--files`):
+  - `lancet rg -w -t rs 'plan_targets' src`
+  - `lancet rg --docs 'learning rate' docs` (also inside PDF, Office, HWP and archives)
+  - Uses `.lancet` automatically (always fresh), always sorts output by path, and keeps line numbers (`-n`) on. See [ripgrep parity](./rg-parity.md) for the flag table and differences (unsupported: `-P`/`--pcre2` and `--pre`).
+- Structure instead of text: `lancet ast '$X.unwrap()' src --lang rs`; definitions and uses: `lancet refs NAME src`.
 - Searches source code, `.pdf`, `.docx`, `.pptx`, `.odt`, `.hwp` (5.0 OLE), `.hwpx`, `.epub`, `.xlsx/.xls/.ods`, and `.zip/.tar.gz` natively in-process.
 - Run `lancet index .` once on large repositories (`>5k` files); `Auto` mode re-checks every indexed file's `(mtime, size, ctime, inode)`, plus a check for timestamps too recent to trust, so results are **never stale** (`Scan == Auto`).
 
 ## 3. Read Surgically (`lancet read` — replaces `cat`/`sed`/PDF extractors)
 
 - Line numbers match `lancet` search output 1-to-1 across code AND binary documents:
-  - `lancet read src/search.rs --symbol execute_one`
-  - `lancet read src/search.rs:100-160 src/main.rs:1-40` (several targets in one call)
-  - `lancet read src/search.rs:100-160 --budget-tokens 800`
+  - `lancet read src/rg.rs --symbol run`
+  - `lancet read src/rg.rs:100-160 src/main.rs:1-40` (several targets in one call)
+  - `lancet read src/rg.rs:100-160 --budget-tokens 800`
   - `lancet read docs/paper.pdf --page 2:3`
   - `lancet read finance/budget.xlsx --sheet 1 --rows 1:30 --cols A:E`
   - `lancet read logs/bundle.zip!node_0.log --lines 1:50`
@@ -42,7 +39,7 @@ Use `lancet` as your unified, deterministic CLI replacement for `rg`, `fd`, `ast
 
 - Find `[def]` declarations and `[ref]` AST identifier sites (comments & strings automatically excluded):
   - `lancet refs SearchOptions src`
-  - `lancet refs execute_one src --lang rs --json`
+  - `lancet refs plan_targets_with_req src --lang rs --json`
 - Rank declarations matching a glob by lexical reference count to locate core types/functions quickly (`definitions > 1` indicates multiple declarations share that name):
   - `lancet refs --rank '*Service' --kind class src --limit 10`
   - `lancet refs --rank '*' --kind function --limit 10 .`
@@ -62,10 +59,10 @@ Supported languages (24): `rs`, `py`, `js`, `ts`, `tsx`, `go`, `c`, `cpp`, `zig`
 ## 6. Edit by Coordinates (`lancet edit` — replaces `sed -i` / hand-written patches)
 
 - Address lines exactly as `lancet read` does, then replace, delete, or insert:
-  - `lancet edit src/search.rs --symbol execute_one --with-file new_fn.rs`
-  - `lancet edit src/search.rs --lines 120:135 --with-file - < patch.txt`
-  - `lancet edit src/search.rs --lines 42 --insert-after '    log::debug!("x");'`
-  - `lancet edit src/search.rs --lines 42:44 --delete`
+  - `lancet edit src/rg.rs --symbol run --with-file new_fn.rs`
+  - `lancet edit src/rg.rs --lines 120:135 --with-file - < patch.txt`
+  - `lancet edit src/rg.rs --lines 42 --insert-after '    log::debug!("x");'`
+  - `lancet edit src/rg.rs --lines 42:44 --delete`
 - **Exact text instead of line numbers** (like a `str_replace` edit tool): `--find TEXT` changes that text, which may be part of a line or span several lines. It must occur exactly once, otherwise the edit is refused and the error lists the lines where it occurs — add surrounding text until it is unique, or pass `--all` to change every occurrence. `\n` in the text also matches CRLF files.
   - `lancet edit src/x.rs --find 'let retries = 3;' --with 'let retries = 5;' --rev <REV> --apply`
   - In `--edits`: `{"find": "old_name(", "with": "new_name(", "all": true}`
@@ -91,8 +88,8 @@ Supported languages (24): `rs`, `py`, `js`, `ts`, `tsx`, `go`, `c`, `cpp`, `zig`
 ## 8. Rename Local Bindings (`lancet rename`)
 
 - Rename a variable, closure parameter, loop variable, or supported function parameter inside a single file with scope proof:
-  - `lancet rename src/search.rs:42 old_name new_name` (dry-run diff)
-  - `lancet rename src/search.rs:42:9 old_name new_name --rev <REV> --apply`
+  - `lancet rename src/rg.rs:42 old_name new_name` (dry-run diff)
+  - `lancet rename src/rg.rs:42:9 old_name new_name --rev <REV> --apply`
 - **Supported languages (6):** Rust (`rs`), Python (`py`), JavaScript (`js`), TypeScript (`ts`), TSX (`tsx`), and Go (`go`).
 - **Safety by design:** Refuses top-level/module/exported symbols, struct fields, methods, Python parameters (keyword-arg callers can cross files), macros, JSX tag names, Go composite-literal keys, dynamic scopes (`eval`/`with`/`locals()`/`global`/`nonlocal`), and any rename whose post-rename scope re-resolution detects shadowing or variable capture.
 - When `lancet rename` refuses a cross-file or top-level symbol, inspect occurrences with `lancet refs <SYMBOL>` and apply explicit updates with `lancet edit --edits` or `lancet ast --rewrite`.

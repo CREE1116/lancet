@@ -259,8 +259,9 @@ def scenario_e(n_terms: int = 40) -> dict:
             rga_found += 1
             ln = int(m.group(1))
             chain_ok += t in (plain[ln - 1] if ln - 1 < len(plain) else "")
-        s = lancet_json([t, "report.docx"], cwd=d)
-        hit = s["results"][0]["lines"][0]["line"] if s.get("results") else None
+        out = sh([LANCET, "rg", "--docs", "-n", "-m1", t, "report.docx"], cwd=d).stdout.decode()
+        m2 = re.match(r"(\d+):", out)
+        hit = int(m2.group(1)) if m2 else None
         if hit:
             rd = lancet_json(["read", "report.docx", "--lines", str(hit)], cwd=d)
             lan_ok += any(t in l["text"] for l in rd.get("lines", []))
@@ -274,7 +275,7 @@ def scenario_e(n_terms: int = 40) -> dict:
     for fname, t in (("budget.xlsx", "H100_CLUSTER_CAPEX"), ("memo.hwpx", "국가클라우드보안인증검토")):
         unsupported[fname] = {
             "rga_hits": len(sh([rga, "-l", t, fname], cwd=d).stdout.splitlines()),
-            "lancet_hits": lancet_json([t, fname], cwd=d).get("matched", 0),
+            "lancet_hits": len(sh([LANCET, "rg", "--docs", "-l", t, fname], cwd=d).stdout.splitlines()),
         }
     shutil.rmtree(d)
     return {"terms": len(terms), "rga_found": rga_found,
@@ -301,7 +302,7 @@ def scenario_g() -> dict:
     for i, f in enumerate(files):
         f.write_text(f.read_text().replace(f"OLD_TOKEN_{i:02d}", f"FRESH_TOKEN_{i:02d}"))
     zl = lambda q: len(sh([tool("zoekt"), "-index_dir", str(zidx), "-l", q]).stdout.splitlines())  # noqa: E731
-    ll = lambda q: len(lancet_json([f'"{q}" | files', str(d)]).get("results", []))  # noqa: E731
+    ll = lambda q: len(sh([LANCET, "rg", "-l", q, str(d)]).stdout.splitlines())  # noqa: E731
     res = {"edited_files": len(files),
            "zoekt": {"finds_new_token_in": zl("FRESH_TOKEN_"), "still_finds_removed_token_in": zl("OLD_TOKEN_")},
            "lancet_auto": {"finds_new_token_in": ll("FRESH_TOKEN_"), "still_finds_removed_token_in": ll("OLD_TOKEN_")}}

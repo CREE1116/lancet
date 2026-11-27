@@ -96,7 +96,7 @@ The result text is the command's stdout, then stderr, then `[exit N]` for a non-
 
 ## 4. Installing the Official Agent Skill
 
-Install [`skills/lancet`](../skills/lancet) (including `SKILL.md` and `references/` covering LQL, 24 AST languages, `edit`/`patch`/`rename` schemas, and MCP configs) into whichever agent harness you use:
+Install [`skills/lancet`](../skills/lancet) (including `SKILL.md` and `references/` covering `rg` notes, 24 AST languages, `edit`/`patch`/`rename` schemas, and MCP configs) into whichever agent harness you use:
 
 ```bash
 # Project-local (universal .agents convention)

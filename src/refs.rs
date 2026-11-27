@@ -5,10 +5,9 @@
 
 use crate::code;
 use crate::index::{self, Req};
-use crate::matcher::for_each_token;
 use crate::output::{ErrorInfo, Stats, Status};
 use crate::query::{Expr, FileType, Filters, Matcher};
-use crate::search::{plan_targets_with_req, IndexMode, Target};
+use crate::scope::{plan_targets_with_req, IndexMode, Target};
 use crate::walk::{walk, FileFilter, WalkOpts};
 use memchr::memmem;
 use rayon::prelude::*;
@@ -734,5 +733,48 @@ pub fn rank_symbols(opts: &RefsOptions, kinds: &[String]) -> RankResponse {
         error: None,
         files_parsed: per_file.len(),
         elapsed_ms: ms(t0),
+    }
+}
+
+#[inline]
+fn is_word_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
+/// Visit byte ranges of word tokens (`[\p{Alphanumeric}_]+`). Stops when `f`
+/// returns false.
+pub fn for_each_token(hay: &[u8], f: &mut dyn FnMut(usize, usize) -> bool) {
+    let base = hay.as_ptr() as usize;
+    let mut start: Option<usize> = None;
+    for chunk in hay.utf8_chunks() {
+        let v = chunk.valid();
+        let off = v.as_ptr() as usize - base;
+        for (i, c) in v.char_indices() {
+            let w = if c.is_ascii() {
+                c.is_ascii_alphanumeric() || c == '_'
+            } else {
+                is_word_char(c)
+            };
+            match (w, start) {
+                (true, None) => start = Some(off + i),
+                (false, Some(s)) => {
+                    start = None;
+                    if !f(s, off + i) {
+                        return;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !chunk.invalid().is_empty() {
+            if let Some(s) = start.take() {
+                if !f(s, off + v.len()) {
+                    return;
+                }
+            }
+        }
+    }
+    if let Some(s) = start {
+        f(s, hay.len());
     }
 }

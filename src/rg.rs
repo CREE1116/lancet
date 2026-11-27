@@ -10,7 +10,7 @@ use crate::content;
 use crate::index::{self, Req};
 use crate::output::Stats;
 use crate::query::{Expr, Matcher};
-use crate::search::{plan_targets_with_req, IndexMode, Target};
+use crate::scope::{plan_targets_with_req, IndexMode, Target};
 use crate::walk::{walk, FileFilter, WalkOpts};
 use rayon::prelude::*;
 use regex::bytes::{Captures, Regex, RegexBuilder};

@@ -43,4 +43,4 @@ Exit `0` done, `1` nothing found, `2` refused (message on stderr).
 - **old_string not unique / not found**: add context, or `--replace-all`.
 - **`rename` refused** (macro it can't see into, `eval`, a capture): use `lancet refs NAME` and one `lancet edit --edits` call.
 
-More: [references/edit-patch-rename.md](references/edit-patch-rename.md) (read/edit/write/patch/rename in detail, Claude Code allowlist) · [references/query-and-ast.md](references/query-and-ast.md) (query language, `rg` notes, AST patterns) · `lancet mcp` for clients without a shell.
+More: [references/edit-patch-rename.md](references/edit-patch-rename.md) (read/edit/write/patch/rename in detail, Claude Code allowlist) · [references/rg-and-ast.md](references/rg-and-ast.md) (`rg` notes, `refs --rank`, AST patterns) · `lancet mcp` for clients without a shell.
