@@ -87,6 +87,8 @@ nav .links a:hover { color: var(--text); }
 .cmd { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
 .cmd code { flex: 1; font-size: 14px; white-space: pre; overflow-x: auto; }
 .cmd code::before { content: "$ "; color: var(--text-3); }
+.cmd.is-prompt code { white-space: pre-wrap; word-break: break-word; font-family: var(--sans); line-height: 1.5; }
+.cmd.is-prompt code::before { content: none; }
 .copy { flex: none; background: var(--bg-3); color: var(--text-2); border: 1px solid var(--line); border-radius: 6px; font: 12px var(--mono); padding: 6px 10px; cursor: pointer; }
 .copy:hover { color: var(--text); }
 

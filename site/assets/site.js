@@ -40,10 +40,12 @@
 
   /* install tabs */
   const cmd = $('#cmd');
+  const cmdBox = cmd.closest('.cmd');
   let activeMethod = 'macos';
   $$('.tabs button').forEach(b => b.addEventListener('click', () => {
     $$('.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
     cmd.textContent = b.dataset.cmd;
+    cmdBox.classList.toggle('is-prompt', b.dataset.prompt === 'true');
     activeMethod = b.dataset.method || b.textContent.trim().toLowerCase();
     track(`install_tab:${activeMethod}`);
   }));

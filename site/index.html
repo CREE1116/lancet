@@ -88,10 +88,11 @@
       </div>
       <div class="install" id="install">
         <div class="tabs" role="tablist" aria-label="Install method">
-          <button role="tab" aria-selected="true" data-cmd="curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh">macOS / Linux</button>
-          <button role="tab" aria-selected="false" data-cmd="brew tap CREE1116/lancet https://github.com/CREE1116/lancet && brew install CREE1116/lancet/lancet">Homebrew</button>
-          <button role="tab" aria-selected="false" data-cmd="irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex">Windows</button>
-          <button role="tab" aria-selected="false" data-cmd="cargo binstall --git https://github.com/CREE1116/lancet lancet">cargo</button>
+          <button role="tab" aria-selected="true" data-method="macos" data-cmd="curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh">macOS / Linux</button>
+          <button role="tab" aria-selected="false" data-method="homebrew" data-cmd="brew tap CREE1116/lancet https://github.com/CREE1116/lancet && brew install CREE1116/lancet/lancet">Homebrew</button>
+          <button role="tab" aria-selected="false" data-method="windows" data-cmd="irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex">Windows</button>
+          <button role="tab" aria-selected="false" data-method="cargo" data-cmd="cargo binstall --git https://github.com/CREE1116/lancet lancet">cargo</button>
+          <button role="tab" aria-selected="false" data-method="agent" data-prompt="true" data-cmd="Install lancet (curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh), run &quot;lancet index .&quot; in this repo, and add https://raw.githubusercontent.com/CREE1116/lancet/main/docs/agent-instructions.md to AGENTS.md / CLAUDE.md.">for Agent</button>
         </div>
         <div class="cmd"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh</code><button class="copy" id="copy">Copy</button></div>
       </div>
@@ -101,10 +102,6 @@
           <span>Star on GitHub</span>
           <span class="star-count" data-gh-stars hidden></span>
         </a>
-        <button type="button" class="btn-agent" id="copy-agent-hero">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span>Copy AGENTS.md / CLAUDE.md rules</span>
-        </button>
       </div>
     </div>
     <div class="term" aria-label="Terminal session using lancet (real output from the lancet repository)">
