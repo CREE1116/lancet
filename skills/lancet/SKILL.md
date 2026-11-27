@@ -62,4 +62,4 @@ Exit `0` = done, `1` = nothing found (not an error), `2` = refused or invalid â€
 
 - Query language, `rg` flags, `ast` languages and metavariables: [references/query-and-ast.md](references/query-and-ast.md)
 - `read`, `edit --edits`, `patch` and `rename` in detail: [references/edit-patch-rename.md](references/edit-patch-rename.md)
-- The same tools over MCP (`lancet mcp`), for clients without a shell: [references/mcp-config.json](references/mcp-config.json) and `docs/mcp.md`
+- Clients without a shell: `lancet mcp` serves one `lancet` tool that takes these same arguments as `{"args": [...]}` â€” [references/mcp-config.json](references/mcp-config.json), `docs/mcp.md`

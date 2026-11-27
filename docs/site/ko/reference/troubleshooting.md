@@ -38,4 +38,4 @@ Lancet의 모든 거절은 조용히 덮어쓰지 않고 종료 코드 `2`와 �
 | Windows에서 크기·`mtime` 동일한 수정 놓침 | Windows에서 Rust stdlib이 `mtime`과 `size`만 제공함 | 타임스탬프를 되돌리는 도구 실행 후엔 `lancet index .`나 `--no-index`를 쓰세요. |
 | `lancet rg`가 PDF / `.docx` 내용을 못 찾음 | `lancet rg`는 `rg` 호환성 때문에 어댑터가 기본 OFF | `lancet rg --docs`를 붙이거나 기본 LQL 검색(`lancet 'query'`)을 쓰세요. |
 | 스캔 PDF / 이미지 텍스트가 비어 있음 | 임베디드 텍스트 레이어가 없는 이미지 | `--ocr`을 붙이고 `PATH`에 `pdftoppm`과 `tesseract`가 있는지 확인하세요. |
-| MCP 목록에 `lancet_edit` / `patch` / `rename` 없음 | `lancet mcp --read-only`로 실행됨 | 편집이 필요하면 `--read-only` 없이 서버를 다시 시작하세요. |
+| MCP 호출이 "this MCP server is read-only"로 실패 | `lancet mcp --read-only`로 실행됨 (`edit`, `patch`, `rename`, `index`, `--apply` 거절) | 편집이 필요하면 `--read-only` 없이 서버를 다시 시작하세요. |

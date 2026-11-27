@@ -1,12 +1,12 @@
 ---
-nav_title: "JSON Schemas & MCP Tools"
-title: "JSON Response Schemas & MCP 11-Tool Reference"
-description: "Exact JSON response structs and all 11 lancet mcp inputSchema parameters, defaults, and JSON-RPC codes."
-lede: "Machine-readable response fields verified against Rust structs and every MCP tool parameter schema."
-keywords: "json schema response mcp inputschema lancet_fd lancet_rg lancet_edit max_output_bytes json-rpc"
+nav_title: "JSON Schemas & MCP"
+title: "JSON Response Schemas & the MCP Tool"
+description: "Exact JSON response structs, the lancet mcp tool schema, and JSON-RPC codes."
+lede: "Machine-readable response fields verified against Rust structs, and the single MCP tool that takes CLI arguments."
+keywords: "json schema response mcp inputschema args stdin max_output_bytes json-rpc"
 source: "https://github.com/CREE1116/lancet/blob/main/docs/mcp.md"
 ---
-Exact JSON response types serialized from Rust structs in `src/` and complete parameter schemas for all 11 tools in `src/mcp.rs`.
+Exact JSON response types serialized from Rust structs in `src/`, and the schema of the one MCP tool in `src/mcp.rs`.
 
 ## Status Enum & ErrorInfo {#status}
 
@@ -50,20 +50,21 @@ Exact JSON response types serialized from Rust structs in `src/` and complete pa
 // ExplainResponse: { status, canonical?, ir?, trigram_req?, index_exists, files_considered, index_candidates?, stale_files?, selectivity_pct?, grams_available?, grams_decoded?, elapsed_ms }
 ```
 
-## MCP 11-Tool Schemas (lancet mcp) {#mcp-tools}
+## MCP: the `lancet` tool {#mcp-tools}
 
-Protocol revisions: `2025-03-26`, `2024-11-05`. JSON-RPC errors: `-32700` (parse error), `-32600` (invalid request), `-32601` (unknown method), `-32602` (invalid params / unknown prompt). Note: `status: "empty"` yields `isError: false`.
+Protocol revisions: `2025-03-26`, `2024-11-05`. JSON-RPC errors: `-32700` (parse error), `-32600` (invalid request), `-32601` (unknown method), `-32602` (unknown tool). One tool:
 
-| Tool (Required) | Parameters & Types | Read-Only / Notes |
-| --- | --- | --- |
-| `lancet_fd` | `path`, `pattern`, `pattern_mode` (`substring\|glob\|regex`), `case_sensitive`, `kinds`, `dirs`, `exts`, `type_classes`, `max_depth`, `changed_within`, `min_size`, `max_size`, `tree`, `limit`, `index_mode` (`auto\|off\|trust`), `hidden`, `no_ignore`, `meta` | `readOnlyHint: true` |
-| `lancet_search` (`query`) | `query`*, `path`, `max_lines` (20), `max_cols` (240), `index_mode`, `hidden`, `no_ignore`, `ocr` | `readOnlyHint: true` |
-| `lancet_rg` (`pattern`) | `pattern`*, `path`, `fixed_strings`, `ignore_case`, `smart_case`, `word`, `line_regexp`, `invert`, `multiline`, `multiline_dotall`, `only_matching`, `count`, `files_with_matches`, `max_count`, `before`, `after`, `context`, `globs`, `iglobs`, `types`, `types_not`, `type_add`, `max_depth`, `max_filesize`, `follow`, `docs`, `passthru`, `index_mode`, `hidden`, `no_ignore`, `max_output_bytes` (128 KiB..4 MiB) | `readOnlyHint: true`; line-boundary truncation |
-| `lancet_outline` | `path`, `max_depth`, `exts`, `limit`, `hidden`, `no_ignore`, `ocr` | `readOnlyHint: true` |
-| `lancet_read` (`target`) | `target`*, `lines`, `symbol`, `page`, `sheet`, `rows`, `cols`, `entry`, `budget_tokens`, `ocr` | `readOnlyHint: true`; returns `rev` on plain text |
-| `lancet_refs` (`symbol`) | `symbol`*, `path`, `lang`, `exts`, `paths`, `all_files`, `rank`, `kinds`, `limit`, `index_mode`, `hidden`, `no_ignore` | `readOnlyHint: true` |
-| `lancet_ast` (`pattern`) | `pattern`*, `path`, `lang`, `rewrite`, `apply` (`false`), `paths`, `limit`, `index_mode`, `hidden`, `no_ignore` | `apply: true` refused under `--read-only` |
-| `lancet_edit` (`path`) | `path`*, `lines`, `symbol`, `find`, `all`, `with`, `delete`, `insert_before`, `insert_after`, `edits` (array), `rev`, `apply` (`false`), `allow_syntax_errors` | Omitted under `--read-only` |
-| `lancet_patch` (`patch`) | `patch`*, `root`, `strip` (`1`), `apply` (`false`), `allow_syntax_errors` | Omitted under `--read-only` |
-| `lancet_rename` (`path,line,old,new`) | `path`*, `line`*, `col`, `old`*, `new`*, `rev`, `apply` (`false`) | Omitted under `--read-only` |
-| `lancet_index` | `action` (`status\|sync\|rebuild\|compact`), `path`, `hidden`, `no_ignore`, `ocr` | `sync`/`rebuild`/`compact` refused under `--read-only` |
+```json title="inputSchema"
+{
+  "type": "object",
+  "properties": {
+    "args":             { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "stdin":            { "type": "string" },
+    "max_output_bytes": { "type": "integer", "minimum": 256, "default": 131072 }
+  },
+  "required": ["args"],
+  "additionalProperties": false
+}
+```
+
+`args` is the CLI command line (see the [CLI reference](cli.html)); add `"--json"` to get the payloads above. The text result is stdout, then stderr, then `[exit N]` for a non-zero exit; `isError` is `true` for exit `2` only. `--read-only` servers refuse `edit`, `patch`, `rename`, `index` and `--apply`, and report `readOnlyHint: true`.

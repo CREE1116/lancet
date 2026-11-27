@@ -2,22 +2,22 @@
 nav_title: "AI Agents, MCP & Skill"
 title: "AI Agents, Built-in MCP Server & Official Skill"
 description: "Configure lancet mcp across Claude Code, Cursor, Codex, Antigravity, and Claude Desktop, plus install skills/lancet."
-lede: "11 tools over newline-delimited stdio JSON-RPC with --read-only, --root, and the cross-agent Official Skill."
-keywords: "mcp server root read-only claude cursor codex antigravity skill agents.md max_output_bytes prompts"
+lede: "One `lancet` tool that takes CLI arguments, over newline-delimited stdio JSON-RPC, with --read-only and --root, plus the cross-agent Official Skill."
+keywords: "mcp server root read-only claude cursor codex antigravity skill agents.md max_output_bytes args stdin"
 source: "https://github.com/CREE1116/lancet/blob/main/docs/mcp.md"
 ---
 AI coding agents can drive Lancet via shell CLI or its zero-dependency stdio **Model Context Protocol (MCP)** server — paired with the cross-agent **Official Skill** package (`skills/lancet/`).
 
 ## Starting lancet mcp {#mcp-flags}
 
-`lancet mcp` speaks newline-delimited JSON-RPC 2.0 over `stdin`/`stdout` supporting protocol revisions `2025-03-26` and `2024-11-05`, invoking Lancet's Rust engines directly in-process.
+`lancet mcp` speaks newline-delimited JSON-RPC 2.0 over `stdin`/`stdout` (protocol revisions `2025-03-26` and `2024-11-05`) and runs each tool call as the `lancet` CLI in the `--root` directory.
 
 | Flag | Default | Exact Behavior |
 | --- | --- | --- |
-| `--root <DIR>` | `.` | Base directory for relative paths in tool arguments (**not** a chroot/sandbox; absolute or `..` paths still resolve like the CLI) |
-| `--read-only` | `false` | Removes `lancet_edit`, `lancet_patch`, and `lancet_rename` from `tools/list` and refuses writes (`lancet_ast` `apply`, mutating `lancet_index` actions) |
-| `--trust-index` | `false` | Sets default `index_mode` to `trust` instead of `auto` unless overridden per tool call |
-| `-j, --threads <NUM>` | CPU count | Rayon worker threads |
+| `--root <DIR>` | `.` | Directory commands run in, so relative paths resolve against it (**not** a chroot/sandbox; absolute or `..` paths still resolve like the CLI) |
+| `--read-only` | `false` | Refuses commands that write: `edit`, `patch`, `rename`, `index`, and anything with `--apply` |
+| `--trust-index` | `false` | Adds `--trust-index` to searches (`rg`, `fd`, `ast`, `refs`, `batch`, queries) that don't pick an index mode themselves |
+| `-j, --threads <NUM>` | CPU count | Adds `-j NUM` to those searches unless they set it |
 
 ## Ready-to-Copy Client Configurations {#client-configs}
 
@@ -83,13 +83,24 @@ mkdir -p ~/.codex/skills  && cp -R skills/lancet ~/.codex/skills/lancet
 mkdir -p ~/.gemini/config/skills && cp -R skills/lancet ~/.gemini/config/skills/lancet
 ```
 
-## Built-in MCP Prompts & AGENTS.md Rule {#prompts-notes}
+## The `lancet` tool {#mcp-tool}
 
-- **`prompts/list`:** ships `lancet-explore` (`goal` argument) and `lancet-safe-edit` (`target` argument).
-- **Empty-match semantics:** read/search tools return `isError: false` on `status: "empty"` (0 hits is normal, not an exception).
-- **Line-boundary byte cap:** `lancet_rg` caps stdout cleanly on a newline boundary via `max_output_bytes` (default `131072` B = 128 KiB, hard clamp `256..=4194304`).
+The server exposes **one tool**, `lancet`. Its arguments are the command line: `{"args": ["rg", "-w", "spin_lock", "src"]}` runs exactly what `lancet rg -w spin_lock src` runs — same binary, flags, output and exit codes — in the `--root` directory. Every CLI feature is available over MCP as soon as it ships, and the whole schema is about 2.4 KB (the earlier 11-tool server was 12.5 KB).
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `args` | string array (required) | Arguments after `lancet`, one per element. No shell: no quoting, globbing, pipes or `&&` (`["\"OOM\" in line", "src"]`, not `["'\"OOM\" in line'"]`). |
+| `stdin` | string | Text for a `-` argument: the hunks for `edit --edits -`, the diff for `patch -`, the text for `--with-file -`. |
+| `max_output_bytes` | integer | Output cap, default `131072`, clamped to `256..=4194304`; longer output is cut and marked `truncated`. |
+
+The result is the command's stdout, then its stderr, then `[exit N]` when it is not `0`. `isError` is `true` only for exit `2` (refused or invalid); exit `1` means nothing was found and is not an error.
+
+```json title="tools/call"
+{"name": "lancet", "arguments": {"args": ["edit", "--edits", "-", "--apply"],
+  "stdin": "[{\"path\": \"src/a.rs\", \"rev\": \"7b47…\", \"find\": \"old(\", \"with\": \"new(\"}]"}}
+```
 
 ```bash title="AGENTS.md / CLAUDE.md snippet"
-Prefer lancet (lancet_* MCP tools or lancet CLI) instead of rg/fd/ast-grep/cat/sed.
-Orient with fd/outline, locate with rg/search/refs/ast, capture rev via read, apply changes via edit/patch/rename --rev --apply.
+Prefer lancet (the lancet CLI, or the `lancet` MCP tool with the same arguments) to rg/fd/ast-grep/cat/sed.
+Orient with fd/outline/refs --rank, locate with rg/refs/ast, note the rev from read, change with edit/patch/rename --rev --apply.
 ```

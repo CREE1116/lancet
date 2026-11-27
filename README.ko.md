@@ -85,7 +85,7 @@ git diff | lancet patch --apply                             # unified diff를 �
 | `lancet read` | 정확한 줄 범위, `--symbol`, PDF/PPTX `--page`, 엑셀 `--sheet --rows --cols`, `archive.zip!항목`, 이어읽기 커서가 있는 `--budget-tokens` |
 | `lancet edit` | `read`와 같은 좌표(`--lines`, `--symbol`, 유일해야 하는 정확한 텍스트 `--find`, 여러 구간은 `--edits`)로 줄 교체·삭제·삽입. `--rev` 기준 잠금 compare-and-swap이라 여러 에이전트가 동시에 고쳐도 서로 덮어쓰지 않음. 구문 오류가 늘어나면 거부, `--apply` 전에는 dry-run |
 | `lancet patch` | unified diff(`git diff`, `diff -u`, rename·모드 변경·빈 파일 포함, 바이너리 변경은 거부) 적용: 정확한 hunk 매칭(줄 번호가 밀렸으면 가장 가까운 고유 위치 탐색, 퍼지 추측 없음), 전체 파일 검증 및 동시 쓰기 충돌 시 롤백, 구문 오류 증가 거부, `--apply` 전에는 dry-run |
-| `lancet mcp` | 내장 Model Context Protocol(`stdio`) 서버 실행: 검색·`rg`·AST·`read`·`edit`·`patch`·인덱스 툴 제공(`--root`, `--read-only`, `--trust-index`) |
+| `lancet mcp` | 내장 Model Context Protocol(`stdio`) 서버. CLI 인자를 그대로 받는 `lancet` 도구 하나를 제공하며, 셸이 없는 클라이언트용입니다(`--root`, `--read-only`, `--trust-index`) |
 | `lancet outline` | 코드 선언 골격, Markdown 목차, 워크북 스키마, 압축 파일 목록 |
 | `lancet refs` | 주석·문자열 리터럴을 건너뛰는 인덱스 가속 `[def]` / `[ref]` 추적. `--rank '*Service' --kind class`로 많이 쓰이는 선언부터 나열 |
 | `lancet batch` | 여러 쿼리를 인덱스 한 번 열고 디렉터리 한 번 훑어 처리 |

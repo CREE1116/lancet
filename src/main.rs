@@ -1567,30 +1567,28 @@ fn run_patch(cli: PatchCli) -> ExitCode {
 #[derive(Parser)]
 #[command(
     name = "lancet mcp",
-    about = "Run a Model Context Protocol (MCP) server over stdio"
+    about = "Run a Model Context Protocol (MCP) server over stdio: one `lancet` tool that takes CLI arguments"
 )]
 struct McpCli {
-    /// Workspace root directory for resolving relative paths
+    /// Directory commands run in (relative paths resolve against it)
     #[arg(long, default_value = ".")]
     root: PathBuf,
-    /// Disable mutating tool calls (`lancet_edit`, `lancet_patch`, `lancet_ast` apply, `lancet_index` writes)
+    /// Refuse commands that write: edit, patch, rename, index, and anything with --apply
     #[arg(long)]
     read_only: bool,
-    /// Answer indexed queries with `trust` mode by default unless overridden per call
+    /// Add --trust-index to searches that don't pick an index mode themselves
     #[arg(long)]
     trust_index: bool,
-    /// Worker threads (default: number of CPUs)
+    /// Add -j N to searches that don't set it themselves
     #[arg(short = 'j', long)]
     threads: Option<usize>,
 }
 
 fn run_mcp(cli: McpCli) -> ExitCode {
-    init_threads(cli.threads);
     let mut cfg = lancet::mcp::McpConfig::new(cli.root);
     cfg.read_only = cli.read_only;
-    if cli.trust_index {
-        cfg.default_index_mode = IndexMode::Trust;
-    }
+    cfg.trust_index = cli.trust_index;
+    cfg.threads = cli.threads;
     match lancet::mcp::serve_stdio(cfg) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

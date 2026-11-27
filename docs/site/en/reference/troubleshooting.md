@@ -38,4 +38,4 @@ Every Lancet refusal returns exit code `2` with a specific diagnostic instead of
 | Windows misses same-size edit with preserved `mtime` | Rust stdlib on Windows exposes only `mtime` & `size` | Run `lancet index .` or query with `--no-index` after tools that restore timestamps on Windows. |
 | `lancet rg` misses text inside PDF / `.docx` | `lancet rg` disables adapters by default for `rg` parity | Pass `lancet rg --docs` (or use default LQL search `lancet 'query'`). |
 | Scanned PDF / image yields empty text | No embedded text layer in image/PDF | Pass `--ocr` and verify `pdftoppm` + `tesseract` are installed on `PATH`. |
-| `lancet_edit` / `patch` / `rename` missing in MCP | Server started with `--read-only` | Restart `lancet mcp` without `--read-only` when edits are intended. |
+| MCP call fails with "this MCP server is read-only" | Server started with `--read-only` (refuses `edit`, `patch`, `rename`, `index`, `--apply`) | Restart `lancet mcp` without `--read-only` when edits are intended. |

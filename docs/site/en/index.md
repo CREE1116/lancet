@@ -81,7 +81,7 @@ lancet edit src/search.rs --find 'let limit = 20;' \
 | Atomic multi-edit | `lancet edit f.rs --edits - --rev REV --apply` | Original coordinates, overlap-checked CAS |
 | Unified diff patch | `git diff \| lancet patch --apply` | All-file pre-check + CAS rollback |
 | Local binding rename | `lancet rename f.rs:42 old new --rev REV --apply` | 6 languages; scope re-resolution proof |
-| MCP stdio server | `lancet mcp --root .` | 11 tools, JSON-RPC 2.0, `--read-only` option |
+| MCP stdio server | `lancet mcp --root .` | one `lancet` tool taking CLI arguments, JSON-RPC 2.0, `--read-only` option |
 | Index diagnostics | `lancet explain 'pat'` · `lancet status` | Trigram requirements & selectivity % |
 
 ## Where to Go Next {#next-steps}

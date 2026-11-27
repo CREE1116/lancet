@@ -85,7 +85,7 @@ git diff | lancet patch --apply                             # apply a unified di
 | `lancet read` | Exact line ranges, `--symbol`, PDF/PPTX `--page`, spreadsheet `--sheet --rows --cols`, `archive.zip!entry`, `--budget-tokens` with resume cursors |
 | `lancet edit` | Replace / delete / insert lines addressed like `read` (`--lines`, `--symbol`, exact text with `--find` that must be unique, or many hunks at once with `--edits`); a locked compare-and-swap on `--rev`, so concurrent agents never overwrite each other; refuses a net increase in syntax errors; dry-run unless `--apply` |
 | `lancet patch` | Apply unified diffs (`git diff`, `diff -u`, including renames, mode changes and empty files; binary changes are refused) with exact hunk matching (unique nearest-offset relocation, never fuzzy), all-or-nothing multi-file verification with race rollback, and syntax-error refusal; dry-run unless `--apply` |
-| `lancet mcp` | Run a built-in Model Context Protocol (`stdio`) server exposing search, `rg`, AST, `read`, `edit`, `patch`, and index tools (`--root`, `--read-only`, `--trust-index`) |
+| `lancet mcp` | Built-in Model Context Protocol (`stdio`) server with one `lancet` tool that takes CLI arguments, for clients without a shell (`--root`, `--read-only`, `--trust-index`) |
 | `lancet outline` | Declaration skeletons, Markdown headings, workbook schemas, archive manifests |
 | `lancet refs` | Index-accelerated `[def]` / `[ref]` lookup that skips comments and string literals; `--rank '*Service' --kind class` lists the most-used declarations first |
 | `lancet batch` | Many queries over one shared index open and directory walk |

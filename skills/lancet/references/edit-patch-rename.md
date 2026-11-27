@@ -1,6 +1,6 @@
 # `read`, `edit`, `patch`, and `rename` Reference
 
-CLI flags first; the MCP tool (`lancet_read`, …) takes the same options as JSON fields (`--budget-tokens` → `budget_tokens`, `--apply` → `apply: true`).
+Over MCP, the `lancet` tool takes these same arguments as an `args` array (and `stdin` for a `-` argument).
 
 ## 1. `lancet read`
 
@@ -81,7 +81,7 @@ Hunks may carry `"path"` (and that file's `"rev"`); then PATH is optional, and h
 ## 4. `lancet rename` (Tier-1 Local Scope)
 
 - **CLI:** `lancet rename FILE:LINE[:COL] OLD NEW [--rev REV] [--apply] [--json]`
-- **MCP:** `lancet_rename(path, line, col?, old, new, rev?, apply?)`
+- **MCP:** `{"args": ["rename", "FILE:LINE", "OLD", "NEW", "--rev", "REV", "--apply"]}`
 - **Supported languages:** Rust, Python, JavaScript / TypeScript / TSX, Go.
 - **How it works & when it refuses (by design):**
   - Identifies a **local binding** (variable, parameter, closure param, loop variable) at `FILE:LINE[:COL]` (`col` optional when `old` only refers to one binding on that line).

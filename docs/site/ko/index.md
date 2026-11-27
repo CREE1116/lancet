@@ -81,7 +81,7 @@ lancet edit src/search.rs --find 'let limit = 20;' \
 | 원자적 다중 편집 | `lancet edit f.rs --edits - --rev REV --apply` | 원본 줄 번호 유지, 겹침 검증 CAS |
 | Unified Diff | `git diff \| lancet patch --apply` | 전체 파일 사전 검증 + 경합 롤백 |
 | 로컬 이름 변경 | `lancet rename f.rs:42 old new --rev REV --apply` | 6개 언어; 스코프 재해석 증명 |
-| MCP 서버 | `lancet mcp --root .` | 11개 도구 stdio JSON-RPC, `--read-only` |
+| MCP 서버 | `lancet mcp --root .` | CLI 인자를 받는 `lancet` 도구 하나, stdio JSON-RPC, `--read-only` |
 | 인덱스 진단 | `lancet explain 'pat'` · `lancet status` | 필요 트라이그램·후보 비율 출력 |
 
 ## 어디부터 볼까요? {#next-steps}

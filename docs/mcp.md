@@ -1,21 +1,21 @@
 # Lancet MCP Server & Official Agent Skill
 
-Lancet ships a built-in Model Context Protocol (MCP) stdio server (`lancet mcp`) and a cross-agent Skill package ([`skills/lancet/SKILL.md`](../skills/lancet/SKILL.md)) so AI coding agents can use Lancet without shell-escaping friction or external daemons.
+Lancet ships a cross-agent Skill package ([`skills/lancet/SKILL.md`](../skills/lancet/SKILL.md)) for agents that have a shell, and a built-in Model Context Protocol (MCP) stdio server (`lancet mcp`) for clients that don't. The server has one tool, `lancet`, that takes the same arguments as the CLI.
 
 ---
 
 ## 1. Quick Setup: `lancet mcp`
 
-`lancet mcp` speaks newline-delimited JSON-RPC 2.0 over `stdin`/`stdout` (MCP revisions `2025-03-26` and `2024-11-05`) and invokes Lancet's Rust engines directly in-process.
+`lancet mcp` speaks newline-delimited JSON-RPC 2.0 over `stdin`/`stdout` (MCP revisions `2025-03-26` and `2024-11-05`) and runs each tool call as the `lancet` CLI in the `--root` directory.
 
 ### Flags
 
 | Flag | Default | Description |
 |---|---|---|
-| `--root <DIR>` | `.` | Default working directory for resolving relative paths in tool calls (not a chroot/sandbox; absolute or `..` paths work like the CLI) |
-| `--read-only` | `false` | Omits `lancet_edit`, `lancet_patch`, and `lancet_rename` from `tools/list` and refuses writes (`lancet_ast` `apply`, `lancet_index` mutating actions) |
-| `--trust-index` | `false` | Default `index_mode` becomes `trust` instead of `auto` (fastest; skips filesystem change checks unless overridden per call) |
-| `-j`, `--threads <NUM>` | CPU count | Rayon worker thread count |
+| `--root <DIR>` | `.` | Directory commands run in, so relative paths resolve against it (not a chroot/sandbox; absolute or `..` paths work like the CLI) |
+| `--read-only` | `false` | Refuses commands that write: `edit`, `patch`, `rename`, `index`, and anything with `--apply` |
+| `--trust-index` | `false` | Adds `--trust-index` to searches (`rg`, `fd`, `ast`, `refs`, `batch`, queries) that don't pick an index mode themselves |
+| `-j`, `--threads <NUM>` | CPU count | Adds `-j NUM` to those searches unless they set it |
 
 ---
 
@@ -73,25 +73,24 @@ args = ["mcp", "--root", "."]
 
 ---
 
-## 3. Exposed MCP Tools
+## 3. The `lancet` Tool
 
-Every read/search tool treats `0` matches as a normal `empty` result (`isError: false`). Write operations default to `apply: false` (dry-run unified diff) and require `apply: true` to touch disk.
+One tool. Its arguments are the command line, so every CLI feature works over MCP as soon as it ships and the schema stays small (about 2.4 KB; the earlier 11-tool server was 12.5 KB).
 
-| Tool | Role | Notes |
+| Field | Type | Meaning |
 |---|---|---|
-| `lancet_fd` | `.gitignore`-aware file/dir discovery & `--tree` | Supports `dirs: true`, `pattern_mode`, `exts`, `type_classes`, `changed_within`, `min_size`/`max_size`, `index_mode` |
-| `lancet_search` | Lancet DSL query (`AND`/`OR`/`NOT`, `near`, `fuzzy`, `regex`, pipes) | Supports `--budget` pipes, `max_lines`, `max_cols`, `ocr` |
-| `lancet_rg` | `ripgrep`-compatible regex/fixed search | Always returns deterministic path-sorted lines with line numbers; `docs: true` enables PDF/Office/HWP/archives; supports `passthru` & `type_add`; output capped cleanly at line boundaries via `max_output_bytes` |
-| `lancet_outline` | Declaration skeletons, Markdown headings, sheets, archive manifests | Supports `max_depth`, `exts`, `limit`, `ocr` |
-| `lancet_read` | Exact `lines`, `symbol`, `page`, `sheet`/`rows`/`cols`, `archive.zip!entry` | Returns `rev` (XXH3-64) on plain-text files and `next_line` with `budget_tokens` |
-| `lancet_refs` | Index-accelerated `[def]` / `[ref]` lexical AST lookup & `--rank` | Excludes comments & string literals across 24 languages; `rank: true` + `kinds` ranks declarations matching `symbol` glob by reference count |
-| `lancet_ast` | Tree-sitter structural search & optional `rewrite` | 24 languages; `apply: false` (dry-run) by default; `apply: true` refused under `--read-only` |
-| `lancet_edit` | Locked CAS line/symbol/`find`/multi-hunk `edits` | Omitted under `--read-only`; verifies `rev` and Tree-sitter syntax gate |
-| `lancet_patch` | Atomic multi-file unified diff apply (`git diff` / `diff -u`) | Omitted under `--read-only`; exact hunk matching + race rollback |
-| `lancet_rename` | Tier-1 local-scope binding rename in one file (`path`, `line`, `col?`, `old`, `new`) | Omitted under `--read-only`; Rust/Python/JS/TS/TSX/Go scope resolution + shadowing check + CAS |
-| `lancet_index` | `.lancet` index `status`, `sync`, `rebuild`, `compact` | Mutating actions (`sync`/`rebuild`/`compact`) refused under `--read-only` |
+| `args` | string array (required) | Arguments after `lancet`, one per element. No shell: no quoting, globbing, pipes or `&&`. |
+| `stdin` | string | Text for a `-` argument: hunks for `edit --edits -`, a diff for `patch -`, text for `--with-file -`. |
+| `max_output_bytes` | integer | Output cap (default `131072`, clamped to `256..=4194304`). |
 
-Built-in MCP prompts (`prompts/list` / `prompts/get`): `lancet-explore` and `lancet-safe-edit`.
+```json
+{"name": "lancet", "arguments": {"args": ["rg", "-w", "spin_lock", "src"]}}
+{"name": "lancet", "arguments": {"args": ["read", "src/x.rs", "--symbol", "handle"]}}
+{"name": "lancet", "arguments": {"args": ["edit", "--edits", "-", "--apply"],
+  "stdin": "[{\"path\": \"src/a.rs\", \"rev\": \"7b47…\", \"find\": \"old(\", \"with\": \"new(\"}]"}}
+```
+
+The result text is the command's stdout, then stderr, then `[exit N]` for a non-zero exit. `isError` is `true` only for exit `2` (refused or invalid); exit `1` means nothing was found. Writes are previews until `--apply`, exactly as on the command line.
 
 ---
 
