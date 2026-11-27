@@ -43,8 +43,8 @@ Use `lancet batch [PATH] -q 'Q1' -q 'Q2' [--name n1 --name n2]` or `--queries-js
 
 ## 3. Discovery & Ranked Declarations (`fd --dirs`, `refs --rank`)
 
-- **Directory-only tree (`lancet fd --tree --dirs` / `lancet_fd(dirs: true, tree: true)`):** lists folders only (same as `-t d`) for compact architecture overviews.
-- **Usage-ranked declarations (`lancet refs --rank '<GLOB>' [--kind K...]` / `lancet_refs(rank: true)`):**
+- **Directory-only tree (`lancet fd --tree --dirs`):** lists folders only (same as `-t d`) for compact architecture overviews.
+- **Usage-ranked declarations (`lancet refs --rank '<GLOB>' [--kind K,...]`):**
   - Matches declaration names against a glob (e.g. `*Service`), narrows candidate files via the index using the longest literal substring of the glob, and sorts by lexical reference count descending.
   - Each entry includes `references` and `definitions`; when `definitions > 1`, multiple declarations share the same name (lexical count is shared).
 

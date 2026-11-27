@@ -1,6 +1,8 @@
 # `read`, `edit`, `patch`, and `rename` Reference
 
-## 1. `lancet read` & `lancet_read`
+CLI flags first; the MCP tool (`lancet_read`, …) takes the same options as JSON fields (`--budget-tokens` → `budget_tokens`, `--apply` → `apply: true`).
+
+## 1. `lancet read`
 
 - **Inline targets:** `path/to/file.rs:10-50`, `path/to/file.rs:42`, or `bundle.zip!logs/node.log` (`--entry` also works).
 - **Selectors:**
@@ -9,29 +11,29 @@
   - `--page 2` or `--page 2:5`: PDF pages / PPTX slides.
   - `--sheet NAME|1 --rows 1:30 --cols A:E` (or `1:5`): spreadsheets (`.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.ods`).
   - `--ocr`: fallback via external `tesseract` / `pdftoppm` for scanned PDFs/images.
-- **Token budget pagination:** pass `budget_tokens: 800` (`--budget-tokens 800`); if `truncated: true`, resume cleanly with `lines: "<next_line>:"`.
-- **Revision token:** `rev` (XXH3-64) is returned for plain-text files (documents/archives omit `rev` because they are read-only).
+- **Token budget pagination:** `--budget-tokens 800`; when it reports `truncated` (JSON: `truncated: true`, `next_line`), continue with `--lines NEXT:`.
+- **Revision token:** the first line of the output is `# PATH [section] rev REV` (JSON: `rev`), an XXH3-64 of the file's bytes. Documents and archives have none: they are read-only.
 
 ---
 
-## 2. `lancet edit` & `lancet_edit`
+## 2. `lancet edit`
 
-### Single-Hunk Addressing (`target` + `op`)
+### Single-Hunk Addressing (target + operation)
 
 Pick **exactly one** target:
-- `lines`: `"10:50"`, `"42"`, `"100:"` (CLI `--lines`)
-- `symbol`: `"execute_one"` (CLI `--symbol`) — **remember this spans doc comments/attributes too**
-- `find` (+ optional `all: true`): exact substring (CLI `--find` / `--all`). Refused unless unique (`all: false`), listing matching line numbers in the error. `\n` in `find` matches CRLF (`\r\n`) files transparently.
+- `--lines 10:50` / `42` / `100:`
+- `--symbol execute_one` — **spans the doc comments and attributes above it too**
+- `--find 'exact text'` (+ `--all`): refused unless it occurs exactly once, and the error lists the lines where it does. `\n` in the text also matches CRLF files.
 
 Pick **exactly one** operation:
-- `with` (CLI `--with` / `--with-file`)
-- `delete: true` (CLI `--delete`)
-- `insert_before` (CLI `--insert-before`)
-- `insert_after` (CLI `--insert-after`)
+- `--with TEXT` / `--with-file FILE` (`-` = stdin)
+- `--delete`
+- `--insert-before TEXT`
+- `--insert-after TEXT`
 
-### Atomic Multi-Hunk `--edits` JSON Schema
+### Atomic Multi-Hunk `--edits` (JSON file, or `-` for stdin)
 
-All hunks use the **original file's line numbers** (never drift across hunks), must not overlap, and either all land or none do:
+`lancet edit FILE --edits - --rev REV --apply <<'JSON'` … `JSON`. All hunks use the **original file's line numbers** (never drift across hunks), must not overlap, and either all land or none do:
 
 ```json
 [
@@ -46,22 +48,22 @@ Rules: each element requires **exactly one** of `lines`, `symbol`, or `find` (`a
 
 ### Safety & Concurrency Guarantees
 
-- **Locked CAS on `--rev`:** acquires an exclusive OS file lock, checks `inode` + `rev`, and refuses (`conflict`, exit `2`) with 0 bytes written if anything changed. Chain consecutive edits with returned `rev_after`.
-- **Tree-sitter syntax gate:** parses before & after; refuses any net increase in syntax errors unless `allow_syntax_errors: true`.
+- **Locked CAS on `--rev`:** takes an exclusive OS file lock, checks `inode` + `rev`, and refuses (`conflict`, exit `2`) with 0 bytes written if anything changed. A preview prints `file is at rev X: re-run with --rev X --apply`; after applying, `rev X -> Y` — pass `Y` to the next edit (JSON: `rev_after`).
+- **Tree-sitter syntax gate:** parses before & after; refuses any net increase in syntax errors unless `--allow-syntax-errors`.
 - **File identity & crash safety:** preserves symlinks (writes target), permissions, owner/group where OS allows; uses temp-file + fsync + atomic rename + dir fsync for ordinary files, and in-place write for multiply hard-linked files.
 
 ---
 
-## 3. `lancet patch` & `lancet_patch`
+## 3. `lancet patch`
 
-- Accepts `git diff` or `diff -u` from a file or stdin (`-` in CLI, `patch` string in MCP).
-- Options: `root` (`--root DIR`), `strip` (`-p N`, default `1` strips `a/` and `b/`), `apply` (default `false`), `allow_syntax_errors`.
+- Accepts `git diff` or `diff -u` from a file or stdin (`-`).
+- Options: `--root DIR`, `-p N` (default `1` strips `a/` and `b/`), `--apply` (default: preview), `--allow-syntax-errors`.
 - Handles `git diff -M` renames (with or without hunks), mode changes (`new mode` / `new file mode`), and created/deleted empty files; refuses binary diffs and copies.
 - Verifies every hunk in every file (exact match or unique nearest-offset relocation, never fuzzy) before writing; uses locked CAS + best-effort rollback of prior files if a concurrent writer wins mid-apply.
 
 ---
 
-## 4. `lancet rename` & `lancet_rename` (Tier-1 Local Scope)
+## 4. `lancet rename` (Tier-1 Local Scope)
 
 - **CLI:** `lancet rename FILE:LINE[:COL] OLD NEW [--rev REV] [--apply] [--json]`
 - **MCP:** `lancet_rename(path, line, col?, old, new, rev?, apply?)`
@@ -71,5 +73,5 @@ Rules: each element requires **exactly one** of `lines`, `symbol`, or `find` (`a
   - Refuses module/top-level declarations, struct fields, methods, exported symbols, macros, JSX tag names, Go composite-literal keys, or dynamic scopes (`eval`/`with`/`locals()`/`global`/`nonlocal`).
   - Re-resolves scopes after substitution and refuses any **shadowing or variable capture** if `new` collides with another visible binding.
   - Comments inside the scope mentioning `old` are left untouched and counted in `comment_mentions`.
-  - Uses locked `--rev` CAS writes; dry-run unless `apply: true`.
+  - Uses locked `--rev` CAS writes; preview unless `--apply`.
   - **Fallback when refused:** use `lancet refs <SYMBOL>` + `lancet edit --edits` (multi-hunk) or `lancet ast --rewrite` across the verified sites.

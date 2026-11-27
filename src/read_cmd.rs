@@ -630,8 +630,19 @@ pub fn print_read_human(resp: &ReadResponse, raw: bool, w: &mut impl Write) -> i
         return writeln!(w, "error: {}", err.message);
     }
     if !raw {
-        if let Some(sec) = &resp.section {
-            writeln!(w, "# {} [{}]", resp.path, sec)?;
+        // The rev is what `edit` / `rename` / `patch` take as `--rev`.
+        let sec = resp
+            .section
+            .as_ref()
+            .map(|s| format!(" [{s}]"))
+            .unwrap_or_default();
+        let rev = resp
+            .rev
+            .as_ref()
+            .map(|r| format!(" rev {r}"))
+            .unwrap_or_default();
+        if !sec.is_empty() || !rev.is_empty() {
+            writeln!(w, "# {}{sec}{rev}", resp.path)?;
         }
     }
     let width = resp.end_line.max(1).ilog10() as usize + 1;

@@ -1,70 +1,64 @@
 ---
 name: lancet
-description: Search code and documents, inspect exact AST symbols, line ranges, PDF/PPTX pages, spreadsheet cells, and archive entries, and apply CAS-safe edits, unified diffs, or scope-checked local renames via `lancet` CLI or `lancet_*` MCP tools. Use whenever navigating an unfamiliar codebase, searching text/regex/AST/references, reading token-budgeted slices, or making race-safe code changes.
+description: Search, read and change code and documents with the `lancet` CLI — ripgrep-compatible search on an index, Tree-sitter AST search/rewrite (24 languages), exact reads by symbol, line range, PDF page, sheet or archive entry, and rev-guarded edits, patches and local renames that never overwrite another agent's change. Use instead of rg/grep/fd/cat/sed/ast-grep when exploring an unfamiliar codebase, finding definitions and references, reading only the part of a file you need, or editing files that other agents may also be editing.
 ---
 
-# Lancet Playbook
+# Lancet (CLI)
 
-Lancet runs identically through **MCP (`lancet_*`)** and **CLI (`lancet ...`)** on one trigram index (`LANCET04`) and one coordinate system across source code, 24 AST languages, PDF, Office (DOCX/PPTX/XLSX), HWP/HWPX, and archives.
+One binary for the whole find → read → change loop. Every command shares one index and one coordinate system: a hit at `src/x.rs:42` is line 42 in `read`, `edit` and `rename`, and paths come out joined onto the PATH you passed, so they can be fed straight back in.
 
-## 1. Tool Selection Matrix
+Check it is installed with `lancet --version`. Searches are always fresh; on large repos (≳ 5k files) run `lancet index .` once to make them fast.
 
-| Task | MCP Tool | CLI Command |
-|---|---|---|
-| Map folders/files or tree view | `lancet_fd` (`dirs: true`) | `lancet fd [--tree -d 2 --dirs] [PAT] [PATH]` |
-| Declarations, Markdown headings, sheet/zip outline | `lancet_outline` | `lancet outline [PATH] [-d N]` |
-| Boolean, proximity, fuzzy, AST-scoped query | `lancet_search` | `lancet '<QUERY>' [PATH]` |
-| Multi-query single-walk batch | — | `lancet batch [PATH] -q ...` / `--queries-json` |
-| `ripgrep`-style regex / line grep | `lancet_rg` | `lancet rg [FLAGS] PATTERN [PATH...]` |
-| Structural AST search & rewrite | `lancet_ast` | `lancet ast '<PAT>' [PATH] [-l LANG] [-r TPL]` |
-| Lexical `[def]` + `[ref]` or ranked declarations | `lancet_refs` (`rank: true`) | `lancet refs [--rank --kind K] <SYM\|GLOB> [PATH]` |
-| Surgical line / symbol / page / sheet / archive read | `lancet_read` | `lancet read <TARGET> [--symbol\|-l\|-p\|--budget-tokens]` |
-| CAS-safe line / symbol / `find` / multi-hunk edit | `lancet_edit` | `lancet edit <PATH> (--lines\|--symbol\|--find\|--edits)` |
-| Atomic multi-file unified diff | `lancet_patch` | `lancet patch [DIFF\|-] [--root DIR] [-p N]` |
-| Tier-1 local-binding rename (`FILE:LINE[:COL]`) | `lancet_rename` | `lancet rename <FILE:LINE[:COL]> <OLD> <NEW>` |
-| Build / inspect / sync `.lancet` index | `lancet_index` | `lancet index\|status\|explain [PATH]` |
+## Pick the command
 
-## 2. Core 4-Step Workflow
+| To… | Run |
+|---|---|
+| See the layout | `lancet fd --tree --dirs -d 2 .` (folders only) · `lancet fd --tree -d 2 src` |
+| Find files by name | `lancet fd config src` (substring) · `lancet fd -e proto` · `lancet fd -g '*_test.go'` (a glob needs `-g`) |
+| Grep (same flags and output as ripgrep) | `lancet rg -w spin_lock src` · `lancet rg -t py -C2 'def \w+_test'` |
+| Boolean / proximity / fuzzy / in-function search | `lancet '"OOM" AND "batch" NOT "CPU" in line' src` · `lancet 'near("retry", "timeout", 20) in function' src` |
+| Skeleton of a file or folder | `lancet outline src/server.rs` · `lancet outline docs/spec.pdf` |
+| Definitions + references (code only, not comments/strings) | `lancet refs SearchOptions src` |
+| The most used classes / functions | `lancet refs --rank '*Service' --kind class .` |
+| Structural search / rewrite | `lancet ast '$X.unwrap()' src --lang rs` · add `--rewrite '$X?'` |
+| Read exactly what you need | `lancet read src/x.rs --symbol handle_request` · `lancet read src/x.rs:120-180` · `lancet read report.pdf --page 3` |
+| Change lines, a symbol or exact text | `lancet edit src/x.rs --find 'retries = 3' --with 'retries = 5' --rev REV --apply` |
+| Apply a diff | `git diff | lancet patch --apply` · `lancet patch fix.diff` (preview) |
+| Rename a local variable safely | `lancet rename src/x.rs:42 count total --rev REV --apply` |
 
-1. **Orient first** (never dump whole files or run blind recursive globs):
-   - `lancet_fd` (`tree: true`, `max_depth: 2`, optionally `dirs: true`) and `lancet_outline` on target files/dirs.
-   - To find central symbols in an unfamiliar repo, rank declarations by usage with `lancet_refs(symbol="*Service", rank=true, kinds=["class"])` / `lancet refs --rank '*Service' --kind class`.
-2. **Locate exact coordinates**:
-   - Use `lancet_search` (`'near("a","b",20) in function'`), `lancet_rg`, `lancet_refs`, or `lancet_ast`.
-   - When running several exploratory queries, use CLI `lancet batch` to share one directory walk and index open.
-3. **Inspect surgically & capture `rev`**:
-   - Read by `--symbol`, `--lines`, `--page`, `--sheet`/`--rows`/`--cols`, or `archive.zip!entry`.
-   - On large files pass `budget_tokens` (e.g. `800`); if `truncated: true`, resume at `next_line` via `lines: "<next_line>:"`.
-   - Record `"rev"` (XXH3-64) returned by `lancet_read` before mutating.
-4. **Preview first, then apply atomically**:
-   - `edit`, `patch`, `ast --rewrite`, and `rename` all default to **dry-run** (`apply: false`). Inspect the unified diff, then re-run with `apply: true` and `rev`.
+Add `--json` to any command when you need to parse the result.
 
-## 3. Critical Gotchas & Rules
+## The loop
 
-- **`--symbol` includes doc comments & attributes:** `read --symbol` shows doc comments/attributes above the declaration; `edit --symbol --with` replaces that entire span, so keep them in the replacement or they are deleted.
-- **LQL case & scope limits:** `"literal"` in `lancet '<QUERY>'` is case-insensitive (Unicode fold), whereas `regex("...")` is case-sensitive unless `(?i)`. `in function` and `symbol:` support 6 languages (`.rs`, `.py`, `.js`, `.ts`, `.tsx`, `.go`); `ast` and `refs` support 24.
-- **`lancet ast` nuances:** `--apply` refuses `--limit` (no partial rewrites). `--lang cpp` scans `.h` headers too. Statement metavariables (`if ($C) $S`, `{ $$$B }` in C-like languages) distinguish `if` from `if-else`.
-- **`lancet rg` defaults:** Line numbers (`-n`) stay **ON even when piped** (pass `-N` for plain `rg` pipes); `--color auto` colors only on interactive TTYs; output is always path-sorted; `--docs` is OFF by default; `-P`/`--pcre2` is unsupported by design.
-- **`lancet patch` scope:** Handles `git diff -M` renames, mode changes, and empty files; refuses binary changes and copies; never applies fuzzy hunks.
-- **`lancet rename` scope (tier 1):** Renames **local bindings only** (variables, parameters, closures, loops) in one file for Rust, Python, JS/TS/TSX, and Go, picked by `FILE:LINE[:COL] OLD NEW`. Refuses non-local/opaque constructs and capture/shadowing rather than guessing; skips comments (`comment_mentions`).
-- **Documents & archives are read-only:** `edit`, `patch`, `ast --rewrite`, and `rename` operate on plain-text UTF-8 files only.
-- **Index freshness:** On repos > 5k files run `lancet index .` (`lancet_index(action="sync")`). `auto` mode checks `(mtime, size, ctime, inode)` + racy timestamps so results stay fresh without a daemon. Use `trust` (`--trust-index`) only when skipping disk checks is acceptable.
+1. **Orient.** `fd --tree --dirs`, `outline`, and `refs --rank` before opening files. Don't `cat` whole files.
+2. **Locate.** `rg`, a query, `refs` or `ast` give `path:line`.
+3. **Read and note the `rev`.** `lancet read` prints `# path [section] rev 0d83f19f5e4c1931` on its first line. On long files add `--budget-tokens 800`; when it says `truncated`, continue with `--lines NEXT:`.
+4. **Preview, then apply with that rev.** `edit`, `patch`, `ast --rewrite` and `rename` print a diff and change nothing until `--apply`. The preview says which rev to pass: `file is at rev X: re-run with --rev X --apply`. After applying it prints `rev X -> Y`; use `Y` for your next edit of that file.
 
-## 4. Exit Codes & Error Recovery
+## Editing
 
-| CLI Exit | `status` | MCP `isError` | Meaning & Next Action |
-|---|---|---|---|
-| `0` | `complete` | `false` | Success (captures/results/diff returned) |
-| `1` | `empty` | `false` | Clean 0-hit result (or missing index in `status`) — **not an error** |
-| `2` | `conflict` | `true` | File changed since `rev` (0 bytes written) → re-run `read`, adapt change, retry with new `rev` |
-| `2` | `invalid_query` | `true` | Syntax/arg error or non-unique `find` → fix query or expand `find` context (or `all: true`) |
-| `2` | `unsupported` | `true` | Syntax-error increase blocked edit, binary diff, or non-local `rename` → fix replacement or fall back |
+- `edit` targets one of `--lines 10:20` (as `read` numbers them), `--symbol NAME` (the span `read --symbol` shows, **including doc comments and attributes above it** — keep them in the replacement or they are deleted), or `--find 'exact text'` (must occur once; the error lists the lines if it doesn't — add context, or pass `--all`).
+- The operation is one of `--with TEXT`, `--with-file FILE` (`-` = stdin), `--delete`, `--insert-before TEXT`, `--insert-after TEXT`.
+- **Several changes to one file = one call:** `lancet edit FILE --edits - --rev REV --apply` with a JSON array on stdin, e.g. `[{"lines": "10:12", "with": "…"}, {"find": "old(", "with": "new(", "all": true}]`. All hunks use the line numbers you read; they never shift each other.
+- Edits that add syntax errors are refused. Fix the replacement; don't reach for `--allow-syntax-errors`.
+- PDFs, Office files, HWP and archive entries are read-only.
 
-- **Syntax gate refusal:** Fix the broken replacement syntax; never retry blindly with `allow_syntax_errors: true`.
-- **`rename` refusal on non-local/macro/member:** Fall back to `lancet_refs` + `lancet_edit` (`edits` array) or `lancet_ast` (`rewrite`).
+## When a command refuses
 
-## 5. Deep References
+Exit `0` = done, `1` = nothing found (not an error), `2` = refused or invalid. Read the message:
 
-- LQL grammar, `batch`, `rg` flags, and all 24 AST languages: [`references/query-and-ast.md`](references/query-and-ast.md)
-- `read`, `edit` (`--edits`/`--find`), `patch`, and tier-1 `rename` schemas & caveats: [`references/edit-patch-rename.md`](references/edit-patch-rename.md)
-- Ready-to-copy MCP client JSON configs: [`references/mcp-config.json`](references/mcp-config.json)
+- **`conflict` / "file changed since rev"** — someone else wrote the file. `read` it again, redo your change on the new content, retry with the new rev. Never retry without `--rev`.
+- **`rename` refused** — it only renames locals (variables, parameters, closure and loop variables) in Rust, Python, JS/TS and Go, and stops if the name is used inside a macro, `eval`, a JSX tag, or if the new name would shadow or capture another. Fall back to `lancet refs NAME` and one `lancet edit --edits` call over the sites you checked.
+- **`--find` not unique** — include more surrounding text, or `--all` if every occurrence should change.
+
+## Good to know
+
+- `lancet rg` keeps line numbers on when piped (`-N` turns them off) and always sorts by path; `-P` (PCRE2) is not supported.
+- Query strings (`lancet '…'`) match `"text"` case-insensitively; `regex("…")` is case-sensitive unless `(?i)`. `in function` / `symbol:` work for Rust, Python, JS, TS and Go; `ast` and `refs` cover 24 languages.
+- `--trust-index` skips the freshness check (faster, may miss edits since `lancet index`); the default never returns stale results.
+
+## More
+
+- Query language, `rg` flags, `ast` languages and metavariables: [references/query-and-ast.md](references/query-and-ast.md)
+- `read`, `edit --edits`, `patch` and `rename` in detail: [references/edit-patch-rename.md](references/edit-patch-rename.md)
+- The same tools over MCP (`lancet mcp`), for clients without a shell: [references/mcp-config.json](references/mcp-config.json) and `docs/mcp.md`
