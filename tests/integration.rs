@@ -3225,6 +3225,33 @@ fn builtin_tool_syntax_write_and_codex_patches() {
         out.contains("   4 | def b():\n") && out.ends_with("   1 | def a():\n"),
         "{out}"
     );
+    // As the built-in Read: a read with no range stops at 2000 lines and very long
+    // lines are cut (whole with --raw).
+    let mut big: String = (1..=2500).map(|i| format!("x{i}\n")).collect();
+    big.insert_str(0, &format!("{}\n", "y".repeat(2500)));
+    fs::write(root.join("big.txt"), &big).unwrap();
+    let (_, out, err) = run(&["read", "big.txt"], None);
+    assert!(
+        out.ends_with("2000 | x1999\n"),
+        "{}",
+        &out[out.len() - 40..]
+    );
+    assert!(out.contains("… [500 more characters]"));
+    assert!(
+        err.contains("showing lines 1-2000 of 2501: continue with --offset 2001"),
+        "{err}"
+    );
+    let (_, out, _) = run(&["read", "big.txt", "--offset", "2001"], None);
+    assert!(out.ends_with("2501 | x2500\n"));
+    let (_, out, _) = run(&["read", "big.txt", "--raw", "--limit", "1"], None);
+    assert!(out.contains(&"y".repeat(2500)));
+    // Several paths, like rg and fd.
+    let (code, out, _) = run(&["outline", "src/a.py", "big.txt"], None);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("src/a.py") && out.contains("big.txt"), "{out}");
+    let (code, out, _) = run(&["refs", "b", "src/a.py", "src"], None);
+    assert_eq!(code, 0, "{out}");
+    assert_eq!(out.matches("[def:function] src/a.py:4").count(), 1, "{out}");
 
     // write: creates; an existing file needs the rev it was read at.
     let (code, _, _) = run(

@@ -72,6 +72,37 @@ pub struct OutlineResponse {
 }
 
 impl OutlineResponse {
+    /// One response for several paths (`lancet outline a.rs b.rs`), in argument order.
+    pub fn merge(mut rs: Vec<OutlineResponse>) -> OutlineResponse {
+        if rs.len() == 1 {
+            return rs.pop().unwrap();
+        }
+        let errors: Vec<String> = rs
+            .iter()
+            .filter_map(|r| r.error.as_ref().map(|e| e.message.clone()))
+            .collect();
+        let files: Vec<FileOutline> = rs
+            .iter_mut()
+            .flat_map(|r| std::mem::take(&mut r.files))
+            .collect();
+        let status = match rs.iter().find(|r| r.error.is_some()) {
+            Some(r) => r.status,
+            None if files.is_empty() => Status::Empty,
+            None => Status::Complete,
+        };
+        OutlineResponse {
+            status,
+            total_items: rs.iter().map(|r| r.total_items).sum(),
+            truncated: rs.iter().any(|r| r.truncated),
+            error: (!errors.is_empty()).then(|| ErrorInfo {
+                message: errors.join("; "),
+                pos: None,
+            }),
+            elapsed_ms: rs.iter().map(|r| r.elapsed_ms).sum(),
+            files,
+        }
+    }
+
     fn failure(status: Status, message: String, elapsed_ms: f64) -> Self {
         OutlineResponse {
             status,

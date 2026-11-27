@@ -3,7 +3,7 @@ use lancet::ast_grep::{print_ast_human, search_ast, AstOptions};
 use lancet::edit_cmd::{edit_file, EditOptions, Op, Target};
 use lancet::fd::{find_files, parse_duration, parse_size, print_fd_human, FdOptions, PatternMode};
 use lancet::index::{self, Index};
-use lancet::outline::{build_outline, print_outline_human, OutlineOptions};
+use lancet::outline::{build_outline, print_outline_human, OutlineOptions, OutlineResponse};
 use lancet::output::{print_human, Status};
 use lancet::query::{parse, FileType};
 use lancet::read_cmd::{
@@ -285,9 +285,9 @@ struct FdCli {
 struct AstCli {
     /// AST pattern with metavariables ($VAR, $_, $$$ARGS)
     pattern: String,
-    /// Directory or file to search
-    #[arg(default_value = ".")]
-    path: PathBuf,
+    /// Directories or files to search
+    #[arg(default_value = ".", value_name = "PATH")]
+    roots: Vec<PathBuf>,
     /// Source language: rs, py, js, ts, tsx, go, c, cpp, zig, java, cs, kt, scala, swift, rb, php, sh, lua, hcl, html, css, json, yaml, toml
     #[arg(short = 'l', long)]
     lang: Option<String>,
@@ -386,9 +386,9 @@ struct ReadCli {
     about = "Extract code symbol skeleton, Markdown headings, spreadsheet sheets, or archive entries"
 )]
 struct OutlineCli {
-    /// Target file or directory
+    /// Files or directories
     #[arg(default_value = ".")]
-    path: PathBuf,
+    paths: Vec<PathBuf>,
     /// Maximum directory traversal depth when PATH is a directory
     #[arg(short = 'd', long)]
     max_depth: Option<usize>,
@@ -480,9 +480,9 @@ struct RefsCli {
     /// (class, interface, struct, enum, trait, function, method; Go: type, function, method)
     #[arg(long = "kind", value_delimiter = ',', requires = "rank")]
     kinds: Vec<String>,
-    /// Directory or file to search
-    #[arg(default_value = ".")]
-    path: PathBuf,
+    /// Directories or files to search
+    #[arg(default_value = ".", value_name = "PATH")]
+    roots: Vec<PathBuf>,
     /// Restrict to one AST language: rs, py, js, ts, tsx, go, c, cpp, zig, java, cs, kt, scala, swift, rb, php, sh, lua, hcl, html, css, json, yaml, toml
     #[arg(short = 'l', long)]
     lang: Option<String>,
@@ -2252,10 +2252,17 @@ fn run_read(cli: ReadCli) -> ExitCode {
                 } else {
                     String::new()
                 };
-                eprintln!(
-                    "[lancet read] {which}truncated at ~{} tokens (resume with --lines {next}:)",
-                    resp.estimated_tokens
-                );
+                if cli.budget_tokens.is_some() {
+                    eprintln!(
+                        "[lancet read] {which}truncated at ~{} tokens (resume with --lines {next}:)",
+                        resp.estimated_tokens
+                    );
+                } else {
+                    eprintln!(
+                        "[lancet read] {which}showing lines {}-{} of {}: continue with --offset {next}, or `lancet outline {}` to see its declarations",
+                        resp.start_line, resp.end_line, resp.total_lines, resp.path
+                    );
+                }
             }
         }
     }
@@ -2264,19 +2271,25 @@ fn run_read(cli: ReadCli) -> ExitCode {
 
 fn run_outline(cli: OutlineCli) -> ExitCode {
     init_threads(cli.threads);
-    let mut opts = OutlineOptions::new(&cli.path);
-    opts.max_depth = cli.max_depth;
-    opts.exts = cli.exts;
-    opts.limit = cli.limit;
-    opts.walk = WalkOpts {
-        hidden: cli.hidden,
-        no_ignore: cli.no_ignore,
-        threads: cli.threads.unwrap_or(0),
-        ..WalkOpts::default()
-    };
-    opts.ocr = cli.ocr;
-
-    let resp = build_outline(&opts);
+    let resp = OutlineResponse::merge(
+        cli.paths
+            .iter()
+            .map(|p| {
+                let mut opts = OutlineOptions::new(p);
+                opts.max_depth = cli.max_depth;
+                opts.exts = cli.exts.clone();
+                opts.limit = cli.limit;
+                opts.walk = WalkOpts {
+                    hidden: cli.hidden,
+                    no_ignore: cli.no_ignore,
+                    threads: cli.threads.unwrap_or(0),
+                    ..WalkOpts::default()
+                };
+                opts.ocr = cli.ocr;
+                build_outline(&opts)
+            })
+            .collect(),
+    );
     let stdout = io::stdout();
     let mut out = io::BufWriter::new(stdout.lock());
     let _ = if cli.json {
@@ -2303,7 +2316,8 @@ fn run_outline(cli: OutlineCli) -> ExitCode {
 
 fn run_refs(cli: RefsCli) -> ExitCode {
     init_threads(cli.threads);
-    let mut opts = RefsOptions::new(&cli.symbol, &cli.path);
+    let mut opts = RefsOptions::new(&cli.symbol, ".");
+    opts.roots = cli.roots;
     opts.lang = cli.lang;
     opts.exts = cli.exts;
     opts.paths = cli.paths;
@@ -2354,7 +2368,8 @@ fn run_refs(cli: RefsCli) -> ExitCode {
 
 fn run_ast(cli: AstCli) -> ExitCode {
     init_threads(cli.threads);
-    let mut opts = AstOptions::new(&cli.pattern, &cli.path);
+    let mut opts = AstOptions::new(&cli.pattern, ".");
+    opts.roots = cli.roots;
     opts.lang = cli.lang;
     opts.rewrite = cli.rewrite;
     opts.apply = cli.apply;

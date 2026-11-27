@@ -9,7 +9,7 @@ One binary for find → read → change, used **instead of** the built-in file t
 
 | Instead of | Run |
 |---|---|
-| **Read** | `lancet read src/x.rs --offset 120 --limit 60` · `lancet read src/x.rs:120-180 src/y.rs:10-40` · `--symbol handle_request` · `report.pdf --page 3` (PDF, Office, HWP too; `--ocr` for scans) |
+| **Read** (first 2000 lines unless you give a range) | `lancet read src/x.rs --offset 120 --limit 60` · `lancet read src/x.rs:120-180 src/y.rs:10-40` · `--symbol handle_request` · `report.pdf --page 3` (PDF, Office, HWP too; `--ocr` for scans) |
 | **Grep** | `lancet rg -w spin_lock src` (ripgrep's flags and output) |
 | **Glob** | `lancet fd '**/*.ts'` · `lancet fd -e proto` |
 | **Edit** | `lancet edit src/x.rs --old-string 'retries = 3' --new-string 'retries = 5' --apply` (`--replace-all`) |
@@ -17,7 +17,7 @@ One binary for find → read → change, used **instead of** the built-in file t
 | apply_patch | `lancet patch - --apply` (unified diff or Codex `*** Begin Patch`) |
 | Rename a local | `lancet rename src/x.rs:42 count total --apply` (Rust, Python, JS/TS, Go; checks scopes) |
 | Definitions + uses | `lancet refs SearchOptions src` (code only; skips other types' `.name` and same-named locals) |
-| Layout | `lancet fd --tree --dirs -d 2 .` · `lancet outline src/server.rs` |
+| Layout | `lancet fd --tree --dirs -d 2 .` · `lancet outline src/server.rs src/db.rs` |
 | AST search / rewrite | `lancet ast '$X.unwrap()' src --lang rs` (`--rewrite '$X?' --apply`) |
 
 Images: over MCP `read` returns the image; with the CLI use your own image viewer.

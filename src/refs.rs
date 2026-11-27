@@ -16,13 +16,14 @@ use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 #[derive(Clone, Debug)]
 pub struct RefsOptions {
     pub symbol: String,
-    pub root: PathBuf,
+    /// Directories or files to search; results show paths joined onto each.
+    pub roots: Vec<PathBuf>,
     pub lang: Option<String>,
     pub exts: Vec<String>,
     pub paths: Vec<String>,
@@ -37,7 +38,7 @@ impl RefsOptions {
     pub fn new(symbol: impl Into<String>, root: impl Into<PathBuf>) -> Self {
         RefsOptions {
             symbol: symbol.into(),
-            root: root.into(),
+            roots: vec![root.into()],
             lang: None,
             exts: Vec::new(),
             paths: Vec::new(),
@@ -251,14 +252,19 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
 }
 
 pub fn find_refs(opts: &RefsOptions) -> RefsResponse {
-    if let Some(msg) = crate::walk::missing_root(&opts.root) {
+    if let Some(msg) = missing_roots(opts) {
         return RefsResponse::failure(Status::InvalidQuery, opts.symbol.clone(), msg, 0.0);
     }
-    let mut r = find_refs_raw(opts);
-    for h in r.definitions.iter_mut().chain(r.references.iter_mut()) {
-        h.path = crate::walk::display_path(&opts.root, &h.path);
-    }
-    r
+    find_refs_raw(opts)
+}
+
+fn missing_roots(opts: &RefsOptions) -> Option<String> {
+    let msgs: Vec<String> = opts
+        .roots
+        .iter()
+        .filter_map(|r| crate::walk::missing_root(r))
+        .collect();
+    (!msgs.is_empty()).then(|| msgs.join("; "))
 }
 
 /// Files to scan for `opts` (code files under the root, narrowed by `--lang` /
@@ -270,7 +276,44 @@ struct Planned {
     stats: Stats,
 }
 
+/// Every root's files, as one list: `refs` decides what a name means across all
+/// of them at once. Paths are already joined onto the root they came from.
 fn plan_files(opts: &RefsOptions, req: &Req) -> Result<Planned, (Status, String)> {
+    let mut all = Planned {
+        targets: Vec::new(),
+        mode: String::new(),
+        warnings: Vec::new(),
+        stats: Stats::default(),
+    };
+    let mut seen = HashSet::new();
+    for root in &opts.roots {
+        let p = plan_root(opts, root, req)?;
+        all.mode = match all.mode.as_str() {
+            "" => p.mode,
+            m if m == p.mode => p.mode,
+            _ => "mixed".into(),
+        };
+        all.warnings.extend(p.warnings);
+        all.stats.files_considered += p.stats.files_considered;
+        for (dst, src) in [
+            (&mut all.stats.index_candidates, p.stats.index_candidates),
+            (&mut all.stats.stale_files, p.stats.stale_files),
+        ] {
+            if let Some(n) = src {
+                *dst = Some(dst.unwrap_or(0) + n);
+            }
+        }
+        for mut t in p.targets {
+            if seen.insert(t.path.clone()) {
+                t.rel = crate::walk::display_path(root, &t.rel);
+                all.targets.push(t);
+            }
+        }
+    }
+    Ok(all)
+}
+
+fn plan_root(opts: &RefsOptions, root: &Path, req: &Req) -> Result<Planned, (Status, String)> {
     let mut filters = Filters::default();
     if let Some(lang_s) = &opts.lang {
         #[cfg(feature = "ast")]
@@ -299,7 +342,7 @@ fn plan_files(opts: &RefsOptions, req: &Req) -> Result<Planned, (Status, String)
             .map(|e| e.trim_start_matches('.').to_ascii_lowercase())
             .filter(|e| !e.is_empty())
             .collect();
-    } else if !opts.all_files && opts.root.is_dir() {
+    } else if !opts.all_files && root.is_dir() {
         filters.types = vec![FileType::Code];
     }
     filters.paths = opts.paths.clone();
@@ -315,7 +358,7 @@ fn plan_files(opts: &RefsOptions, req: &Req) -> Result<Planned, (Status, String)
     let mut targets: Option<Vec<Target>> = None;
 
     if opts.index != IndexMode::Off {
-        match index::discover(&opts.root, opts.index_dir.as_deref()) {
+        match index::discover(root, opts.index_dir.as_deref()) {
             Ok(Some((ix, rel_prefix))) => {
                 mode = if opts.index == IndexMode::Trust {
                     "index_trusted".into()
@@ -326,7 +369,7 @@ fn plan_files(opts: &RefsOptions, req: &Req) -> Result<Planned, (Status, String)
                     &ix,
                     req,
                     &filter,
-                    &opts.root,
+                    root,
                     &rel_prefix,
                     &opts.walk,
                     opts.index,
@@ -349,7 +392,7 @@ fn plan_files(opts: &RefsOptions, req: &Req) -> Result<Planned, (Status, String)
     }
 
     let targets = targets.unwrap_or_else(|| {
-        walk(&opts.root, &opts.walk, &filter, false)
+        walk(root, &opts.walk, &filter, false)
             .into_iter()
             .map(|e| Target {
                 path: e.path,
@@ -582,7 +625,7 @@ pub fn rank_symbols(opts: &RefsOptions, kinds: &[String]) -> RankResponse {
             "`--rank` requires building with `--features ast`".into(),
         );
     }
-    if let Some(msg) = crate::walk::missing_root(&opts.root) {
+    if let Some(msg) = missing_roots(opts) {
         return fail(Status::InvalidQuery, msg);
     }
     let glob = match globset::Glob::new(if pattern.is_empty() { "*" } else { &pattern }) {
@@ -657,7 +700,7 @@ pub fn rank_symbols(opts: &RefsOptions, kinds: &[String]) -> RankResponse {
                     RankEntry {
                         name: name.clone(),
                         kind,
-                        path: crate::walk::display_path(&opts.root, rel),
+                        path: rel.clone(),
                         line: *line,
                         references: uses.get(name).copied().unwrap_or(0).saturating_sub(n_decl),
                         definitions: n_decl,

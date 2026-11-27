@@ -13,7 +13,8 @@ use std::time::Instant;
 pub struct AstOptions {
     pub pattern: String,
     pub lang: Option<String>,
-    pub root: PathBuf,
+    /// Directories or files to search; results show paths joined onto each.
+    pub roots: Vec<PathBuf>,
     pub rewrite: Option<String>,
     pub apply: bool,
     pub paths: Vec<String>,
@@ -28,7 +29,7 @@ impl AstOptions {
         AstOptions {
             pattern: pattern.into(),
             lang: None,
-            root: root.into(),
+            roots: vec![root.into()],
             rewrite: None,
             apply: false,
             paths: Vec::new(),
@@ -1018,7 +1019,23 @@ mod imp {
                 format!("unsupported language `{raw}` (supported: {SUPPORTED_LANGS})")
             });
         }
-        if let Some(l) = Lang::from_path(&opts.root) {
+        // Files given by name pick the language (and must agree on it).
+        let files: Vec<&std::path::PathBuf> = opts.roots.iter().filter(|r| r.is_file()).collect();
+        if let Some(f) = files.iter().find(|f| Lang::from_path(f).is_none()) {
+            return Err(format!(
+                "can't tell the language of {}: pass `--lang <LANG>` ({SUPPORTED_LANGS})",
+                f.display()
+            ));
+        }
+        let mut langs = files.iter().filter_map(|r| Lang::from_path(r));
+        if let Some(l) = langs.next() {
+            if let Some(other) = langs.find(|o| o.name() != l.name()) {
+                return Err(format!(
+                    "files in different languages ({} and {}): run one `lancet ast` per language",
+                    l.name(),
+                    other.name()
+                ));
+            }
             return Ok(l);
         }
         Err(format!(
@@ -1246,7 +1263,12 @@ mod imp {
     }
 
     pub fn search_ast(opts: &AstOptions) -> AstResponse {
-        if let Some(msg) = crate::walk::missing_root(&opts.root) {
+        let missing: Vec<String> = opts
+            .roots
+            .iter()
+            .filter_map(|r| crate::walk::missing_root(r))
+            .collect();
+        if let Some(msg) = (!missing.is_empty()).then(|| missing.join("; ")) {
             return AstResponse::failure(
                 Status::InvalidQuery,
                 opts.lang.clone(),
@@ -1255,15 +1277,87 @@ mod imp {
                 0.0,
             );
         }
-        let mut r = search_ast_raw(opts);
-        for m in &mut r.matches {
-            m.path = crate::walk::display_path(&opts.root, &m.path);
+        search_ast_raw(opts)
+    }
+
+    struct Planned {
+        targets: Vec<Target>,
+        mode: String,
+        warnings: Vec<String>,
+        stats: Stats,
+    }
+
+    /// One root's files for `lang`, narrowed by `--path` and the index.
+    fn plan_root(
+        opts: &AstOptions,
+        root: &std::path::Path,
+        lang: Lang,
+        req: &Req,
+    ) -> Result<Planned, String> {
+        let mut filters = Filters::default();
+        if root.is_dir() {
+            filters.exts = lang.extensions().iter().map(|s| (*s).to_string()).collect();
         }
-        for d in &mut r.diffs {
-            d.diff = crate::walk::display_diff(&opts.root, &d.path, &d.diff);
-            d.path = crate::walk::display_path(&opts.root, &d.path);
+        filters.paths = opts.paths.clone();
+        let filter = FileFilter::new(&filters)?;
+
+        let mut warnings = Vec::new();
+        let mut mode = "scan".to_string();
+        let mut core_stats = Stats::default();
+        let mut targets: Option<Vec<Target>> = None;
+
+        if opts.index != IndexMode::Off {
+            match index::discover(root, opts.index_dir.as_deref()) {
+                Ok(Some((ix, rel_prefix))) => {
+                    mode = if opts.index == IndexMode::Trust {
+                        "index_trusted".into()
+                    } else {
+                        "index".into()
+                    };
+                    targets = Some(plan_targets_with_req(
+                        &ix,
+                        req,
+                        &filter,
+                        root,
+                        &rel_prefix,
+                        &opts.walk,
+                        opts.index,
+                        None,
+                        &mut core_stats,
+                        None,
+                    ));
+                }
+                Ok(None) => {
+                    if opts.index == IndexMode::Trust {
+                        warnings.push(
+                            "no index found; fell back to a full scan (run `lancet index`)".into(),
+                        );
+                    }
+                }
+                Err(e) => {
+                    warnings.push(format!("index unusable ({e:#}); fell back to a full scan"));
+                }
+            }
         }
-        r
+
+        let targets = targets.unwrap_or_else(|| {
+            walk(root, &opts.walk, &filter, false)
+                .into_iter()
+                .map(|e| Target {
+                    path: e.path,
+                    rel: e.rel,
+                })
+                .collect()
+        });
+        if core_stats.files_considered == 0 {
+            core_stats.files_considered = targets.len();
+        }
+        Ok(Planned {
+            targets,
+            mode,
+            warnings,
+            stats: core_stats,
+        })
     }
 
     fn search_ast_raw(opts: &AstOptions) -> AstResponse {
@@ -1327,75 +1421,47 @@ mod imp {
             }
         }
 
-        let mut filters = Filters::default();
-        if opts.root.is_dir() {
-            filters.exts = lang.extensions().iter().map(|s| (*s).to_string()).collect();
-        }
-        filters.paths = opts.paths.clone();
-        let filter = match FileFilter::new(&filters) {
-            Ok(f) => f,
-            Err(e) => {
-                return AstResponse::failure(
-                    Status::InvalidQuery,
-                    Some(lang_name),
-                    opts.pattern.clone(),
-                    e,
-                    super::ms(t0),
-                )
-            }
-        };
-
         let req = build_ast_req(&compiled.trigram_literals);
         let mut warnings = Vec::new();
-        let mut mode = "scan".to_string();
+        let mut mode = String::new();
         let mut core_stats = Stats::default();
-        let mut targets: Option<Vec<Target>> = None;
-
-        if opts.index != IndexMode::Off {
-            match index::discover(&opts.root, opts.index_dir.as_deref()) {
-                Ok(Some((ix, rel_prefix))) => {
-                    mode = if opts.index == IndexMode::Trust {
-                        "index_trusted".into()
-                    } else {
-                        "index".into()
-                    };
-                    targets = Some(plan_targets_with_req(
-                        &ix,
-                        &req,
-                        &filter,
-                        &opts.root,
-                        &rel_prefix,
-                        &opts.walk,
-                        opts.index,
-                        None,
-                        &mut core_stats,
-                        None,
-                    ));
-                }
-                Ok(None) => {
-                    if opts.index == IndexMode::Trust {
-                        warnings.push(
-                            "no index found; fell back to a full scan (run `lancet index`)".into(),
-                        );
-                    }
-                }
+        let mut targets: Vec<Target> = Vec::new();
+        let mut seen = HashSet::new();
+        for root in &opts.roots {
+            let p = match plan_root(opts, root, lang, &req) {
+                Ok(p) => p,
                 Err(e) => {
-                    warnings.push(format!("index unusable ({e:#}); fell back to a full scan"));
+                    return AstResponse::failure(
+                        Status::InvalidQuery,
+                        Some(lang_name),
+                        opts.pattern.clone(),
+                        e,
+                        super::ms(t0),
+                    )
+                }
+            };
+            mode = match mode.as_str() {
+                "" => p.mode,
+                m if m == p.mode => p.mode,
+                _ => "mixed".into(),
+            };
+            warnings.extend(p.warnings);
+            core_stats.files_considered += p.stats.files_considered;
+            for (dst, src) in [
+                (&mut core_stats.index_candidates, p.stats.index_candidates),
+                (&mut core_stats.stale_files, p.stats.stale_files),
+            ] {
+                if let Some(n) = src {
+                    *dst = Some(dst.unwrap_or(0) + n);
                 }
             }
-        }
-
-        let targets = targets.unwrap_or_else(|| {
-            walk(&opts.root, &opts.walk, &filter, false)
-                .into_iter()
-                .map(|e| Target {
-                    path: e.path,
-                    rel: e.rel,
-                })
-                .collect()
-        });
-        if core_stats.files_considered == 0 {
-            core_stats.files_considered = targets.len();
+            for mut t in p.targets {
+                if seen.insert(t.path.clone()) {
+                    // Matches and diff headers show the path the way it was given.
+                    t.rel = crate::walk::display_path(root, &t.rel);
+                    targets.push(t);
+                }
+            }
         }
 
         let file_results: Vec<Option<FileResult>> = targets
