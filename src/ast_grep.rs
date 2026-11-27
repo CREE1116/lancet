@@ -1497,10 +1497,9 @@ mod imp {
         )
     }
 
-    pub fn print_ast_human(resp: &AstResponse, w: &mut impl Write) -> io::Result<()> {
+    pub fn print_ast_human(resp: &AstResponse, _w: &mut impl Write) -> io::Result<()> {
         if let Some(err) = &resp.error {
             eprintln!("error: {}", err.message);
-            return Ok(());
         }
         Ok(())
     }
