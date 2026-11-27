@@ -30,7 +30,7 @@ mod imp {
     use super::{CodeSpan, IdRole};
     use std::cell::RefCell;
     use std::path::Path;
-    use tree_sitter::{Language, Node, Parser};
+    use tree_sitter::{Language, Node, Parser, Tree};
 
     pub const ENABLED: bool = true;
 
@@ -247,17 +247,199 @@ mod imp {
         static PARSER: RefCell<(Option<Lang>, Parser)> = RefCell::new((None, Parser::new()));
     }
 
-    fn with_tree<T>(path: &Path, src: &[u8], f: impl FnOnce(Lang, Node<'_>) -> T) -> Option<T> {
-        let lang = Lang::from_path(path)?;
+    /// Parses `src` as `lang` with this thread's parser (one per thread, reused).
+    pub fn parse_tree(lang: Lang, src: &[u8]) -> Option<Tree> {
         PARSER.with(|cell| {
             let mut st = cell.borrow_mut();
             if st.0 != Some(lang) {
                 st.1.set_language(&lang.language()).ok()?;
                 st.0 = Some(lang);
             }
-            let tree = st.1.parse(src, None)?;
-            Some(f(lang, tree.root_node()))
+            st.1.parse(src, None)
         })
+    }
+
+    /// A parsed source file. Parse once, then read every structural view from it
+    /// (symbols, function spans, identifiers, syntax errors, scopes).
+    pub struct Syntax {
+        pub lang: Lang,
+        pub tree: Tree,
+    }
+
+    /// `None` for a file whose language lancet doesn't parse.
+    pub fn parse(path: &Path, src: &[u8]) -> Option<Syntax> {
+        let lang = Lang::from_path(path)?;
+        Some(Syntax {
+            lang,
+            tree: parse_tree(lang, src)?,
+        })
+    }
+
+    impl Syntax {
+        /// Number of Tree-sitter ERROR / MISSING nodes, or `None` for unsupported files.
+        pub fn errors(&self) -> usize {
+            let root = self.tree.root_node();
+            if !root.has_error() {
+                return 0;
+            }
+            let mut n = 0;
+            visit_dfs(root, |node| {
+                n += (node.is_error() || node.is_missing()) as usize
+            });
+            n
+        }
+        pub fn functions(&self, src: &[u8]) -> Vec<CodeSpan> {
+            let lang = self.lang;
+            let root = self.tree.root_node();
+            let mut out = Vec::new();
+            visit_dfs(root, |node| {
+                let k = node.kind();
+                if !is_function_node(lang, k) {
+                    return;
+                }
+                let (name, ns, ne) = if k == "arrow_function" {
+                    if let Some(parent) = node.parent() {
+                        if parent.kind() == "variable_declarator" {
+                            if let Some((nm, s, e)) = resolve_decl_name(lang, parent, src) {
+                                (Some(nm), s, e)
+                            } else {
+                                (None, node.start_byte(), node.start_byte())
+                            }
+                        } else {
+                            (None, node.start_byte(), node.start_byte())
+                        }
+                    } else {
+                        (None, node.start_byte(), node.start_byte())
+                    }
+                } else if let Some((nm, s, e)) = resolve_decl_name(lang, node, src) {
+                    (Some(nm), s, e)
+                } else {
+                    (None, node.start_byte(), node.start_byte())
+                };
+                out.push(CodeSpan {
+                    name,
+                    kind: "function",
+                    start: node.start_byte(),
+                    end: node.end_byte(),
+                    name_start: ns,
+                    name_end: ne,
+                });
+            });
+            out.sort_by_key(|s| (s.start, s.end));
+            out
+        }
+        pub fn symbols(&self, src: &[u8]) -> Vec<CodeSpan> {
+            let lang = self.lang;
+            let root = self.tree.root_node();
+            let mut out = Vec::new();
+            visit_dfs(root, |node| {
+                let Some(kind) = symbol_kind(lang, node) else {
+                    return;
+                };
+                let Some((nm, ns, ne)) = resolve_decl_name(lang, node, src) else {
+                    return;
+                };
+                out.push(CodeSpan {
+                    name: Some(nm),
+                    kind,
+                    start: node.start_byte(),
+                    end: node.end_byte(),
+                    name_start: ns,
+                    name_end: ne,
+                });
+            });
+            out.sort_by_key(|s| (s.name_start, s.name_end));
+            out
+        }
+        /// One parse: the file's declarations, and how many times each code token
+        /// (not in a comment or string) whose text passes `keep` occurs.
+        pub fn symbols_and_token_counts(
+            &self,
+            src: &[u8],
+            keep: &dyn Fn(&str) -> bool,
+        ) -> (Vec<CodeSpan>, std::collections::HashMap<String, usize>) {
+            let lang = self.lang;
+            let root = self.tree.root_node();
+            let mut syms = Vec::new();
+            let mut counts = std::collections::HashMap::new();
+            visit_dfs(root, |node| {
+                if node.child_count() == 0 {
+                    if let Ok(t) = std::str::from_utf8(&src[node.byte_range()]) {
+                        if keep(t) && !is_comment_or_string(node) {
+                            *counts.entry(t.to_string()).or_insert(0) += 1;
+                        }
+                    }
+                    return;
+                }
+                let Some(kind) = symbol_kind(lang, node) else {
+                    return;
+                };
+                if let Some((nm, ns, ne)) = resolve_decl_name(lang, node, src) {
+                    syms.push(CodeSpan {
+                        name: Some(nm),
+                        kind,
+                        start: node.start_byte(),
+                        end: node.end_byte(),
+                        name_start: ns,
+                        name_end: ne,
+                    });
+                }
+            });
+            (syms, counts)
+        }
+        /// Return `(start_byte, end_byte)` of all non-comment, non-string AST leaf tokens matching `ident`.
+        pub fn identifiers(&self, src: &[u8], ident: &str) -> Vec<(usize, usize, IdRole)> {
+            let target = ident.as_bytes();
+            let lang = self.lang;
+            let root = self.tree.root_node();
+            let mut out = Vec::new();
+            visit_dfs(root, |node| {
+                if node.child_count() != 0 {
+                    return;
+                }
+                let s = node.start_byte();
+                let e = node.end_byte();
+                if e.saturating_sub(s) != target.len() || &src[s..e] != target {
+                    return;
+                }
+                if is_comment_or_string(node) {
+                    return;
+                }
+                let role = match (lang, node.parent()) {
+                    (Lang::Rust, _) if node.kind() == "field_identifier" => IdRole::Member,
+                    // `x.name` / `name: value` inside a macro's token tree
+                    (Lang::Rust, Some(p))
+                        if p.kind() == "token_tree"
+                            && (node.prev_sibling().is_some_and(|b| b.kind() == ".")
+                                || node.next_sibling().is_some_and(|b| b.kind() == ":")) =>
+                    {
+                        IdRole::Member
+                    }
+                    (Lang::Rust, Some(p))
+                        if p.kind() == "function_item"
+                            && p.child_by_field_name("name")
+                                .is_some_and(|n| n.id() == node.id()) =>
+                    {
+                        let mut a = p.parent();
+                        while let Some(x) = a {
+                            if matches!(x.kind(), "impl_item" | "trait_item") {
+                                break;
+                            }
+                            a = x.parent();
+                        }
+                        if a.is_none() {
+                            IdRole::FreeFn
+                        } else {
+                            IdRole::Plain
+                        }
+                    }
+                    _ => IdRole::Plain,
+                };
+                out.push((s, e, role));
+            });
+            out.sort_unstable_by_key(|x| (x.0, x.1));
+            out
+        }
     }
 
     fn node_text_clean(node: Node<'_>, src: &[u8]) -> Option<(String, usize, usize)> {
@@ -543,81 +725,15 @@ mod imp {
 
     /// Number of Tree-sitter ERROR / MISSING nodes, or `None` for unsupported files.
     pub fn syntax_errors(path: &Path, src: &[u8]) -> Option<usize> {
-        with_tree(path, src, |_, root| {
-            if !root.has_error() {
-                return 0;
-            }
-            let mut n = 0;
-            visit_dfs(root, |node| {
-                n += (node.is_error() || node.is_missing()) as usize
-            });
-            n
-        })
+        parse(path, src).map(|s| s.errors())
     }
 
     pub fn extract_functions(path: &Path, src: &[u8]) -> Option<Vec<CodeSpan>> {
-        with_tree(path, src, |lang, root| {
-            let mut out = Vec::new();
-            visit_dfs(root, |node| {
-                let k = node.kind();
-                if !is_function_node(lang, k) {
-                    return;
-                }
-                let (name, ns, ne) = if k == "arrow_function" {
-                    if let Some(parent) = node.parent() {
-                        if parent.kind() == "variable_declarator" {
-                            if let Some((nm, s, e)) = resolve_decl_name(lang, parent, src) {
-                                (Some(nm), s, e)
-                            } else {
-                                (None, node.start_byte(), node.start_byte())
-                            }
-                        } else {
-                            (None, node.start_byte(), node.start_byte())
-                        }
-                    } else {
-                        (None, node.start_byte(), node.start_byte())
-                    }
-                } else if let Some((nm, s, e)) = resolve_decl_name(lang, node, src) {
-                    (Some(nm), s, e)
-                } else {
-                    (None, node.start_byte(), node.start_byte())
-                };
-                out.push(CodeSpan {
-                    name,
-                    kind: "function",
-                    start: node.start_byte(),
-                    end: node.end_byte(),
-                    name_start: ns,
-                    name_end: ne,
-                });
-            });
-            out.sort_by_key(|s| (s.start, s.end));
-            out
-        })
+        parse(path, src).map(|s| s.functions(src))
     }
 
     pub fn extract_symbols(path: &Path, src: &[u8]) -> Option<Vec<CodeSpan>> {
-        with_tree(path, src, |lang, root| {
-            let mut out = Vec::new();
-            visit_dfs(root, |node| {
-                let Some(kind) = symbol_kind(lang, node) else {
-                    return;
-                };
-                let Some((nm, ns, ne)) = resolve_decl_name(lang, node, src) else {
-                    return;
-                };
-                out.push(CodeSpan {
-                    name: Some(nm),
-                    kind,
-                    start: node.start_byte(),
-                    end: node.end_byte(),
-                    name_start: ns,
-                    name_end: ne,
-                });
-            });
-            out.sort_by_key(|s| (s.name_start, s.name_end));
-            out
-        })
+        parse(path, src).map(|s| s.symbols(src))
     }
 
     fn is_comment_or_string(node: Node<'_>) -> bool {
@@ -643,92 +759,7 @@ mod imp {
         src: &[u8],
         keep: &dyn Fn(&str) -> bool,
     ) -> Option<(Vec<CodeSpan>, std::collections::HashMap<String, usize>)> {
-        with_tree(path, src, |lang, root| {
-            let mut syms = Vec::new();
-            let mut counts = std::collections::HashMap::new();
-            visit_dfs(root, |node| {
-                if node.child_count() == 0 {
-                    if let Ok(t) = std::str::from_utf8(&src[node.byte_range()]) {
-                        if keep(t) && !is_comment_or_string(node) {
-                            *counts.entry(t.to_string()).or_insert(0) += 1;
-                        }
-                    }
-                    return;
-                }
-                let Some(kind) = symbol_kind(lang, node) else {
-                    return;
-                };
-                if let Some((nm, ns, ne)) = resolve_decl_name(lang, node, src) {
-                    syms.push(CodeSpan {
-                        name: Some(nm),
-                        kind,
-                        start: node.start_byte(),
-                        end: node.end_byte(),
-                        name_start: ns,
-                        name_end: ne,
-                    });
-                }
-            });
-            (syms, counts)
-        })
-    }
-
-    /// Return `(start_byte, end_byte)` of all non-comment, non-string AST leaf tokens matching `ident`.
-    pub fn find_identifier_spans(
-        path: &Path,
-        src: &[u8],
-        ident: &str,
-    ) -> Option<Vec<(usize, usize, IdRole)>> {
-        let target = ident.as_bytes();
-        with_tree(path, src, |lang, root| {
-            let mut out = Vec::new();
-            visit_dfs(root, |node| {
-                if node.child_count() != 0 {
-                    return;
-                }
-                let s = node.start_byte();
-                let e = node.end_byte();
-                if e.saturating_sub(s) != target.len() || &src[s..e] != target {
-                    return;
-                }
-                if is_comment_or_string(node) {
-                    return;
-                }
-                let role = match (lang, node.parent()) {
-                    (Lang::Rust, _) if node.kind() == "field_identifier" => IdRole::Member,
-                    // `x.name` / `name: value` inside a macro's token tree
-                    (Lang::Rust, Some(p))
-                        if p.kind() == "token_tree"
-                            && (node.prev_sibling().is_some_and(|b| b.kind() == ".")
-                                || node.next_sibling().is_some_and(|b| b.kind() == ":")) =>
-                    {
-                        IdRole::Member
-                    }
-                    (Lang::Rust, Some(p))
-                        if p.kind() == "function_item"
-                            && p.child_by_field_name("name")
-                                .is_some_and(|n| n.id() == node.id()) =>
-                    {
-                        let mut a = p.parent();
-                        while let Some(x) = a {
-                            if matches!(x.kind(), "impl_item" | "trait_item") {
-                                break;
-                            }
-                            a = x.parent();
-                        }
-                        if a.is_none() {
-                            IdRole::FreeFn
-                        } else {
-                            IdRole::Plain
-                        }
-                    }
-                    _ => IdRole::Plain,
-                };
-                out.push((s, e, role));
-            });
-            out.sort_unstable_by_key(|x| (x.0, x.1));
-            out
-        })
+        parse(path, src).map(|s| s.symbols_and_token_counts(src, keep))
     }
 }
 
@@ -750,12 +781,21 @@ mod imp {
     pub fn extract_symbols(_path: &Path, _src: &[u8]) -> Option<Vec<CodeSpan>> {
         None
     }
-    pub fn find_identifier_spans(
-        _path: &Path,
-        _src: &[u8],
-        _ident: &str,
-    ) -> Option<Vec<(usize, usize, super::IdRole)>> {
+    /// Without the `ast` feature nothing is parsed, so no `Syntax` value exists.
+    pub enum Syntax {}
+    pub fn parse(_path: &Path, _src: &[u8]) -> Option<Syntax> {
         None
+    }
+    impl Syntax {
+        pub fn functions(&self, _src: &[u8]) -> Vec<CodeSpan> {
+            match *self {}
+        }
+        pub fn symbols(&self, _src: &[u8]) -> Vec<CodeSpan> {
+            match *self {}
+        }
+        pub fn identifiers(&self, _src: &[u8], _ident: &str) -> Vec<(usize, usize, super::IdRole)> {
+            match *self {}
+        }
     }
     #[allow(clippy::type_complexity)]
     pub fn symbols_and_token_counts(
@@ -767,9 +807,9 @@ mod imp {
     }
 }
 
-#[cfg(feature = "ast")]
-pub use imp::Lang;
 pub use imp::{
-    extract_functions, extract_symbols, find_identifier_spans, supports_path,
-    symbols_and_token_counts, syntax_errors, ENABLED,
+    extract_functions, extract_symbols, parse, supports_path, symbols_and_token_counts,
+    syntax_errors, Syntax, ENABLED,
 };
+#[cfg(feature = "ast")]
+pub use imp::{parse_tree, Lang};

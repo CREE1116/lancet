@@ -168,9 +168,10 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
     let mut local = Vec::new();
     let mut free_fns = 0;
 
-    if code::ENABLED && code::supports_path(&target.path) {
-        let syms = code::extract_symbols(&target.path, raw_bytes).unwrap_or_default();
-        let funcs = code::extract_functions(&target.path, raw_bytes).unwrap_or_default();
+    // One parse per file; every view below reads it.
+    if let Some(syn) = code::parse(&target.path, raw_bytes) {
+        let syms = syn.symbols(raw_bytes);
+        let funcs = syn.functions(raw_bytes);
         let mut def_spans: HashSet<(usize, usize)> = HashSet::new();
 
         for sp in &syms {
@@ -189,9 +190,9 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
             }
         }
 
-        let locals = crate::rename::local_name_starts(&target.path, &src).unwrap_or_default();
-        if let Some(id_spans) = code::find_identifier_spans(&target.path, raw_bytes, symbol) {
-            for (s, e, role) in id_spans {
+        let locals = crate::rename::local_name_starts_in(&syn, &src).unwrap_or_default();
+        {
+            for (s, e, role) in syn.identifiers(raw_bytes, symbol) {
                 if def_spans.contains(&(s, e)) {
                     free_fns += (role == code::IdRole::FreeFn) as usize;
                     continue;

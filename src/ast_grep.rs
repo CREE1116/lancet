@@ -147,11 +147,7 @@ mod imp {
     use std::fs;
     use std::io::{self, Write};
     use std::time::Instant;
-    use tree_sitter::{Node, Parser, Tree};
-
-    thread_local! {
-        static AST_PARSER: RefCell<(Option<Lang>, Parser)> = RefCell::new((None, Parser::new()));
-    }
+    use tree_sitter::{Node, Tree};
 
     #[derive(Clone, Debug, PartialEq, Eq)]
     struct MetaSpec {
@@ -297,14 +293,7 @@ mod imp {
     }
 
     fn parse_src(lang: Lang, src: &str) -> Option<Tree> {
-        AST_PARSER.with(|cell| {
-            let mut st = cell.borrow_mut();
-            if st.0 != Some(lang) {
-                st.1.set_language(&lang.language()).ok()?;
-                st.0 = Some(lang);
-            }
-            st.1.parse(src.as_bytes(), None)
-        })
+        crate::code::parse_tree(lang, src.as_bytes())
     }
 
     fn path_to_descendant(root: Node<'_>, target: Node<'_>) -> Option<Vec<usize>> {

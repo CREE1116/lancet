@@ -100,12 +100,15 @@ pub fn rename(o: &RenameOptions) -> RenameResponse {
     r
 }
 
-pub use imp::local_name_starts;
+pub use imp::{local_name_starts, local_name_starts_in};
 
 #[cfg(not(feature = "ast"))]
 mod imp {
     use super::*;
     pub fn local_name_starts(_path: &std::path::Path, _src: &str) -> Option<Vec<usize>> {
+        None
+    }
+    pub fn local_name_starts_in(_syn: &crate::code::Syntax, _src: &str) -> Option<Vec<usize>> {
         None
     }
     pub fn run(_o: &RenameOptions, _r: &mut RenameResponse) -> Result<(), (Status, String)> {
@@ -122,7 +125,7 @@ mod imp {
     use crate::code::Lang;
     use crate::edit::{self, Edit};
     use std::collections::HashMap;
-    use tree_sitter::{Node, Parser};
+    use tree_sitter::Node;
 
     type Fail = (Status, String);
     type Span = (usize, usize);
@@ -738,10 +741,7 @@ mod imp {
     }
 
     fn parse(lang: Lang, src: &str) -> Result<tree_sitter::Tree, Fail> {
-        let mut p = Parser::new();
-        p.set_language(&lang.language())
-            .map_err(|e| (Status::Unsupported, e.to_string()))?;
-        p.parse(src, None)
+        crate::code::parse_tree(lang, src.as_bytes())
             .ok_or_else(|| (Status::InvalidQuery, "parse failed".into()))
     }
 
@@ -750,8 +750,12 @@ mod imp {
     /// can skip them. `None` when the language isn't modeled or names are resolved
     /// at run time (`eval`, `with`, `locals()`).
     pub fn local_name_starts(path: &std::path::Path, src: &str) -> Option<Vec<usize>> {
-        let lang = Lang::from_path(path)?;
-        let a = analyze(lang, family(lang)?, src).ok()?;
+        local_name_starts_in(&crate::code::parse(path, src.as_bytes())?, src)
+    }
+
+    /// [`local_name_starts`] for a file already parsed.
+    pub fn local_name_starts_in(syn: &crate::code::Syntax, src: &str) -> Option<Vec<usize>> {
+        let a = analyze_tree(family(syn.lang)?, src, &syn.tree);
         if !a.dynamic.is_empty() {
             return None;
         }
@@ -771,7 +775,10 @@ mod imp {
     }
 
     fn analyze(lang: Lang, fam: L, src: &str) -> Result<Analysis, Fail> {
-        let tree = parse(lang, src)?;
+        Ok(analyze_tree(fam, src, &parse(lang, src)?))
+    }
+
+    fn analyze_tree(fam: L, src: &str, tree: &tree_sitter::Tree) -> Analysis {
         let mut a = Analysis::default();
         let mut cx = Cx {
             fam,
@@ -788,7 +795,7 @@ mod imp {
             let kids: Vec<Node> = n.children(&mut c).collect();
             stack.extend(kids.into_iter().rev());
         }
-        Ok(a)
+        a
     }
 
     struct Cx<'s> {
