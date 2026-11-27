@@ -2889,3 +2889,35 @@ fn rename_local_bindings_exactly_or_refuses() {
     };
     assert_eq!(rename(&o).status, Status::Conflict);
 }
+
+#[test]
+fn refs_rank_orders_declarations_by_use() {
+    use lancet::refs::{find_refs, rank_symbols, RefsOptions};
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/a.rs"),
+        "pub struct UserService;\npub struct MailService;\nstruct Other;\n// MailService in a comment\nfn f(_: UserService, _: UserService) -> MailService { let _s = \"UserService\"; MailService }\n",
+    )
+    .unwrap();
+    fs::write(root.join("src/b.rs"), "fn g(_: UserService) {}\n").unwrap();
+    let mut o = RefsOptions::new("*Service", root);
+    o.index = IndexMode::Off;
+    let r = rank_symbols(&o, &["struct".into()]);
+    let got: Vec<(&str, usize)> = r
+        .entries
+        .iter()
+        .map(|e| (e.name.as_str(), e.references))
+        .collect();
+    // Comments and strings don't count; `Other` doesn't match the glob.
+    assert_eq!(got, vec![("UserService", 3), ("MailService", 2)]);
+    assert_eq!(rel(&r.entries[0].path), "src/a.rs");
+    assert_eq!(r.entries[0].line, 1);
+    // Same count as `lancet refs` for that name.
+    let mut one = RefsOptions::new("UserService", root);
+    one.index = IndexMode::Off;
+    assert_eq!(find_refs(&one).total_references, 3);
+    // Kind filter.
+    assert!(rank_symbols(&o, &["function".into()]).entries.is_empty());
+}

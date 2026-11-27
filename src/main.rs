@@ -242,9 +242,12 @@ struct FdCli {
     /// Maximum file size (e.g. 10m, 1g)
     #[arg(long)]
     max_size: Option<String>,
-    /// Render matched entries as an indented ASCII directory tree
+    /// Render matched entries as an indented ASCII directory tree (add --dirs for folders only)
     #[arg(long)]
     tree: bool,
+    /// Only directories (same as `-t d`): a project's layout without its files
+    #[arg(long)]
+    dirs: bool,
     /// Maximum number of entries returned
     #[arg(long)]
     limit: Option<usize>,
@@ -407,14 +410,71 @@ struct OutlineCli {
     json: bool,
 }
 
+fn run_rank(opts: &RefsOptions, kinds: &[String], json: bool) -> ExitCode {
+    let resp = lancet::refs::rank_symbols(opts, kinds);
+    let stdout = io::stdout();
+    let mut out = io::BufWriter::new(stdout.lock());
+    if json {
+        let _ = serde_json::to_writer(&mut out, &resp)
+            .map_err(io::Error::other)
+            .and_then(|_| writeln!(out));
+    } else {
+        let w = resp
+            .entries
+            .iter()
+            .map(|e| e.references.to_string().len())
+            .max()
+            .unwrap_or(1);
+        for e in &resp.entries {
+            let shared = if e.definitions > 1 {
+                format!("  (name shared by {} declarations)", e.definitions)
+            } else {
+                String::new()
+            };
+            let _ = writeln!(
+                out,
+                "{:>w$}  {:<9} {}  {}:{}{shared}",
+                e.references, e.kind, e.name, e.path, e.line
+            );
+        }
+        if resp.truncated {
+            let _ = writeln!(
+                out,
+                "… {} more (raise --limit)",
+                resp.total - resp.entries.len()
+            );
+        }
+    }
+    let _ = out.flush();
+    if let Some(err) = &resp.error {
+        eprintln!("error: {}", err.message);
+    }
+    for w in &resp.warnings {
+        eprintln!("[lancet refs] warning: {w}");
+    }
+    match resp.status {
+        Status::Complete => ExitCode::SUCCESS,
+        Status::Empty => ExitCode::from(1),
+        _ => ExitCode::from(2),
+    }
+}
+
 #[derive(Parser)]
 #[command(
     name = "lancet refs",
-    about = "Find symbol definitions and lexical AST references (excluding comments & strings)"
+    about = "Find symbol definitions and lexical AST references (excluding comments & strings)",
+    after_help = "Rank declarations by how often they are used:\n  lancet refs --rank '*Service' --kind class src     # the most used *Service classes\n  lancet refs --rank '*' --kind function --limit 10 ."
 )]
 struct RefsCli {
-    /// Exact identifier / symbol name
+    /// Exact identifier / symbol name (with --rank: a glob such as `*Service`)
     symbol: String,
+    /// List the declarations whose name matches SYMBOL (a glob), most referenced first
+    #[arg(long)]
+    rank: bool,
+    /// With --rank: only these declaration kinds, as the language names them
+    /// (class, interface, struct, enum, trait, function, method; Go: type, function, method)
+    #[arg(long = "kind", value_delimiter = ',', requires = "rank")]
+    kinds: Vec<String>,
     /// Directory or file to search
     #[arg(default_value = ".")]
     path: PathBuf,
@@ -770,7 +830,7 @@ fn run_fd(cli: FdCli) -> ExitCode {
     };
 
     let mut include_files = false;
-    let mut include_dirs = false;
+    let mut include_dirs = cli.dirs;
     for k in &cli.kinds {
         match k.to_ascii_lowercase().as_str() {
             "f" | "file" => include_files = true,
@@ -1377,11 +1437,6 @@ fn run_rename(cli: RenameCli) -> ExitCode {
         if let Some(err) = &resp.error {
             eprintln!("error: {}", err.message);
         } else {
-            let hint = if resp.applied {
-                ""
-            } else {
-                " (re-run with --apply to write)"
-            };
             let comments = if resp.comment_mentions > 0 {
                 format!(
                     "; {} comment mention(s) of `{}` left unchanged",
@@ -1391,13 +1446,13 @@ fn run_rename(cli: RenameCli) -> ExitCode {
                 String::new()
             };
             eprintln!(
-                "[lancet rename] {}: `{}` -> `{}`, {} site(s) in {}, rev {}{comments}{hint}",
+                "[lancet rename] {}: `{}` -> `{}`, {} site(s) in {}{comments}; {}",
                 resp.mode,
                 resp.old,
                 resp.new,
                 resp.sites.len(),
                 resp.path,
-                resp.rev_after.as_deref().unwrap_or("-"),
+                rev_note(resp.applied, resp.rev.as_deref(), resp.rev_after.as_deref()),
             );
         }
     }
@@ -1406,6 +1461,17 @@ fn run_rename(cli: RenameCli) -> ExitCode {
         Status::Complete => ExitCode::SUCCESS,
         Status::Empty => ExitCode::from(1),
         _ => ExitCode::from(2),
+    }
+}
+
+/// Which revision to pass next: before writing, the file's current rev (what
+/// `--rev` must match); after writing, the new one (for the next edit).
+fn rev_note(applied: bool, rev: Option<&str>, rev_after: Option<&str>) -> String {
+    let (r, a) = (rev.unwrap_or("-"), rev_after.unwrap_or("-"));
+    if applied {
+        format!("rev {r} -> {a} (pass --rev {a} to the next edit)")
+    } else {
+        format!("file is at rev {r}: re-run with --rev {r} --apply to write (afterwards it will be at rev {a})")
     }
 }
 
@@ -1578,21 +1644,16 @@ fn report_edit(resp: &lancet::edit_cmd::EditResponse, json: bool) -> ExitCode {
         } else if resp.status == Status::Empty {
             eprintln!("[lancet edit] no change");
         } else {
-            let hint = if resp.applied {
-                ""
-            } else {
-                " (re-run with --apply to write)"
-            };
             let what = if resp.hunks.len() > 1 {
                 format!("{} hunks", resp.hunks.len())
             } else {
                 format!("lines {}-{}", resp.start_line, resp.end_line)
             };
             eprintln!(
-                "[lancet edit] {}: {what} of {}, rev {}{hint}",
+                "[lancet edit] {}: {what} of {}; {}",
                 resp.mode,
                 resp.path,
-                resp.rev_after.as_deref().unwrap_or("-"),
+                rev_note(resp.applied, resp.rev.as_deref(), resp.rev_after.as_deref()),
             );
         }
     }
@@ -1719,6 +1780,9 @@ fn run_refs(cli: RefsCli) -> ExitCode {
     };
     opts.index = index_mode(cli.no_index, cli.trust_index);
     opts.index_dir = cli.index_dir;
+    if cli.rank {
+        return run_rank(&opts, &cli.kinds, cli.json);
+    }
 
     let resp = find_refs(&opts);
     let stdout = io::stdout();

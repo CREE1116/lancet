@@ -626,6 +626,43 @@ mod imp {
         false
     }
 
+    /// One parse: the file's declarations, and how many times each code token
+    /// (not in a comment or string) whose text passes `keep` occurs.
+    pub fn symbols_and_token_counts(
+        path: &Path,
+        src: &[u8],
+        keep: &dyn Fn(&str) -> bool,
+    ) -> Option<(Vec<CodeSpan>, std::collections::HashMap<String, usize>)> {
+        with_tree(path, src, |lang, root| {
+            let mut syms = Vec::new();
+            let mut counts = std::collections::HashMap::new();
+            visit_dfs(root, |node| {
+                if node.child_count() == 0 {
+                    if let Ok(t) = std::str::from_utf8(&src[node.byte_range()]) {
+                        if keep(t) && !is_comment_or_string(node) {
+                            *counts.entry(t.to_string()).or_insert(0) += 1;
+                        }
+                    }
+                    return;
+                }
+                let Some(kind) = symbol_kind(lang, node) else {
+                    return;
+                };
+                if let Some((nm, ns, ne)) = resolve_decl_name(lang, node, src) {
+                    syms.push(CodeSpan {
+                        name: Some(nm),
+                        kind,
+                        start: node.start_byte(),
+                        end: node.end_byte(),
+                        name_start: ns,
+                        name_end: ne,
+                    });
+                }
+            });
+            (syms, counts)
+        })
+    }
+
     /// Return `(start_byte, end_byte)` of all non-comment, non-string AST leaf tokens matching `ident`.
     pub fn find_identifier_spans(
         path: &Path,
@@ -679,11 +716,19 @@ mod imp {
     ) -> Option<Vec<(usize, usize)>> {
         None
     }
+    #[allow(clippy::type_complexity)]
+    pub fn symbols_and_token_counts(
+        _path: &Path,
+        _src: &[u8],
+        _keep: &dyn Fn(&str) -> bool,
+    ) -> Option<(Vec<CodeSpan>, std::collections::HashMap<String, usize>)> {
+        None
+    }
 }
 
 #[cfg(feature = "ast")]
 pub use imp::Lang;
 pub use imp::{
-    extract_functions, extract_symbols, find_identifier_spans, supports_path, syntax_errors,
-    ENABLED,
+    extract_functions, extract_symbols, find_identifier_spans, supports_path,
+    symbols_and_token_counts, syntax_errors, ENABLED,
 };

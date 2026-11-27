@@ -80,14 +80,14 @@ git diff | lancet patch --apply                             # unified diff를 �
 |---|---|
 | `lancet <QUERY> [PATH]` | `AND` / `OR` / `NOT`, `near` / `before`, `fuzzy("단어", k)`, `regex(...)`, `in function`, `symbol(...)`, `\| expand parent \| limit 5 \| budget tokens:1500` 같은 파이프 — [쿼리 문법](./docs/grammar.md) 참고 |
 | `lancet rg [FLAGS] PATTERN [PATH...]` | 항상 최신인 lancet 인덱스와 문서 추출기 위에서 동작하는 ripgrep 호환 플래그(`-L`, `--max-depth`, `--max-filesize`, `--color`, `-U`, `-w`, `-A`/`-B`/`-C`, `--json` 등; 파이프 시에도 `-n` 기본, `-N`으로 해제) — [ripgrep 대조표](./docs/rg-parity.md) 참고 |
-| `lancet fd` | `.gitignore` 인식 파일·폴더 탐색, `--tree`, 크기·수정 시각 필터, `--trust-index` 조회 |
+| `lancet fd` | `.gitignore` 인식 파일·폴더 탐색, `--tree`(폴더만 보려면 `--dirs`), 크기·수정 시각 필터, `--trust-index` 조회 |
 | `lancet ast` | **24개 언어** Tree-sitter 구조 검색과 `--rewrite` (`$X`, `$_`, `$$$ARGS`, C 계열 언어의 `if ($C) $S`·`{ $$$B }` 같은 문장 메타변수 포함) |
 | `lancet read` | 정확한 줄 범위, `--symbol`, PDF/PPTX `--page`, 엑셀 `--sheet --rows --cols`, `archive.zip!항목`, 이어읽기 커서가 있는 `--budget-tokens` |
 | `lancet edit` | `read`와 같은 좌표(`--lines`, `--symbol`, 유일해야 하는 정확한 텍스트 `--find`, 여러 구간은 `--edits`)로 줄 교체·삭제·삽입. `--rev` 기준 잠금 compare-and-swap이라 여러 에이전트가 동시에 고쳐도 서로 덮어쓰지 않음. 구문 오류가 늘어나면 거부, `--apply` 전에는 dry-run |
 | `lancet patch` | unified diff(`git diff`, `diff -u`, rename·모드 변경·빈 파일 포함, 바이너리 변경은 거부) 적용: 정확한 hunk 매칭(줄 번호가 밀렸으면 가장 가까운 고유 위치 탐색, 퍼지 추측 없음), 전체 파일 검증 및 동시 쓰기 충돌 시 롤백, 구문 오류 증가 거부, `--apply` 전에는 dry-run |
 | `lancet mcp` | 내장 Model Context Protocol(`stdio`) 서버 실행: 검색·`rg`·AST·`read`·`edit`·`patch`·인덱스 툴 제공(`--root`, `--read-only`, `--trust-index`) |
 | `lancet outline` | 코드 선언 골격, Markdown 목차, 워크북 스키마, 압축 파일 목록 |
-| `lancet refs` | 주석·문자열 리터럴을 건너뛰는 인덱스 가속 `[def]` / `[ref]` 추적 |
+| `lancet refs` | 주석·문자열 리터럴을 건너뛰는 인덱스 가속 `[def]` / `[ref]` 추적. `--rank '*Service' --kind class`로 많이 쓰이는 선언부터 나열 |
 | `lancet batch` | 여러 쿼리를 인덱스 한 번 열고 디렉터리 한 번 훑어 처리 |
 | `lancet index` · `status` · `explain` | 인덱스 빌드·갱신, 상태 확인, 쿼리에 필요한 트라이그램 보기 |
 

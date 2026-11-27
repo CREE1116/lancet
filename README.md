@@ -80,14 +80,14 @@ git diff | lancet patch --apply                             # apply a unified di
 |---|---|
 | `lancet <QUERY> [PATH]` | `AND` / `OR` / `NOT`, `near` / `before`, `fuzzy("term", k)`, `regex(...)`, `in function`, `symbol(...)`, pipes like `\| expand parent \| limit 5 \| budget tokens:1500` — see the [query language](./docs/grammar.md) |
 | `lancet rg [FLAGS] PATTERN [PATH...]` | ripgrep-compatible flags (`-L`, `--max-depth`, `--max-filesize`, `--color`, `-U`, `-w`, `-A`/`-B`/`-C`, `--json`, etc.) on lancet's index & document extractors (`-n` stays on when piped; `-N` disables) — see [ripgrep parity](./docs/rg-parity.md) |
-| `lancet fd` | `.gitignore`-aware file & folder finder, `--tree`, size / recency filters, `--trust-index` lookups |
+| `lancet fd` | `.gitignore`-aware file & folder finder, `--tree` (`--dirs` for folders only), size / recency filters, `--trust-index` lookups |
 | `lancet ast` | Tree-sitter structural search & `--rewrite` (`$X`, `$_`, `$$$ARGS`, plus statement metavariables like `if ($C) $S` and `{ $$$B }` in C-like languages) across **24 languages** |
 | `lancet read` | Exact line ranges, `--symbol`, PDF/PPTX `--page`, spreadsheet `--sheet --rows --cols`, `archive.zip!entry`, `--budget-tokens` with resume cursors |
 | `lancet edit` | Replace / delete / insert lines addressed like `read` (`--lines`, `--symbol`, exact text with `--find` that must be unique, or many hunks at once with `--edits`); a locked compare-and-swap on `--rev`, so concurrent agents never overwrite each other; refuses a net increase in syntax errors; dry-run unless `--apply` |
 | `lancet patch` | Apply unified diffs (`git diff`, `diff -u`, including renames, mode changes and empty files; binary changes are refused) with exact hunk matching (unique nearest-offset relocation, never fuzzy), all-or-nothing multi-file verification with race rollback, and syntax-error refusal; dry-run unless `--apply` |
 | `lancet mcp` | Run a built-in Model Context Protocol (`stdio`) server exposing search, `rg`, AST, `read`, `edit`, `patch`, and index tools (`--root`, `--read-only`, `--trust-index`) |
 | `lancet outline` | Declaration skeletons, Markdown headings, workbook schemas, archive manifests |
-| `lancet refs` | Index-accelerated `[def]` / `[ref]` lookup that skips comments and string literals |
+| `lancet refs` | Index-accelerated `[def]` / `[ref]` lookup that skips comments and string literals; `--rank '*Service' --kind class` lists the most-used declarations first |
 | `lancet batch` | Many queries over one shared index open and directory walk |
 | `lancet index` · `status` · `explain` | Build / update the index, inspect it, see which trigrams a query needs |
 

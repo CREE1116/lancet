@@ -234,18 +234,16 @@ pub fn find_refs(opts: &RefsOptions) -> RefsResponse {
     r
 }
 
-fn find_refs_raw(opts: &RefsOptions) -> RefsResponse {
-    let t0 = Instant::now();
-    let sym = opts.symbol.trim();
-    if sym.is_empty() {
-        return RefsResponse::failure(
-            Status::InvalidQuery,
-            opts.symbol.clone(),
-            "symbol name cannot be empty".into(),
-            ms(t0),
-        );
-    }
+/// Files to scan for `opts` (code files under the root, narrowed by `--lang` /
+/// `--ext` / `--path`), using the index to keep only files that can contain `req`.
+struct Planned {
+    targets: Vec<Target>,
+    mode: String,
+    warnings: Vec<String>,
+    stats: Stats,
+}
 
+fn plan_files(opts: &RefsOptions, req: &Req) -> Result<Planned, (Status, String)> {
     let mut filters = Filters::default();
     if let Some(lang_s) = &opts.lang {
         #[cfg(feature = "ast")]
@@ -255,24 +253,17 @@ fn find_refs_raw(opts: &RefsOptions) -> RefsResponse {
                     filters.exts = l.extensions().iter().map(|s| (*s).to_string()).collect();
                 }
                 None => {
-                    return RefsResponse::failure(
-                        Status::InvalidQuery,
-                        sym.to_string(),
-                        format!("unknown --lang `{lang_s}`"),
-                        ms(t0),
-                    );
+                    return Err((Status::InvalidQuery, format!("unknown --lang `{lang_s}`")));
                 }
             }
         }
         #[cfg(not(feature = "ast"))]
         {
             let _ = lang_s;
-            return RefsResponse::failure(
+            return Err((
                 Status::Unsupported,
-                sym.to_string(),
                 "`--lang` requires building with `--features ast`".into(),
-                ms(t0),
-            );
+            ));
         }
     } else if !opts.exts.is_empty() {
         filters.exts = opts
@@ -288,14 +279,8 @@ fn find_refs_raw(opts: &RefsOptions) -> RefsResponse {
 
     let filter = match FileFilter::new(&filters) {
         Ok(f) => f,
-        Err(e) => return RefsResponse::failure(Status::InvalidQuery, sym.to_string(), e, ms(t0)),
+        Err(e) => return Err((Status::InvalidQuery, e)),
     };
-
-    let req = Req::from_expr(&Expr::Match {
-        m: Matcher::Lit {
-            text: sym.to_string(),
-        },
-    });
 
     let mut warnings = Vec::new();
     let mut mode = "scan".to_string();
@@ -312,7 +297,7 @@ fn find_refs_raw(opts: &RefsOptions) -> RefsResponse {
                 };
                 targets = Some(plan_targets_with_req(
                     &ix,
-                    &req,
+                    req,
                     &filter,
                     &opts.root,
                     &rel_prefix,
@@ -348,6 +333,40 @@ fn find_refs_raw(opts: &RefsOptions) -> RefsResponse {
     if core_stats.files_considered == 0 {
         core_stats.files_considered = targets.len();
     }
+    Ok(Planned {
+        targets,
+        mode,
+        warnings,
+        stats: core_stats,
+    })
+}
+
+fn find_refs_raw(opts: &RefsOptions) -> RefsResponse {
+    let t0 = Instant::now();
+    let sym = opts.symbol.trim();
+    if sym.is_empty() {
+        return RefsResponse::failure(
+            Status::InvalidQuery,
+            opts.symbol.clone(),
+            "symbol name cannot be empty".into(),
+            ms(t0),
+        );
+    }
+
+    let req = Req::from_expr(&Expr::Match {
+        m: Matcher::Lit {
+            text: sym.to_string(),
+        },
+    });
+    let Planned {
+        targets,
+        mode,
+        warnings,
+        stats: core_stats,
+    } = match plan_files(opts, &req) {
+        Ok(p) => p,
+        Err((status, msg)) => return RefsResponse::failure(status, sym.to_string(), msg, ms(t0)),
+    };
 
     let finder = memmem::Finder::new(sym.as_bytes());
     let per_file: Vec<Option<FileRefs>> = targets
@@ -440,4 +459,177 @@ pub fn print_refs_human(resp: &RefsResponse, w: &mut impl Write) -> io::Result<(
 
 fn ms(t0: Instant) -> f64 {
     t0.elapsed().as_secs_f64() * 1000.0
+}
+
+/// One declaration and how often its name is used elsewhere (`lancet refs --rank`).
+#[derive(Clone, Debug, Serialize)]
+pub struct RankEntry {
+    pub name: String,
+    pub kind: &'static str,
+    pub path: String,
+    pub line: usize,
+    /// Occurrences of the name in code (not comments or strings), minus its declarations.
+    pub references: usize,
+    /// Declarations sharing this name (overloads, same-named types in different
+    /// modules): they share the count, as `refs` is lexical.
+    pub definitions: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct RankResponse {
+    pub status: Status,
+    pub mode: String,
+    pub pattern: String,
+    pub entries: Vec<RankEntry>,
+    /// Declarations that matched before `limit`.
+    pub total: usize,
+    pub truncated: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ErrorInfo>,
+    pub files_parsed: usize,
+    pub elapsed_ms: f64,
+}
+
+/// The longest run of literal text in a glob (`*Service` → `Service`).
+fn glob_literal(g: &str) -> &str {
+    g.split(['*', '?', '[', ']', '{', '}', ','])
+        .max_by_key(|s| s.len())
+        .unwrap_or("")
+}
+
+/// Declarations whose name matches the glob `opts.symbol` (and `kinds`, if any),
+/// ranked by how many times the name is used — "the most used `*Service` classes".
+pub fn rank_symbols(opts: &RefsOptions, kinds: &[String]) -> RankResponse {
+    let t0 = Instant::now();
+    let pattern = opts.symbol.trim().to_string();
+    let fail = |status: Status, msg: String| RankResponse {
+        status,
+        mode: "scan".into(),
+        pattern: pattern.clone(),
+        entries: Vec::new(),
+        total: 0,
+        truncated: false,
+        warnings: Vec::new(),
+        error: Some(ErrorInfo {
+            message: msg,
+            pos: None,
+        }),
+        files_parsed: 0,
+        elapsed_ms: ms(t0),
+    };
+    if !code::ENABLED {
+        return fail(
+            Status::Unsupported,
+            "`--rank` requires building with `--features ast`".into(),
+        );
+    }
+    let glob = match globset::Glob::new(if pattern.is_empty() { "*" } else { &pattern }) {
+        Ok(g) => g.compile_matcher(),
+        Err(e) => {
+            return fail(
+                Status::InvalidQuery,
+                format!("bad pattern `{pattern}`: {e}"),
+            )
+        }
+    };
+    let lit = glob_literal(&pattern).to_string();
+    let req = if lit.is_empty() {
+        Req::All
+    } else {
+        Req::from_expr(&Expr::Match {
+            m: Matcher::Lit { text: lit.clone() },
+        })
+    };
+    let planned = match plan_files(opts, &req) {
+        Ok(p) => p,
+        Err((status, msg)) => return fail(status, msg),
+    };
+    let finder = memmem::Finder::new(lit.as_bytes());
+    let keep = |t: &str| glob.is_match(t);
+    // Per file: matching declarations (name, kind, line) and token counts.
+    type Found = (
+        String,
+        Vec<(String, &'static str, usize)>,
+        std::collections::HashMap<String, usize>,
+    );
+    let per_file: Vec<Found> = planned
+        .targets
+        .par_iter()
+        .filter_map(|t| {
+            let src = fs::read(&t.path).ok()?;
+            if !lit.is_empty() && finder.find(&src).is_none() {
+                return None;
+            }
+            let (syms, counts) = code::symbols_and_token_counts(&t.path, &src, &keep)?;
+            let defs = syms
+                .into_iter()
+                .filter_map(|s| {
+                    let name = s.name?;
+                    glob.is_match(&name).then(|| {
+                        let line = memchr::memchr_iter(b'\n', &src[..s.name_start]).count() + 1;
+                        (name, s.kind, line)
+                    })
+                })
+                .collect();
+            Some((t.rel.clone(), defs, counts))
+        })
+        .collect();
+    let mut uses: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut decls: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for (_, defs, counts) in &per_file {
+        for (k, v) in counts {
+            *uses.entry(k.clone()).or_insert(0) += v;
+        }
+        for (name, _, _) in defs {
+            *decls.entry(name.clone()).or_insert(0) += 1;
+        }
+    }
+    let wanted = |k: &str| kinds.is_empty() || kinds.iter().any(|w| w.eq_ignore_ascii_case(k));
+    let mut entries: Vec<RankEntry> = per_file
+        .iter()
+        .flat_map(|(rel, defs, _)| {
+            defs.iter()
+                .filter(|d| wanted(d.1))
+                .map(|(name, kind, line)| {
+                    let n_decl = decls[name];
+                    RankEntry {
+                        name: name.clone(),
+                        kind,
+                        path: crate::walk::display_path(&opts.root, rel),
+                        line: *line,
+                        references: uses.get(name).copied().unwrap_or(0).saturating_sub(n_decl),
+                        definitions: n_decl,
+                    }
+                })
+        })
+        .collect();
+    entries.sort_by(|a, b| {
+        b.references
+            .cmp(&a.references)
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.path.cmp(&b.path))
+            .then(a.line.cmp(&b.line))
+    });
+    let total = entries.len();
+    let limit = opts.limit.unwrap_or(20);
+    let truncated = entries.len() > limit;
+    entries.truncate(limit);
+    RankResponse {
+        status: if total == 0 {
+            Status::Empty
+        } else {
+            Status::Complete
+        },
+        mode: planned.mode,
+        pattern,
+        entries,
+        total,
+        truncated,
+        warnings: planned.warnings,
+        error: None,
+        files_parsed: per_file.len(),
+        elapsed_ms: ms(t0),
+    }
 }
