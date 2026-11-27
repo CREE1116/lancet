@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>기존 도구(rg, fd, ast-grep, sed, patch, rga)에서 전환하기 — lancet 문서</title>
+<meta name="description" content="ripgrep, fd, ast-grep, sed, patch, rga 사용자용 1:1 대조표와 의도적 차이, 도구 선택 경계.">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://cree1116.github.io/lancet/ko/docs/migration.html">
+<link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/migration.html">
+<link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/migration.html">
+<link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/migration.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="lancet">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:url" content="https://cree1116.github.io/lancet/ko/docs/migration.html">
+<meta property="og:title" content="기존 도구(rg, fd, ast-grep, sed, patch, rga)에서 전환하기 — lancet 문서">
+<meta property="og:description" content="ripgrep, fd, ast-grep, sed, patch, rga 사용자용 1:1 대조표와 의도적 차이, 도구 선택 경계.">
+<meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image-ko.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../../assets/docs.css?v=1">
+</head>
+<body data-docs-root="" data-search-url="../../assets/docs-search.json">
+
+<header class="doc-header">
+  <div class="doc-header-in">
+    <button class="menu-btn" id="menu-btn" type="button" aria-label="문서 메뉴 열기" aria-expanded="false">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg>
+    </button>
+    <a class="doc-brand" href="../index.html">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 27 L24 6 l3 3 L8 28 Z" fill="currentColor" style="color:var(--accent)"/></svg>
+      lancet
+    </a>
+    <a class="doc-badge" href="index.html">문서</a>
+    <button class="search-trigger" id="search-trigger" type="button">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <span>문서 검색…</span>
+      <kbd>/</kbd>
+    </button>
+    <nav class="header-links" aria-label="Primary">
+      <a href="../index.html" class="hide-sm">홈</a>
+      <a href="../../docs/migration.html" hreflang="en" lang="en">English</a>
+      <a class="header-gh" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span class="hide-sm">GitHub</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+
+<div class="doc-shell">
+  <aside class="doc-sidebar" aria-label="Documentation navigation">
+    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="index.html">소개 · 설치 · 치트시트</a></li><li><a href="migration.html" class="active">rg·fd·sg·sed에서 전환</a></li></ul></div><div class="nav-group"><div class="nav-group-title">실전 가이드</div><ul class="nav-list"><li><a href="guides/explore.html">낯선 코드베이스 탐색</a></li><li><a href="guides/editing.html">안전한 편집·패치·이름 변경</a></li><li><a href="guides/documents.html">PDF·오피스·HWP·압축파일</a></li><li><a href="guides/agents-mcp.html">AI 에이전트·MCP·공식 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">핵심 개념</div><ul class="nav-list"><li><a href="concepts/index-and-freshness.html">인덱스 & 최신성 모델</a></li><li><a href="concepts/architecture-and-benchmarks.html">아키텍처 & 벤치마크</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="reference/cli.html">CLI & lancet rg 레퍼런스</a></li><li><a href="reference/query-and-ast.html">LQL 문법 & AST 24개 언어</a></li><li><a href="reference/json-and-mcp.html">JSON 스키마 · MCP · 문제 해결</a></li></ul></div>
+  </aside>
+
+  <main class="doc-main">
+    <article class="doc-article">
+      <div class="crumb">시작하기</div>
+      <h1>기존 도구(rg, fd, ast-grep, sed, patch, rga)에서 전환하기</h1>
+      <p class="lede">ripgrep, fd, ast-grep의 익숙한 사용감을 그대로 가져오면서 통일된 좌표계와 무손실 편집을 더합니다.</p>
+      
+<p>이미 <code>ripgrep</code>, <code>fd</code>, <code>ast-grep</code>, <code>sed</code>, <code>patch</code>, <code>rga</code>에 익숙하다면 한 번에 다 바꿀 필요가 없습니다. Lancet은 기존 플래그를 그대로 받는 호환 진입점과 단계 간 이음새 오류를 없애는 안전장치를 함께 제공합니다.</p>
+
+<h2 id="from-rg">ripgrep(rg)에서 오셨다면<a class="heading-anchor" href="#from-rg" aria-label="Link to section">#</a></h2>
+<p><code>lancet rg</code>는 ripgrep의 플래그, Rust <code>regex</code> 엔진, <code>.gitignore</code> / <code>.ignore</code> / <code>.rgignore</code> 규칙, 종료 코드(<code>0</code> 매치, <code>1</code> 없음, <code>2</code> 오류), 출력 형식을 그대로 구현했습니다(ripgrep 15.2와 바이트 단위 검증).</p>
+<div class="table-wrap"><table><thead><tr><th>ripgrep 명령</th><th>lancet 대안</th><th>참고</th></tr></thead><tbody><tr><td><code>rg foo src</code></td><td><code>lancet rg foo src</code></td><td>줄 번호가 기본 ON; 끄려면 <code>-N</code></td></tr><tr><td><code>rg -i -w -t py tok</code></td><td><code>lancet rg -i -w -t py tok</code></td><td><code>-i</code>/<code>-s</code>/<code>-S</code>, <code>-w</code>, <code>--type</code> 규칙 동일</td></tr><tr><td><code>rg -g '*.toml' -C 2 pat</code></td><td><code>lancet rg -g '*.toml' -C 2 pat</code></td><td><code>--passthru</code>, <code>--type-add</code>, <code>-L</code>, <code>--max-depth</code> 지원</td></tr><tr><td><code>rg --files -t rs</code></td><td><code>lancet rg --files -t rs</code></td><td>경로순으로 결정적 정렬 출력</td></tr><tr><td><code>rg -P '(?&lt;=a)b'</code></td><td><code>lancet 'before("a", "b", 1)'</code> 또는 Rust regex</td><td><code>-P</code> / PCRE2는 의도적으로 미지원(선형 시간 + 건전한 트라이그램 컴파일 보장)</td></tr><tr><td><code>rg --pre pdftotext pat</code></td><td><code>lancet rg --docs pat</code></td><td>외부 프로세스 없이 인프로세스로 PDF/오피스/HWP/압축 검색</td></tr></tbody></table></div>
+
+<div class="callout note"><div class="callout-title">lancet rg의 의도적 차이 3가지</div><ul><li><strong>항상 경로순 정렬:</strong> <code>rg --sort path</code>와 동일하며 스레드 수와 무관하게 결정적입니다.</li><li><strong>줄 번호(<code>-n</code>) 기본 활성화:</strong> 파이프 출력에서도 켜져 있으며 <code>-N</code>으로 끕니다.</li><li><strong>파일명 헤더 없음:</strong> 항상 <code>path:line:text</code> 형식으로 출력하며 <code>--color auto</code>는 파이프 시 색상을 끕니다.</li></ul></div>
+
+<h2 id="from-fd">fd / find에서 오셨다면<a class="heading-anchor" href="#from-fd" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>fd / find</th><th>lancet fd</th><th>차이점 및 확장 기능</th></tr></thead><tbody><tr><td><code>fd -e rs -d 2 src</code></td><td><code>lancet fd -e rs -d 2 src</code></td><td><code>.lancet</code> 인덱스가 있으면 바로 활용</td></tr><tr><td><code>fd -t d -d 2</code></td><td><code>lancet fd --tree --dirs -d 2 .</code></td><td>파일 없이 폴더 트리만 깔끔하게 출력</td></tr><tr><td><code>find . -mtime -7</code></td><td><code>lancet fd --changed-within 7d</code></td><td>단위: <code>s</code>, <code>m</code>, <code>h</code>, <code>d</code>, <code>w</code></td></tr><tr><td><code>find . -name '*.pdf'</code></td><td><code>lancet fd --type-class document</code></td><td>내장 분류: <code>code</code>, <code>document</code>, <code>spreadsheet</code>, <code>archive</code> 등</td></tr><tr><td><code>fd pat dir1 dir2</code></td><td>경로마다 호출하거나 LQL <code>path:</code> 사용</td><td><code>lancet fd</code>는 <code>[PATH]</code> 1개만 받음; 패턴이 경로처럼 보이면 <code>-p pat</code> 사용</td></tr></tbody></table></div>
+
+<h2 id="from-ast">ast-grep(sg)에서 오셨다면<a class="heading-anchor" href="#from-ast" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>ast-grep</th><th>lancet ast</th><th>중요한 차이</th></tr></thead><tbody><tr><td><code>sg -p '$X.unwrap()' -l rs</code></td><td><code>lancet ast '$X.unwrap()' -l rs</code></td><td>패턴에 리터럴이 있으면 <code>.lancet</code> 트라이그램 프리필터 가속</td></tr><tr><td><code>sg -p 'f($$$A)' -r 'g($$$A)' -U</code></td><td><code>lancet ast 'f($$$A)' -r 'g($$$A)' --apply</code></td><td>기본은 dry-run diff; <code>--apply</code>일 때만 원자적 기록</td></tr><tr><td><code>sg -p 'if ($C) $S'</code></td><td><code>lancet ast 'if ($C) $S'</code></td><td><strong>의미 차이:</strong> Lancet은 모양을 엄격히 매치함(<code>if-else</code>는 별개 구문 노드)</td></tr><tr><td><code>sg -l cpp ...</code></td><td><code>lancet ast ... -l cpp</code></td><td>Lancet <code>--lang cpp</code>는 <code>.cpp</code>/<code>.cc</code> 외에 <code>.h</code> 헤더도 함께 스캔</td></tr></tbody></table></div>
+
+<h2 id="from-sed-patch">cat / sed / patch / rga에서 오셨다면<a class="heading-anchor" href="#from-sed-patch" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>기존 도구 사슬</th><th>Lancet 대체</th><th>해결된 실패 사례</th></tr></thead><tbody><tr><td><code>sed -n '10,50p' f.rs</code></td><td><code>lancet read f.rs --lines 10:50</code></td><td>XXH3-64 <code>rev</code> 반환 + <code>--budget-tokens</code> 상한 지원</td></tr><tr><td>하나의 <code>rg</code> 결과로 <code>sed -i</code> 2회</td><td><code>lancet edit f.rs --edits - --rev REV --apply</code></td><td>모든 hunk가 원본 줄 번호 기준; 심볼릭/하드 링크·권한 유지</td></tr><tr><td><code>patch -p1 &lt; diff</code></td><td><code>lancet patch diff --apply</code></td><td>모든 파일 사전 검증, 충돌 시 롤백(반쪽 패치 없음)</td></tr><tr><td><code>rga</code> + <code>pdftotext</code>/<code>pandoc</code></td><td><code>lancet 'pat'</code> + <code>lancet read f.pdf -p 2</code></td><td>단일 추출 파이프라인으로 줄 번호 100% 일치</td></tr></tbody></table></div>
+
+<h2 id="when-not">전문 도구를 그대로 써야 할 때<a class="heading-anchor" href="#when-not" aria-label="Link to section">#</a></h2>
+<div class="callout warn"><div class="callout-title">적용 범위 경계</div><ul><li><strong>버전 관리:</strong> <code>git</code>은 그대로 사용하세요. Lancet은 작업 트리를 검색하고(<code>.gitignore</code> 준수) <code>git diff</code>를 <code>lancet patch</code>로 안전하게 적용합니다.</li><li><strong>여러 파일에 걸친 타입 기반 리팩터링:</strong> 공개 API, 구조체 필드, 메서드 이름 일괄 변경은 LSP(<code>rust-analyzer</code>, <code>tsserver</code>, <code>gopls</code>)를 사용하세요. Lancet은 어휘 기반 <code>refs</code>와 단일 파일 스코프 증명 기반 <code>lancet rename</code>을 제공합니다.</li></ul></div>
+
+      <div class="pager"><a class="pager-card prev" href="index.html"><small>← 이전</small><b>소개 · 설치 · 치트시트</b></a><a class="pager-card next" href="guides/explore.html"><small>다음 →</small><b>낯선 코드베이스 탐색</b></a></div>
+      <div class="meta-foot">
+        <span>MIT OR Apache-2.0 · Rust 단일 바이너리</span>
+        <a href="https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md" target="_blank" rel="noopener">GitHub에서 소스 보기 →</a>
+      </div>
+    </article>
+  </main>
+
+  <aside class="doc-toc" aria-label="이 페이지 목차">
+    <div class="toc-title">이 페이지 목차</div>
+    <ul class="toc-list" id="doc-toc"></ul>
+  </aside>
+</div>
+
+<div class="search-modal" id="search-modal" role="dialog" aria-modal="true" aria-label="문서 검색…" hidden>
+  <div class="search-panel">
+    <div class="search-input-row">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <input id="search-input" type="search" placeholder="문서 검색…" autocomplete="off" spellcheck="false">
+      <button class="search-esc" id="search-esc" type="button">Esc</button>
+    </div>
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../../assets/docs-search.js?v=1"></script>
+<script src="../../assets/docs.js?v=1"></script>
+</body>
+</html>

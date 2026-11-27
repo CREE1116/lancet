@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lancet Documentation — Introduction & Cheat Sheet — lancet Docs</title>
+<meta name="description" content="Install Lancet, run a 60-second walkthrough, and keep the one-screen CLI cheat sheet handy.">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://cree1116.github.io/lancet/docs/">
+<link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/">
+<link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/">
+<link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="lancet">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://cree1116.github.io/lancet/docs/">
+<meta property="og:title" content="Lancet Documentation — Introduction & Cheat Sheet — lancet Docs">
+<meta property="og:description" content="Install Lancet, run a 60-second walkthrough, and keep the one-screen CLI cheat sheet handy.">
+<meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../assets/docs.css?v=1">
+</head>
+<body data-docs-root="" data-search-url="../assets/docs-search.json">
+
+<header class="doc-header">
+  <div class="doc-header-in">
+    <button class="menu-btn" id="menu-btn" type="button" aria-label="Open documentation menu" aria-expanded="false">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg>
+    </button>
+    <a class="doc-brand" href="../index.html">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 27 L24 6 l3 3 L8 28 Z" fill="currentColor" style="color:var(--accent)"/></svg>
+      lancet
+    </a>
+    <a class="doc-badge" href="index.html">Docs</a>
+    <button class="search-trigger" id="search-trigger" type="button">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <span>Search docs…</span>
+      <kbd>/</kbd>
+    </button>
+    <nav class="header-links" aria-label="Primary">
+      <a href="../index.html" class="hide-sm">Home</a>
+      <a href="../ko/docs/index.html" hreflang="ko" lang="ko">한국어</a>
+      <a class="header-gh" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span class="hide-sm">GitHub</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+
+<div class="doc-shell">
+  <aside class="doc-sidebar" aria-label="Documentation navigation">
+    <div class="nav-group"><div class="nav-group-title">Getting Started</div><ul class="nav-list"><li><a href="index.html" class="active">Introduction & Cheat Sheet</a></li><li><a href="migration.html">Migration from rg, fd, sg, sed</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Guides & Recipes</div><ul class="nav-list"><li><a href="guides/explore.html">Exploring Codebases</a></li><li><a href="guides/editing.html">Safe Editing, Patch & Rename</a></li><li><a href="guides/documents.html">PDFs, Office, HWP & Archives</a></li><li><a href="guides/agents-mcp.html">AI Agents, MCP & Skill</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Concepts & Design</div><ul class="nav-list"><li><a href="concepts/index-and-freshness.html">Index & Freshness Model</a></li><li><a href="concepts/architecture-and-benchmarks.html">Architecture & Benchmarks</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul class="nav-list"><li><a href="reference/cli.html">CLI & lancet rg Reference</a></li><li><a href="reference/query-and-ast.html">LQL & 24 AST Languages</a></li><li><a href="reference/json-and-mcp.html">JSON Schemas, MCP & Recovery</a></li></ul></div>
+  </aside>
+
+  <main class="doc-main">
+    <article class="doc-article">
+      <div class="crumb">Getting Started</div>
+      <h1>Lancet Documentation — Introduction & Cheat Sheet</h1>
+      <p class="lede">Find, read, and change code and documents on one coordinate system, at index speed.</p>
+      
+<p><strong>Lancet</strong> is a single Rust binary that unifies discovery (<code>fd</code>), trigram-indexed search (<code>rg</code> / LQL), structural AST search &amp; rewrite (<code>ast</code>), exact range/document reading (<code>read</code> / <code>outline</code>), compare-and-swap editing (<code>edit</code> / <code>patch</code> / <code>rename</code>), and an embedded stdio MCP server (<code>mcp</code>).</p>
+
+<div class="callout tip"><div class="callout-title">One rule before you start</div><p>Every search hit, AST match, read slice, and edit hunk agrees on exact <strong>1-based line numbers</strong> and <strong>XXH3-64 <code>rev</code> hashes</strong>. Even PDFs, Office files, HWP/HWPX, and archive entries share the exact same line numbering between search and <code>read</code>.</p></div>
+
+<h2 id="install">Installation<a class="heading-anchor" href="#install" aria-label="Link to section">#</a></h2>
+<p>Install a prebuilt binary on macOS, Linux (glibc and static musl), or Windows — no Rust toolchain needed:</p>
+
+<div class="doc-code"><div class="doc-code-head"><span>macOS / Linux (Homebrew)</span><button class="copy-btn" type="button">Copy</button></div><pre><code>brew tap CREE1116/lancet https://github.com/CREE1116/lancet
+brew install CREE1116/lancet/lancet</code></pre></div>
+<div class="doc-code"><div class="doc-code-head"><span>macOS / Linux (Release Installer)</span><button class="copy-btn" type="button">Copy</button></div><pre><code>curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh</code></pre></div>
+<div class="doc-code"><div class="doc-code-head"><span>Windows (PowerShell)</span><button class="copy-btn" type="button">Copy</button></div><pre><code>irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex</code></pre></div>
+<div class="doc-code"><div class="doc-code-head"><span>From source (Cargo)</span><button class="copy-btn" type="button">Copy</button></div><pre><code># Full binary (~40 MB, 24 Tree-sitter grammars + PDF/Office/HWP adapters)
+cargo binstall --git https://github.com/CREE1116/lancet lancet
+
+# Lean text/code-only binary (~4 MB, no document adapters)
+cargo install --git https://github.com/CREE1116/lancet --no-default-features</code></pre></div>
+
+<h2 id="walkthrough">60-Second Walkthrough<a class="heading-anchor" href="#walkthrough" aria-label="Link to section">#</a></h2>
+<p>Run this loop in any repository. Building <code>.lancet</code> is optional — commands work identically with or without an index, and <code>auto</code> mode checks disk freshness on every query.</p>
+<div class="doc-code"><div class="doc-code-head"><span>Terminal</span><button class="copy-btn" type="button">Copy</button></div><pre><code># 1. Optional: build the local trigram index once
+lancet index .
+
+# 2. Map folders first, then rank core symbols by lexical usage
+lancet fd --tree --dirs -d 2 .
+lancet refs --rank &#x27;*Service&#x27; --kind class src --limit 8
+
+# 3. Search with ripgrep syntax or LQL boolean/proximity queries
+lancet rg -w execute_one src
+lancet &#x27;near(&quot;gradient&quot;, &quot;clip&quot;, 30) in function | expand parent&#x27;
+
+# 4. Read exact lines or symbols and capture `rev`
+lancet read src/search.rs --symbol execute_one --json
+
+# 5. Preview a dry-run diff, then commit atomically with --rev and --apply
+lancet edit src/search.rs --find &#x27;let limit = 20;&#x27; --with &#x27;let limit = 50;&#x27; --rev &lt;REV&gt; --apply</code></pre></div>
+
+<h2 id="cheat-sheet">One-Screen Cheat Sheet<a class="heading-anchor" href="#cheat-sheet" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Job</th><th>Command</th><th>Key Guarantee</th></tr></thead><tbody><tr><td>Folder layout</td><td><code>lancet fd --tree --dirs -d 2 .</code></td><td>Respects <code>.gitignore</code></td></tr><tr><td>Recent/typed files</td><td><code>lancet fd -t f -e rs --changed-within 7d</code></td><td>Index-accelerated</td></tr><tr><td>Drop-in grep</td><td><code>lancet rg -w -t rs 'pat' src</code></td><td>Byte-identical to <code>rg</code> + <code>--docs</code></td></tr><tr><td>Boolean/fuzzy search</td><td><code>lancet '("a" OR "b") NOT "c" in function'</code></td><td><code>Scan == Auto</code></td></tr><tr><td>File skeleton</td><td><code>lancet outline src/main.rs</code></td><td>Functions, Markdown headings, sheets, ZIPs</td></tr><tr><td>Exact slice</td><td><code>lancet read f.rs --lines 10:50 --budget-tokens 800</code></td><td>Returns <code>rev</code> + <code>next_line</code></td></tr><tr><td>Symbol read</td><td><code>lancet read f.rs --symbol my_fn</code></td><td>Includes doc comments &amp; attributes</td></tr><tr><td>Document / ZIP</td><td><code>lancet read r.pdf -p 2:3</code> · <code>a.zip!app.log</code></td><td>Shared coordinates with search</td></tr><tr><td>Usage ranking</td><td><code>lancet refs --rank '*Service' --kind class src</code></td><td>Sorted by lexical reference count</td></tr><tr><td>AST search/rewrite</td><td><code>lancet ast '$X.unwrap()' src -l rs -r '$X?'</code></td><td>24 languages; dry-run until <code>--apply</code></td></tr><tr><td>CAS edit</td><td><code>lancet edit f.rs --edits - --rev REV --apply</code></td><td>Original coordinates, all-or-nothing</td></tr><tr><td>Unified diff</td><td><code>git diff | lancet patch --apply</code></td><td>Pre-verified + race rollback</td></tr><tr><td>Local scope rename</td><td><code>lancet rename f.rs:42 old new --rev REV --apply</code></td><td>Re-resolves scope to prevent capture</td></tr><tr><td>MCP server</td><td><code>lancet mcp --root .</code></td><td>11 tools over stdio JSON-RPC</td></tr><tr><td>Index inspection</td><td><code>lancet explain 'pat'</code> · <code>lancet status</code></td><td>Shows trigrams &amp; candidate %</td></tr></tbody></table></div>
+
+<h2 id="explore-docs">Explore the Documentation<a class="heading-anchor" href="#explore-docs" aria-label="Link to section">#</a></h2>
+<div class="doc-cards"><a class="doc-card" href="migration.html"><small>Getting Started</small><b>Migration Guide</b><span>Coming from rg, fd, ast-grep, sed, patch, or rga — side-by-side equivalents and exact differences.</span></a><a class="doc-card" href="guides/explore.html"><small>Guides</small><b>Exploring &amp; Budgeted Reads</b><span>Map repos with fd --dirs, rank symbols, inspect outlines, batch queries, and paginate by token budget.</span></a><a class="doc-card" href="guides/editing.html"><small>Guides</small><b>Safe Editing &amp; Concurrency</b><span>Avoid line drift with --edits, guard races with --rev, apply unified diffs, and use local rename.</span></a><a class="doc-card" href="reference/cli.html"><small>Reference</small><b>CLI, LQL &amp; JSON/MCP Schemas</b><span>Complete flag tables, LQL formal grammar, 24 AST aliases, all 11 MCP tools, and error recovery.</span></a></div>
+
+      <div class="pager"><div></div><a class="pager-card next" href="migration.html"><small>Next →</small><b>Migration from rg, fd, sg, sed</b></a></div>
+      <div class="meta-foot">
+        <span>MIT OR Apache-2.0 · Single Rust binary</span>
+        <a href="https://github.com/CREE1116/lancet/blob/main/README.md" target="_blank" rel="noopener">View source on GitHub →</a>
+      </div>
+    </article>
+  </main>
+
+  <aside class="doc-toc" aria-label="On this page">
+    <div class="toc-title">On this page</div>
+    <ul class="toc-list" id="doc-toc"></ul>
+  </aside>
+</div>
+
+<div class="search-modal" id="search-modal" role="dialog" aria-modal="true" aria-label="Search docs…" hidden>
+  <div class="search-panel">
+    <div class="search-input-row">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <input id="search-input" type="search" placeholder="Search docs…" autocomplete="off" spellcheck="false">
+      <button class="search-esc" id="search-esc" type="button">Esc</button>
+    </div>
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/docs-search.js?v=1"></script>
+<script src="../assets/docs.js?v=1"></script>
+</body>
+</html>

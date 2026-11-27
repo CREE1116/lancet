@@ -7,7 +7,7 @@
 [![CI](https://github.com/CREE1116/lancet/actions/workflows/ci.yml/badge.svg)](https://github.com/CREE1116/lancet/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#라이선스)
 
-[English](./README.md) · [쿼리 문법](./docs/grammar.md) · [ripgrep 대조표](./docs/rg-parity.md) · [에이전트 지침](./docs/agent-instructions.md) · [벤치마크](#벤치마크)
+[공식 문서](https://cree1116.github.io/lancet/ko/docs/) · [English](./README.md) · [쿼리 문법](./docs/grammar.md) · [ripgrep 대조표](./docs/rg-parity.md) · [에이전트 지침](./docs/agent-instructions.md) · [벤치마크](#벤치마크)
 
 </div>
 

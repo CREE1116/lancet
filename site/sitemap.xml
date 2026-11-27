@@ -13,4 +13,136 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/"/>
   </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/docs/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/ko/docs/</loc>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/docs/migration.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/migration.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/migration.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/migration.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/ko/docs/migration.html</loc>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/migration.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/migration.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/migration.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/docs/guides/explore.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/guides/explore.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/guides/explore.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/guides/explore.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/ko/docs/guides/explore.html</loc>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/guides/explore.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/guides/explore.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/guides/explore.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/docs/guides/editing.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/guides/editing.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/guides/editing.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/guides/editing.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/ko/docs/guides/editing.html</loc>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/guides/editing.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/guides/editing.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/guides/editing.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/docs/guides/documents.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/guides/documents.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/guides/documents.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/guides/documents.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/ko/docs/guides/documents.html</loc>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/guides/documents.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/guides/documents.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/guides/documents.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/docs/guides/agents-mcp.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/guides/agents-mcp.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/guides/agents-mcp.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/guides/agents-mcp.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/ko/docs/guides/agents-mcp.html</loc>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/guides/agents-mcp.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/guides/agents-mcp.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/guides/agents-mcp.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/docs/concepts/index-and-freshness.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/concepts/index-and-freshness.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/concepts/index-and-freshness.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/concepts/index-and-freshness.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/ko/docs/concepts/index-and-freshness.html</loc>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/concepts/index-and-freshness.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/concepts/index-and-freshness.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/concepts/index-and-freshness.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/docs/concepts/architecture-and-benchmarks.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/concepts/architecture-and-benchmarks.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/concepts/architecture-and-benchmarks.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/concepts/architecture-and-benchmarks.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/ko/docs/concepts/architecture-and-benchmarks.html</loc>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/concepts/architecture-and-benchmarks.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/concepts/architecture-and-benchmarks.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/concepts/architecture-and-benchmarks.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/docs/reference/cli.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/reference/cli.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/reference/cli.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/reference/cli.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/ko/docs/reference/cli.html</loc>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/reference/cli.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/reference/cli.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/reference/cli.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/docs/reference/query-and-ast.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/reference/query-and-ast.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/reference/query-and-ast.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/reference/query-and-ast.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/ko/docs/reference/query-and-ast.html</loc>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/reference/query-and-ast.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/reference/query-and-ast.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/reference/query-and-ast.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/docs/reference/json-and-mcp.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/reference/json-and-mcp.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/reference/json-and-mcp.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/reference/json-and-mcp.html"/>
+  </url>
+  <url>
+    <loc>https://cree1116.github.io/lancet/ko/docs/reference/json-and-mcp.html</loc>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/reference/json-and-mcp.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/reference/json-and-mcp.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/reference/json-and-mcp.html"/>
+  </url>
 </urlset>

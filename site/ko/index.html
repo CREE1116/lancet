@@ -63,7 +63,7 @@
       <a href="#features" class="opt">기능</a>
       <a href="#bench" class="keep">벤치마크</a>
       <a href="#start" class="opt">시작하기</a>
-      <a href="https://github.com/CREE1116/lancet/tree/main/docs" class="opt">문서</a>
+      <a href="docs/" class="keep">문서</a>
       <a href="../" class="keep" hreflang="en" lang="en">English</a>
     </div>
     <a class="gh" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
@@ -255,7 +255,7 @@
         </table>
       </details>
     </div>
-    <p class="honest"><b>느린 경우도 있습니다.</b> 리터럴이 하나도 없는 정규식은 인덱스로 좁힐 수가 없어서 ripgrep과 비슷하거나 최대 1.4배 느립니다. 리터럴 없는 AST 패턴은 ast-grep의 0.6–1.0배입니다. <a href="https://github.com/CREE1116/lancet/blob/main/bench/results/SUITE.md">전체 표와 측정 방법 →</a></p>
+    <p class="honest"><b>느린 경우도 있습니다.</b> 리터럴이 하나도 없는 정규식은 인덱스로 좁힐 수가 없어서 ripgrep과 비슷하거나 최대 1.4배 느립니다. 리터럴 없는 AST 패턴은 ast-grep의 0.6–1.0배입니다. <a href="docs/concepts/architecture-and-benchmarks.html">벤치마크·경쟁 비교 →</a> · <a href="https://github.com/CREE1116/lancet/blob/main/bench/results/SUITE.md">전체 표 →</a></p>
   </div>
 </section>
 
@@ -289,22 +289,23 @@
 <pre><span class="c"># 선택: 인덱스는 한 번만 만들면 이후엔 알아서 따라옵니다</span>
 lancet index .
 
-lancet fd --tree --max-depth 2 .
+lancet fd --tree --dirs --max-depth 2 .
+lancet refs --rank '*Service' --kind class src
 lancet rg -w spin_lock src
 lancet read src/search.rs --symbol execute_one
-lancet refs SearchOptions src
 lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'
 lancet edit src/net.rs --find 'retries = 3' \
   --with 'retries = 5' --rev &lt;REV&gt; --apply
+lancet rename src/net.rs:12 old_var new_var --rev &lt;REV&gt; --apply
 git diff | lancet patch --apply</pre>
       </div>
       <div class="code">
         <h4>MCP · 공식 스킬</h4>
 <pre><span class="c"># 1. 내장 MCP 서버 등록 (Claude Code)</span>
 claude mcp add --transport stdio lancet -- lancet mcp --root .
-<span class="c"># Cursor / Codex / Antigravity 설정은 docs/mcp.md 참고</span>
+<span class="c"># Cursor / Codex / Antigravity 설정은 docs/guides/agents-mcp.html 참고</span>
 
-<span class="c"># 2. 공식 스킬 설치 (SKILL.md + mcp-config.json)</span>
+<span class="c"># 2. 공식 스킬 설치 (SKILL.md + references/)</span>
 <span class="c"># skills/lancet/ 폴더를 ~/.claude/skills, ~/.codex/skills,</span>
 <span class="c"># ~/.gemini/config/skills 또는 .agents/skills에 복사</span>
 
@@ -320,12 +321,13 @@ rg/fd/ast-grep/cat/sed 대신 lancet(lancet_* MCP 또는 CLI)을 쓰고,
   <div class="wrap">
     <div>lancet · MIT OR Apache-2.0</div>
     <div style="display:flex;gap:20px;flex-wrap:wrap">
+      <a href="docs/">문서</a>
+      <a href="docs/guides/agents-mcp.html">MCP · 스킬</a>
+      <a href="docs/reference/query-and-ast.html">쿼리 언어</a>
+      <a href="docs/reference/cli.html#rg-parity">ripgrep 호환성</a>
+      <a href="docs/concepts/architecture-and-benchmarks.html">벤치마크 · 설계</a>
       <a href="https://github.com/CREE1116/lancet">GitHub</a>
       <a href="https://github.com/CREE1116/lancet/releases">릴리스</a>
-      <a href="https://github.com/CREE1116/lancet/blob/main/docs/mcp.md">MCP · 스킬</a>
-      <a href="https://github.com/CREE1116/lancet/blob/main/docs/grammar.md">쿼리 언어</a>
-      <a href="https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md">ripgrep 호환성</a>
-      <a href="https://github.com/CREE1116/lancet/blob/main/docs/why-one-tool.ko.md">왜 도구 하나인가</a>
       <a href="../" hreflang="en" lang="en">English</a>
     </div>
   </div>

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JSON 출력 스키마, MCP 11개 도구 명세 & 문제 해결 — lancet 문서</title>
+<meta name="description" content="Rust 구조체 기반 실제 JSON 응답 스키마, 11개 MCP 도구, 오류·거절 사유별 복구 가이드.">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://cree1116.github.io/lancet/ko/docs/reference/json-and-mcp.html">
+<link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/reference/json-and-mcp.html">
+<link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/reference/json-and-mcp.html">
+<link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/reference/json-and-mcp.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="lancet">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:url" content="https://cree1116.github.io/lancet/ko/docs/reference/json-and-mcp.html">
+<meta property="og:title" content="JSON 출력 스키마, MCP 11개 도구 명세 & 문제 해결 — lancet 문서">
+<meta property="og:description" content="Rust 구조체 기반 실제 JSON 응답 스키마, 11개 MCP 도구, 오류·거절 사유별 복구 가이드.">
+<meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image-ko.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../../../assets/docs.css?v=1">
+</head>
+<body data-docs-root="../" data-search-url="../../../assets/docs-search.json">
+
+<header class="doc-header">
+  <div class="doc-header-in">
+    <button class="menu-btn" id="menu-btn" type="button" aria-label="문서 메뉴 열기" aria-expanded="false">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg>
+    </button>
+    <a class="doc-brand" href="../../index.html">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 27 L24 6 l3 3 L8 28 Z" fill="currentColor" style="color:var(--accent)"/></svg>
+      lancet
+    </a>
+    <a class="doc-badge" href="../index.html">문서</a>
+    <button class="search-trigger" id="search-trigger" type="button">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <span>문서 검색…</span>
+      <kbd>/</kbd>
+    </button>
+    <nav class="header-links" aria-label="Primary">
+      <a href="../../index.html" class="hide-sm">홈</a>
+      <a href="../../../docs/reference/json-and-mcp.html" hreflang="en" lang="en">English</a>
+      <a class="header-gh" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span class="hide-sm">GitHub</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+
+<div class="doc-shell">
+  <aside class="doc-sidebar" aria-label="Documentation navigation">
+    <div class="nav-group"><div class="nav-group-title">시작하기</div><ul class="nav-list"><li><a href="../index.html">소개 · 설치 · 치트시트</a></li><li><a href="../migration.html">rg·fd·sg·sed에서 전환</a></li></ul></div><div class="nav-group"><div class="nav-group-title">실전 가이드</div><ul class="nav-list"><li><a href="../guides/explore.html">낯선 코드베이스 탐색</a></li><li><a href="../guides/editing.html">안전한 편집·패치·이름 변경</a></li><li><a href="../guides/documents.html">PDF·오피스·HWP·압축파일</a></li><li><a href="../guides/agents-mcp.html">AI 에이전트·MCP·공식 스킬</a></li></ul></div><div class="nav-group"><div class="nav-group-title">핵심 개념</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">인덱스 & 최신성 모델</a></li><li><a href="../concepts/architecture-and-benchmarks.html">아키텍처 & 벤치마크</a></li></ul></div><div class="nav-group"><div class="nav-group-title">레퍼런스</div><ul class="nav-list"><li><a href="cli.html">CLI & lancet rg 레퍼런스</a></li><li><a href="query-and-ast.html">LQL 문법 & AST 24개 언어</a></li><li><a href="json-and-mcp.html" class="active">JSON 스키마 · MCP · 문제 해결</a></li></ul></div>
+  </aside>
+
+  <main class="doc-main">
+    <article class="doc-article">
+      <div class="crumb">레퍼런스</div>
+      <h1>JSON 출력 스키마, MCP 11개 도구 명세 & 문제 해결</h1>
+      <p class="lede">기계 판독용 JSON 스키마, MCP 도구 인벤토리, 거절·오류별 즉시 복구 절차.</p>
+      
+<p><code>--json</code> 플래그나 <code>lancet mcp</code>로 호출하면 모든 명령이 Rust 구조체에서 직접 직렬화된 일관된 snake_case JSON을 반환합니다.</p>
+
+<h2 id="status-enum">공통 Status &amp; Error 규격<a class="heading-anchor" href="#status-enum" aria-label="Link to section">#</a></h2>
+<p>모든 JSON 응답에는 <code>status</code> 필드(필요 시 <code>error: {"message": string, "pos"?: number}</code>)가 포함됩니다:</p>
+<ul>
+  <li><code>"complete"</code> (종료 <code>0</code>) — 검색 완료 또는 편집·패치 적용/검증 완료.</li>
+  <li><code>"empty"</code> (종료 <code>1</code>) — 오류 없이 결과 0건.</li>
+  <li><code>"invalid_query"</code> (종료 <code>2</code>) — 잘못된 LQL, 잘못된 줄 범위, 중복된 <code>--find</code> 등.</li>
+  <li><code>"unsupported"</code> (종료 <code>2</code>) — 미지원 언어, 읽기 전용 문서 수정 시도, 거절된 <code>rename</code> 위치.</li>
+  <li><code>"conflict"</code> (종료 <code>2</code>) — <code>--rev</code>가 현재 디스크 상태와 달라 OS 파일 잠금 하에 0바이트만 쓰고 중단됨.</li>
+</ul>
+
+<h2 id="json-schemas">명령별 JSON 응답 스키마<a class="heading-anchor" href="#json-schemas" aria-label="Link to section">#</a></h2>
+<div class="doc-code"><div class="doc-code-head"><span>Response (lancet &#x27;&lt;QUERY&gt;&#x27; --json)</span><button class="copy-btn" type="button">복사</button></div><pre><code>{
+  &quot;status&quot;: &quot;complete&quot;,
+  &quot;query&quot;: &quot;&quot;spin_lock&quot; in file&quot;,
+  &quot;mode&quot;: &quot;auto&quot;,
+  &quot;matched&quot;: 7073,
+  &quot;matched_is_lower_bound&quot;: false,
+  &quot;returned&quot;: 20,
+  &quot;truncated&quot;: true,
+  &quot;results&quot;: [
+    {
+      &quot;id&quot;: &quot;...&quot;,
+      &quot;path&quot;: &quot;kernel/locking/spinlock.c&quot;,
+      &quot;unit&quot;: &quot;file&quot;,
+      &quot;start_line&quot;: 12,
+      &quot;end_line&quot;: 44,
+      &quot;symbol&quot;: &quot;raw_spin_lock&quot;,
+      &quot;lines&quot;: [{ &quot;line&quot;: 12, &quot;text&quot;: &quot;void __lockfunc raw_spin_lock(raw_spinlock_t *lock)&quot; }],
+      &quot;more_lines&quot;: 0
+    }
+  ],
+  &quot;terms&quot;: [{ &quot;term&quot;: &quot;spinlock&quot;, &quot;count&quot;: 42, &quot;files&quot;: 19 }],
+  &quot;budget&quot;: { &quot;limit_tokens&quot;: 1500, &quot;used_tokens&quot;: 1120, &quot;estimated&quot;: true },
+  &quot;stats&quot;: {
+    &quot;files_considered&quot;: 86218,
+    &quot;files_searched&quot;: 7814,
+    &quot;files_matched&quot;: 7073,
+    &quot;binary_skipped&quot;: 0,
+    &quot;read_errors&quot;: 0,
+    &quot;index_candidates&quot;: 7814,
+    &quot;stale_files&quot;: 0,
+    &quot;elapsed_ms&quot;: 141.3
+  }
+}</code></pre></div>
+
+<div class="doc-code"><div class="doc-code-head"><span>ReadResponse · EditResponse · RenameResponse</span><button class="copy-btn" type="button">복사</button></div><pre><code>// ReadResponse (PDF, 오피스, HWP, 압축 항목에서는 rev 생략)
+{
+  &quot;status&quot;: &quot;complete&quot;,
+  &quot;path&quot;: &quot;src/net.rs&quot;,
+  &quot;rev&quot;: &quot;e70d5a898f122a62&quot;,
+  &quot;section&quot;: &quot;fn retry_limit&quot;,
+  &quot;total_lines&quot;: 80,
+  &quot;start_line&quot;: 1,
+  &quot;end_line&quot;: 4,
+  &quot;returned_lines&quot;: 4,
+  &quot;truncated&quot;: false,
+  &quot;next_line&quot;: null,
+  &quot;estimated_tokens&quot;: 28,
+  &quot;lines&quot;: [{ &quot;num&quot;: 1, &quot;text&quot;: &quot;pub fn retry_limit() -&gt; u32 {&quot; }],
+  &quot;elapsed_ms&quot;: 0.4
+}
+
+// EditResponse (mode: &quot;dry-run&quot; | &quot;applied&quot;, hunks는 원본 파일 기준 줄 범위)
+{
+  &quot;status&quot;: &quot;complete&quot;,
+  &quot;mode&quot;: &quot;applied&quot;,
+  &quot;path&quot;: &quot;src/net.rs&quot;,
+  &quot;rev&quot;: &quot;e70d5a898f122a62&quot;,
+  &quot;rev_after&quot;: &quot;1486bdffbc06c68f&quot;,
+  &quot;start_line&quot;: 2,
+  &quot;end_line&quot;: 2,
+  &quot;hunks&quot;: [[2, 2]],
+  &quot;applied&quot;: true,
+  &quot;diff&quot;: &quot;--- a/src/net.rs\n+++ b/src/net.rs\n...&quot;,
+  &quot;elapsed_ms&quot;: 1.1
+}
+
+// RenameResponse (tier: &quot;local-scope&quot;)
+{
+  &quot;status&quot;: &quot;complete&quot;,
+  &quot;mode&quot;: &quot;applied&quot;,
+  &quot;path&quot;: &quot;src/search.rs&quot;,
+  &quot;old&quot;: &quot;old_name&quot;,
+  &quot;new&quot;: &quot;new_name&quot;,
+  &quot;tier&quot;: &quot;local-scope&quot;,
+  &quot;rev&quot;: &quot;...&quot;,
+  &quot;rev_after&quot;: &quot;...&quot;,
+  &quot;declaration&quot;: { &quot;line&quot;: 40, &quot;col&quot;: 9 },
+  &quot;sites&quot;: [{ &quot;line&quot;: 40, &quot;col&quot;: 9 }, { &quot;line&quot;: 45, &quot;col&quot;: 14 }],
+  &quot;comment_mentions&quot;: 1,
+  &quot;applied&quot;: true,
+  &quot;elapsed_ms&quot;: 2.3
+}</code></pre></div>
+
+<div class="doc-code"><div class="doc-code-head"><span>PatchResponse · RefsResponse · RankResponse · AstResponse</span><button class="copy-btn" type="button">복사</button></div><pre><code>// PatchResponse: { status, mode, applied, files: [{ path, action, from?, hunks, offsets, rev?, rev_after?, diff }], elapsed_ms }
+// RefsResponse:  { status, mode, symbol, definitions: [RefHit], references: [RefHit], total_references, truncated, stats }
+// RankResponse:  { status, mode, pattern, entries: [{ name, kind, path, line, references, definitions }], total, truncated, files_parsed, elapsed_ms }
+// AstResponse:   { status, mode, lang?, pattern, matched, returned, truncated, matches: [AstMatch], diffs: [FileDiff], stats }</code></pre></div>
+
+<h2 id="mcp-tools">MCP 11개 도구 상세 (lancet mcp)<a class="heading-anchor" href="#mcp-tools" aria-label="Link to section">#</a></h2>
+<p>지원 프로토콜 버전: <code>2025-03-26</code>, <code>2024-11-05</code>. MCP에서는 <code>status: "empty"</code>도 정상(<code>isError: false</code>)이며, <code>lancet_rg</code>는 <code>max_output_bytes</code>(기본 128 KiB, 최대 4 MiB) 기준으로 줄 경계에서 깔끔히 잘립니다.</p>
+<div class="table-wrap"><table><thead><tr><th>MCP 도구</th><th>역할</th><th>주요 인자 및 동작</th></tr></thead><tbody><tr><td><code>lancet_fd</code></td><td>파일·폴더 탐색</td><td><code>pattern</code>, <code>path</code>, <code>dirs</code>, <code>tree</code>, <code>exts</code>, <code>type_classes</code>, <code>changed_within</code>, <code>index_mode</code></td></tr><tr><td><code>lancet_search</code></td><td>LQL 검색</td><td><code>query</code>, <code>path</code>, <code>max_lines</code>, <code>max_cols</code>, <code>ocr</code>, <code>index_mode</code></td></tr><tr><td><code>lancet_rg</code></td><td>ripgrep 호환 검색</td><td><code>pattern</code>, <code>paths</code>, <code>docs</code>, <code>passthru</code>, <code>type_add</code>, <code>max_output_bytes</code></td></tr><tr><td><code>lancet_outline</code></td><td>선언·문서 뼈대</td><td><code>path</code>, <code>max_depth</code>, <code>exts</code>, <code>limit</code>, <code>ocr</code></td></tr><tr><td><code>lancet_read</code></td><td>정밀 범위·문서 읽기</td><td><code>target</code>, <code>lines</code>, <code>symbol</code>, <code>page</code>, <code>sheet</code>, <code>rows</code>, <code>cols</code>, <code>entry</code>, <code>budget_tokens</code></td></tr><tr><td><code>lancet_refs</code></td><td>어휘 AST 참조 &amp; 랭킹</td><td><code>symbol</code>, <code>path</code>, <code>rank</code>, <code>kinds</code>, <code>lang</code>, <code>limit</code></td></tr><tr><td><code>lancet_ast</code></td><td>AST 검색·치환</td><td><code>pattern</code>, <code>path</code>, <code>lang</code>, <code>rewrite</code>, <code>apply</code> (<code>--read-only</code> 시 차단)</td></tr><tr><td><code>lancet_edit</code></td><td>잠금 CAS 편집</td><td><code>--read-only</code> 시 목록에서 제외; <code>lines</code>, <code>symbol</code>, <code>find</code>, <code>edits</code>, <code>rev</code>, <code>apply</code></td></tr><tr><td><code>lancet_patch</code></td><td>원자적 Diff 패치</td><td><code>--read-only</code> 시 목록에서 제외; <code>patch</code>, <code>root</code>, <code>strip</code>, <code>apply</code>, <code>allow_syntax_errors</code></td></tr><tr><td><code>lancet_rename</code></td><td>로컬 이름 변경</td><td><code>--read-only</code> 시 목록에서 제외; <code>path</code>, <code>line</code>, <code>col?</code>, <code>old</code>, <code>new</code>, <code>rev?</code>, <code>apply?</code></td></tr><tr><td><code>lancet_index</code></td><td>인덱스 관리</td><td><code>action</code> (<code>status</code>, <code>sync</code>, <code>rebuild</code>, <code>compact</code>); 변경 작업은 <code>--read-only</code> 시 차단</td></tr></tbody></table></div>
+
+<h2 id="troubleshooting">문제 해결 및 거절 사유별 복구법<a class="heading-anchor" href="#troubleshooting" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>오류 / 거절</th><th>원인</th><th>정확한 복구 방법</th></tr></thead><tbody><tr><td><code>status: "conflict"</code> (종료 2)</td><td><code>rev</code>를 읽은 뒤 다른 작업이 파일을 수정함</td><td><code>lancet read</code>로 최신 내용과 새 <code>rev</code>를 다시 읽어 변경을 재계산해 적용합니다.</td></tr><tr><td><code>--find</code> 거절 (비고유)</td><td>찾을 문자열이 0회 또는 2회 이상 등장</td><td>오류에 출력된 줄 번호를 확인하고 주변 문맥을 더 넓히거나 의도한 경우 <code>--all</code>을 추가합니다.</td></tr><tr><td>구문 오류 증가 거절</td><td>편집·패치 후 Tree-sitter 구문 오류가 늘어남</td><td>dry-run diff에서 괄호/따옴표 누락을 점검하고, 단계적 수정일 때만 <code>--allow-syntax-errors</code>를 씁니다.</td></tr><tr><td><code>lancet rename</code> 거절</td><td>전역/필드/Python 매개변수, 매크로·<code>eval</code>, 섀도잉</td><td>오류 사유를 확인하고, 파일 간 심볼은 <code>lancet refs</code> + <code>lancet edit --edits</code> 또는 LSP를 씁니다.</td></tr><tr><td><code>ast --rewrite --apply</code> + <code>--limit</code></td><td>일부만 잘라낸 치환은 실수로 적용할 수 없음</td><td><code>--limit</code>을 빼거나 <code>--path</code> 글롭으로 대상 파일을 좁힌 뒤 <code>--apply</code>하세요.</td></tr><tr><td><code>lancet rg -P</code> 오류</td><td>PCRE2 전후방 탐색·역참조 미지원</td><td>룩어라운드 없는 Rust <code>regex</code>나 LQL <code>before()</code> / <code>NOT</code>으로 표현하세요.</td></tr><tr><td><code>lancet fd</code> 경로 2개 오류</td><td><code>fd</code>는 <code>[PATH]</code> 인자를 최대 1개만 받음</td><td>디렉터리마다 나눠 실행하거나 저장소 루트에서 <code>-p</code>/글롭 필터를 사용하세요.</td></tr></tbody></table></div>
+
+      <div class="pager"><a class="pager-card prev" href="query-and-ast.html"><small>← 이전</small><b>LQL 문법 & AST 24개 언어</b></a><div></div></div>
+      <div class="meta-foot">
+        <span>MIT OR Apache-2.0 · Rust 단일 바이너리</span>
+        <a href="https://github.com/CREE1116/lancet/blob/main/docs/mcp.md" target="_blank" rel="noopener">GitHub에서 소스 보기 →</a>
+      </div>
+    </article>
+  </main>
+
+  <aside class="doc-toc" aria-label="이 페이지 목차">
+    <div class="toc-title">이 페이지 목차</div>
+    <ul class="toc-list" id="doc-toc"></ul>
+  </aside>
+</div>
+
+<div class="search-modal" id="search-modal" role="dialog" aria-modal="true" aria-label="문서 검색…" hidden>
+  <div class="search-panel">
+    <div class="search-input-row">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <input id="search-input" type="search" placeholder="문서 검색…" autocomplete="off" spellcheck="false">
+      <button class="search-esc" id="search-esc" type="button">Esc</button>
+    </div>
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../../../assets/docs-search.js?v=1"></script>
+<script src="../../../assets/docs.js?v=1"></script>
+</body>
+</html>

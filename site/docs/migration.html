@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coming from rg, fd, ast-grep, sed, patch & rga — lancet Docs</title>
+<meta name="description" content="Side-by-side Rosetta Stone, intentional behavioral differences, and when to keep specialized tools.">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://cree1116.github.io/lancet/docs/migration.html">
+<link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/migration.html">
+<link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/migration.html">
+<link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/migration.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="lancet">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://cree1116.github.io/lancet/docs/migration.html">
+<meta property="og:title" content="Coming from rg, fd, ast-grep, sed, patch & rga — lancet Docs">
+<meta property="og:description" content="Side-by-side Rosetta Stone, intentional behavioral differences, and when to keep specialized tools.">
+<meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../assets/docs.css?v=1">
+</head>
+<body data-docs-root="" data-search-url="../assets/docs-search.json">
+
+<header class="doc-header">
+  <div class="doc-header-in">
+    <button class="menu-btn" id="menu-btn" type="button" aria-label="Open documentation menu" aria-expanded="false">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg>
+    </button>
+    <a class="doc-brand" href="../index.html">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 27 L24 6 l3 3 L8 28 Z" fill="currentColor" style="color:var(--accent)"/></svg>
+      lancet
+    </a>
+    <a class="doc-badge" href="index.html">Docs</a>
+    <button class="search-trigger" id="search-trigger" type="button">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <span>Search docs…</span>
+      <kbd>/</kbd>
+    </button>
+    <nav class="header-links" aria-label="Primary">
+      <a href="../index.html" class="hide-sm">Home</a>
+      <a href="../ko/docs/migration.html" hreflang="ko" lang="ko">한국어</a>
+      <a class="header-gh" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span class="hide-sm">GitHub</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+
+<div class="doc-shell">
+  <aside class="doc-sidebar" aria-label="Documentation navigation">
+    <div class="nav-group"><div class="nav-group-title">Getting Started</div><ul class="nav-list"><li><a href="index.html">Introduction & Cheat Sheet</a></li><li><a href="migration.html" class="active">Migration from rg, fd, sg, sed</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Guides & Recipes</div><ul class="nav-list"><li><a href="guides/explore.html">Exploring Codebases</a></li><li><a href="guides/editing.html">Safe Editing, Patch & Rename</a></li><li><a href="guides/documents.html">PDFs, Office, HWP & Archives</a></li><li><a href="guides/agents-mcp.html">AI Agents, MCP & Skill</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Concepts & Design</div><ul class="nav-list"><li><a href="concepts/index-and-freshness.html">Index & Freshness Model</a></li><li><a href="concepts/architecture-and-benchmarks.html">Architecture & Benchmarks</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul class="nav-list"><li><a href="reference/cli.html">CLI & lancet rg Reference</a></li><li><a href="reference/query-and-ast.html">LQL & 24 AST Languages</a></li><li><a href="reference/json-and-mcp.html">JSON Schemas, MCP & Recovery</a></li></ul></div>
+  </aside>
+
+  <main class="doc-main">
+    <article class="doc-article">
+      <div class="crumb">Getting Started</div>
+      <h1>Coming from rg, fd, ast-grep, sed, patch & rga</h1>
+      <p class="lede">Keep the mental models you already know from ripgrep, fd, and ast-grep — with unified coordinates and zero-loss editing.</p>
+      
+<p>If you already use <code>ripgrep</code>, <code>fd</code>, <code>ast-grep</code>, <code>sed</code>, <code>patch</code>, or <code>rga</code>, you do not have to relearn everything at once. Lancet provides direct drop-in entrypoints alongside tighter guarantees across steps.</p>
+
+<h2 id="from-rg">Coming from ripgrep (rg)<a class="heading-anchor" href="#from-rg" aria-label="Link to section">#</a></h2>
+<p><code>lancet rg</code> shares ripgrep's flag names, Rust <code>regex</code> engine, <code>.gitignore</code> / <code>.ignore</code> / <code>.rgignore</code> rules, exit codes (<code>0</code> hit, <code>1</code> miss, <code>2</code> error), and output formats — tested byte-for-byte against ripgrep 15.2.</p>
+<div class="table-wrap"><table><thead><tr><th>ripgrep Command</th><th>lancet Equivalent</th><th>Notes</th></tr></thead><tbody><tr><td><code>rg foo src</code></td><td><code>lancet rg foo src</code></td><td>Line numbers on by default; pass <code>-N</code> to hide</td></tr><tr><td><code>rg -i -w -t py tok</code></td><td><code>lancet rg -i -w -t py tok</code></td><td>Identical <code>-i</code>/<code>-s</code>/<code>-S</code>, <code>-w</code>, and <code>--type</code> rules</td></tr><tr><td><code>rg -g '*.toml' -C 2 pat</code></td><td><code>lancet rg -g '*.toml' -C 2 pat</code></td><td>Supports <code>--passthru</code>, <code>--type-add</code>, <code>-L</code>, <code>--max-depth</code></td></tr><tr><td><code>rg --files -t rs</code></td><td><code>lancet rg --files -t rs</code></td><td>Deterministic path-sorted list</td></tr><tr><td><code>rg -P '(?&lt;=a)b'</code></td><td><code>lancet 'before("a", "b", 1)'</code> or Rust regex</td><td><code>-P</code> / PCRE2 intentionally omitted (linear-time + sound trigram lowering)</td></tr><tr><td><code>rg --pre pdftotext pat</code></td><td><code>lancet rg --docs pat</code></td><td>In-process PDF/Office/HWP/archive extraction without spawning subprocesses</td></tr></tbody></table></div>
+
+<div class="callout note"><div class="callout-title">Intentional differences in lancet rg</div><ul><li><strong>Always path-sorted:</strong> equivalent to <code>rg --sort path</code> (deterministic across threads).</li><li><strong><code>-n</code> enabled by default:</strong> stays on even when stdout is piped; use <code>-N</code> to disable.</li><li><strong>No grouped headings:</strong> always prints <code>path:line:text</code>, with <code>--color auto</code> disabled when piped.</li></ul></div>
+
+<h2 id="from-fd">Coming from fd / find<a class="heading-anchor" href="#from-fd" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>fd / find</th><th>lancet fd</th><th>Difference / Extra Capability</th></tr></thead><tbody><tr><td><code>fd -e rs -d 2 src</code></td><td><code>lancet fd -e rs -d 2 src</code></td><td>Backed by <code>.lancet</code> index when available</td></tr><tr><td><code>fd -t d -d 2</code></td><td><code>lancet fd --tree --dirs -d 2 .</code></td><td>Clean folder hierarchy view without file clutter</td></tr><tr><td><code>find . -mtime -7</code></td><td><code>lancet fd --changed-within 7d</code></td><td>Units: <code>s</code>, <code>m</code>, <code>h</code>, <code>d</code>, <code>w</code></td></tr><tr><td><code>find . -name '*.pdf'</code></td><td><code>lancet fd --type-class document</code></td><td>Built-in classes: <code>code</code>, <code>document</code>, <code>spreadsheet</code>, <code>archive</code>, etc.</td></tr><tr><td><code>fd pat dir1 dir2</code></td><td>Invoke per root or use LQL <code>path:</code></td><td><code>lancet fd</code> takes a single optional <code>[PATH]</code>; use <code>-p pat</code> if pattern looks like a dir</td></tr></tbody></table></div>
+
+<h2 id="from-ast">Coming from ast-grep (sg)<a class="heading-anchor" href="#from-ast" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>ast-grep</th><th>lancet ast</th><th>Important Nuance</th></tr></thead><tbody><tr><td><code>sg -p '$X.unwrap()' -l rs</code></td><td><code>lancet ast '$X.unwrap()' -l rs</code></td><td>Uses <code>.lancet</code> trigram prefilter when pattern contains a literal</td></tr><tr><td><code>sg -p 'f($$$A)' -r 'g($$$A)' -U</code></td><td><code>lancet ast 'f($$$A)' -r 'g($$$A)' --apply</code></td><td>Dry-run diff by default; <code>--apply</code> writes atomically</td></tr><tr><td><code>sg -p 'if ($C) $S'</code></td><td><code>lancet ast 'if ($C) $S'</code></td><td><strong>Semantic difference:</strong> Lancet matches shape strictly (<code>if</code> without <code>else</code>); <code>if-else</code> is a separate node</td></tr><tr><td><code>sg -l cpp ...</code></td><td><code>lancet ast ... -l cpp</code></td><td>Lancet <code>--lang cpp</code> includes <code>.h</code> headers in addition to <code>.cpp</code>/<code>.cc</code></td></tr></tbody></table></div>
+
+<h2 id="from-sed-patch">Coming from cat / sed / patch / rga<a class="heading-anchor" href="#from-sed-patch" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Legacy Chain</th><th>Lancet Replacement</th><th>Failure Mode Eliminated</th></tr></thead><tbody><tr><td><code>sed -n '10,50p' f.rs</code></td><td><code>lancet read f.rs --lines 10:50</code></td><td>Returns XXH3-64 <code>rev</code> + respects <code>--budget-tokens</code></td></tr><tr><td>Two <code>sed -i</code> edits from one <code>rg</code></td><td><code>lancet edit f.rs --edits - --rev REV --apply</code></td><td>All hunks resolve against original lines; never shifts or breaks links/mode</td></tr><tr><td><code>patch -p1 &lt; diff</code></td><td><code>lancet patch diff --apply</code></td><td>Pre-verifies every hunk across all files; rolls back on write race</td></tr><tr><td><code>rga</code> + <code>pdftotext</code>/<code>pandoc</code></td><td><code>lancet 'pat'</code> + <code>lancet read f.pdf -p 2</code></td><td>Single extraction pipeline so line numbers stay identical</td></tr></tbody></table></div>
+
+<h2 id="when-not">When NOT to Replace Specialized Tools<a class="heading-anchor" href="#when-not" aria-label="Link to section">#</a></h2>
+<div class="callout warn"><div class="callout-title">Scope boundaries</div><ul><li><strong>Version control:</strong> keep using <code>git</code>; Lancet searches working trees (respecting <code>.gitignore</code>) and consumes <code>git diff</code> via <code>lancet patch</code>.</li><li><strong>Cross-file type-checked refactoring:</strong> keep your LSP (<code>rust-analyzer</code>, <code>tsserver</code>, <code>gopls</code>) when renaming public APIs, struct fields, or traits across files. Lancet provides lexical <code>refs</code> plus single-file scope-proven <code>lancet rename</code>.</li></ul></div>
+
+      <div class="pager"><a class="pager-card prev" href="index.html"><small>← Previous</small><b>Introduction & Cheat Sheet</b></a><a class="pager-card next" href="guides/explore.html"><small>Next →</small><b>Exploring Codebases</b></a></div>
+      <div class="meta-foot">
+        <span>MIT OR Apache-2.0 · Single Rust binary</span>
+        <a href="https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md" target="_blank" rel="noopener">View source on GitHub →</a>
+      </div>
+    </article>
+  </main>
+
+  <aside class="doc-toc" aria-label="On this page">
+    <div class="toc-title">On this page</div>
+    <ul class="toc-list" id="doc-toc"></ul>
+  </aside>
+</div>
+
+<div class="search-modal" id="search-modal" role="dialog" aria-modal="true" aria-label="Search docs…" hidden>
+  <div class="search-panel">
+    <div class="search-input-row">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <input id="search-input" type="search" placeholder="Search docs…" autocomplete="off" spellcheck="false">
+      <button class="search-esc" id="search-esc" type="button">Esc</button>
+    </div>
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/docs-search.js?v=1"></script>
+<script src="../assets/docs.js?v=1"></script>
+</body>
+</html>

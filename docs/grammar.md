@@ -65,21 +65,31 @@ stage   := "limit" uint                    # uint >= 1
 ```text
 lancet <QUERY> [PATH] [--json] [--no-index | --trust-index] [--index-dir DIR] [--ocr]
                       [--hidden] [--no-ignore] [-j THREADS] [--max-lines N] [--max-cols N] [--stats]
-lancet fd [PATTERN] [PATH] [-t f|d] [-e EXT] [--type-class CLASS] [-g | -r] [-d DEPTH]
-                           [--changed-within DUR] [--min-size S] [--max-size S] [--tree]
-                           [--no-index | --trust-index] [--json] [--stats]
-lancet ast <PATTERN> [PATH] [-l LANG] [-r TEMPLATE [--apply]] [--path GLOB]
-                            [--no-index | --trust-index] [--json] [--stats]
+lancet rg [FLAGS] [PATTERN] [PATH...] [--docs] [--passthru] [--type-add TYPESPEC]
+                      [--no-index | --trust-index] [--index-dir DIR]     # see docs/rg-parity.md
+lancet fd [PATTERN] [PATH] [-p PATTERN] [-t f|d] [-e EXT] [--type-class CLASS] [-g | -r] [-s]
+                           [-d DEPTH] [--changed-within DUR] [--min-size S] [--max-size S]
+                           [--tree] [--dirs] [--limit N] [--meta]
+                           [--no-index | --trust-index] [--index-dir DIR] [--json] [--stats]
+lancet ast <PATTERN> [PATH] [-l LANG] [-r TEMPLATE [--apply]] [--path GLOB] [--limit N]
+                            [--no-index | --trust-index] [--index-dir DIR] [--json] [--stats]
 lancet read <TARGET> [-l START:END] [-s SYMBOL] [-p PAGE] [--sheet S] [--rows R] [--cols C]
                      [-e ENTRY] [--budget-tokens N] [--raw] [--ocr] [--json]
-lancet outline [PATH] [-d DEPTH] [-e EXT] [--limit N] [--ocr] [--json]
-lancet refs <SYMBOL> [PATH] [-l LANG] [-e EXT] [--path GLOB] [--all-files]
-                            [--no-index | --trust-index] [--json] [--stats]
-lancet index [PATH] [--rebuild] [--index-dir DIR] [--ocr] [--hidden] [--no-ignore] [-j THREADS]
+lancet outline [PATH] [-d DEPTH] [-e EXT] [--limit N] [--hidden] [--no-ignore] [--ocr] [--json]
+lancet refs <SYMBOL> [PATH] [--rank [--kind KIND,...]] [-l LANG] [-e EXT] [--path GLOB]
+                            [--all-files] [--limit N] [--no-index | --trust-index] [--json] [--stats]
+lancet edit <PATH> (--lines RANGE | --symbol SYM | --find TEXT [--all] | --edits FILE)
+                   (--with TEXT | --with-file FILE | --delete | --insert-before TEXT | --insert-after TEXT)
+                   [--rev REV] [--apply] [--allow-syntax-errors] [--json]
+lancet patch [DIFF|-] [--root DIR] [-p N] [--apply] [--allow-syntax-errors] [--json]
+lancet rename <FILE:LINE[:COL]> <OLD> <NEW> [--rev REV] [--apply] [--json]
+lancet mcp [--root DIR] [--read-only] [--trust-index] [-j THREADS]
+lancet index [PATH] [--rebuild | --compact] [--index-dir DIR] [--ocr] [--hidden] [--no-ignore] [-j THREADS]
 lancet status [PATH] [--index-dir DIR]
 lancet parse <QUERY>
-lancet explain <QUERY> [PATH] [--index-dir DIR] [--no-index | --trust-index]
+lancet explain <QUERY> [PATH] [--index-dir DIR] [--no-index | --trust-index] [--hidden] [--no-ignore]
 lancet batch [PATH] (-q <QUERY>... [--name <NAME>...] | --queries-json <JSON>)
+                    [--no-index | --trust-index] [--index-dir DIR] [--ocr] [--json]
 ```
 
-Exit codes: `0` (`complete`), `1` (`empty` or missing index in `status`), `2` (`invalid_query`, `unsupported`, or I/O error).
+Exit codes: `0` (`complete` or match found), `1` (`empty` or missing index in `status`), `2` (`invalid_query`, `unsupported`, `conflict`, or I/O error).

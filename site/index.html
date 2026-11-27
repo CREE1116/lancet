@@ -63,7 +63,7 @@
       <a href="#features" class="opt">Features</a>
       <a href="#bench" class="keep">Benchmarks</a>
       <a href="#start" class="opt">Get started</a>
-      <a href="https://github.com/CREE1116/lancet/tree/main/docs" class="opt">Docs</a>
+      <a href="docs/" class="keep">Docs</a>
       <a href="ko/" class="keep" hreflang="ko" lang="ko">한국어</a>
     </div>
     <a class="gh" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
@@ -202,7 +202,7 @@
     <div class="grid3">
       <div class="card">
         <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div>
-        <h3>Index speed, never stale</h3>
+        <h3>Index speed, fresh by default</h3>
         <p>A trigram index picks candidate files; every candidate is checked by the same evaluator a full scan uses. Files edited since indexing are found by <code>mtime</code>/<code>size</code>/<code>ctime</code>/<code>inode</code> and scanned live. No daemon to run.</p>
       </div>
       <div class="card">
@@ -255,7 +255,7 @@
         </table>
       </details>
     </div>
-    <p class="honest"><b>Where lancet doesn't win:</b> regexes with no literal text (the index can't narrow them, so it runs at ripgrep's speed or up to 1.4× slower) and AST patterns with no literal text (0.6–1.0× ast-grep's speed). <a href="https://github.com/CREE1116/lancet/blob/main/bench/results/SUITE.md">Full tables and method →</a></p>
+    <p class="honest"><b>Where lancet doesn't win:</b> regexes with no literal text (the index can't narrow them, so it runs at ripgrep's speed or up to 1.4× slower) and AST patterns with no literal text (0.6–1.0× ast-grep's speed). <a href="docs/concepts/architecture-and-benchmarks.html">Benchmarks &amp; competitor tradeoffs →</a> · <a href="https://github.com/CREE1116/lancet/blob/main/bench/results/SUITE.md">Full tables →</a></p>
   </div>
 </section>
 
@@ -289,22 +289,23 @@
 <pre><span class="c"># optional: build the index once (it updates itself afterwards)</span>
 lancet index .
 
-lancet fd --tree --max-depth 2 .
+lancet fd --tree --dirs --max-depth 2 .
+lancet refs --rank '*Service' --kind class src
 lancet rg -w spin_lock src
 lancet read src/search.rs --symbol execute_one
-lancet refs SearchOptions src
 lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'
 lancet edit src/net.rs --find 'retries = 3' \
   --with 'retries = 5' --rev &lt;REV&gt; --apply
+lancet rename src/net.rs:12 old_var new_var --rev &lt;REV&gt; --apply
 git diff | lancet patch --apply</pre>
       </div>
       <div class="code">
         <h4>MCP &amp; Official Skill</h4>
 <pre><span class="c"># 1. Register built-in MCP server (Claude Code)</span>
 claude mcp add --transport stdio lancet -- lancet mcp --root .
-<span class="c"># Cursor / Codex / Antigravity: see docs/mcp.md</span>
+<span class="c"># Cursor / Codex / Antigravity: see docs/guides/agents-mcp.html</span>
 
-<span class="c"># 2. Install official skill (SKILL.md + mcp-config.json)</span>
+<span class="c"># 2. Install official skill (SKILL.md + references/)</span>
 <span class="c"># Copy skills/lancet/ to ~/.claude/skills/, ~/.codex/skills/,</span>
 <span class="c"># ~/.gemini/config/skills/, or .agents/skills/</span>
 
@@ -320,12 +321,13 @@ follow the lancet skill for read --rev -&gt; edit --apply.</pre>
   <div class="wrap">
     <div>lancet · MIT OR Apache-2.0</div>
     <div style="display:flex;gap:20px;flex-wrap:wrap">
+      <a href="docs/">Docs</a>
+      <a href="docs/guides/agents-mcp.html">MCP &amp; Skill</a>
+      <a href="docs/reference/query-and-ast.html">Query language</a>
+      <a href="docs/reference/cli.html#rg-parity">ripgrep parity</a>
+      <a href="docs/concepts/architecture-and-benchmarks.html">Benchmarks &amp; design</a>
       <a href="https://github.com/CREE1116/lancet">GitHub</a>
       <a href="https://github.com/CREE1116/lancet/releases">Releases</a>
-      <a href="https://github.com/CREE1116/lancet/blob/main/docs/mcp.md">MCP &amp; Skill</a>
-      <a href="https://github.com/CREE1116/lancet/blob/main/docs/grammar.md">Query language</a>
-      <a href="https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md">ripgrep parity</a>
-      <a href="https://github.com/CREE1116/lancet/blob/main/docs/why-one-tool.md">Why one tool</a>
       <a href="ko/" hreflang="ko" lang="ko">한국어</a>
     </div>
   </div>

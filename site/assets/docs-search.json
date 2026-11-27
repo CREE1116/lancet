@@ -1,0 +1,642 @@
+{
+  "en": [
+    {
+      "path": "index.html",
+      "group": "Getting Started",
+      "title": "Lancet Documentation — Introduction & Cheat Sheet",
+      "description": "Install Lancet, run a 60-second walkthrough, and keep the one-screen CLI cheat sheet handy.",
+      "keywords": "install homebrew cargo curl windows cheat sheet overview",
+      "headings": [
+        {
+          "id": "install",
+          "text": "Installation"
+        },
+        {
+          "id": "walkthrough",
+          "text": "60-Second Walkthrough"
+        },
+        {
+          "id": "cheat-sheet",
+          "text": "One-Screen Cheat Sheet"
+        },
+        {
+          "id": "explore-docs",
+          "text": "Explore the Documentation"
+        }
+      ],
+      "text": "Lancet is a single Rust binary that unifies discovery ( fd ), trigram-indexed search ( rg / LQL), structural AST search & rewrite ( ast ), exact range/document reading ( read / outline ), compare-and-swap editing ( edit / patch / rename ), and an embedded stdio MCP server ( mcp ). One rule before you start Every search hit, AST match, read slice, and edit hunk agrees on exact 1-based line numbers and XXH3-64 rev hashes . Even PDFs, Office files, HWP/HWPX, and archive entries share the exact same line numbering between search and read . Installation Install a prebuilt binary on macOS, Linux (glibc and static musl), or Windows — no Rust toolchain needed: macOS / Linux (Homebrew) Copy brew tap CREE1116/lancet https://github.com/CREE1116/lancet brew install CREE1116/lancet/lancet macOS / Linux (Release Installer) Copy curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh Windows (PowerShell) Copy irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex From source (Cargo) Copy # Full binary (~40 MB, 24 Tree-sitter grammars + PDF/Office/HWP adapters) cargo binstall --git https://github.com/CREE1116/lancet lancet # Lean text/code-only binary (~4 MB, no document adapters) cargo install --git https://github.com/CREE1116/lancet --no-default-features 60-Second Walkthrough Run this loop in any repository. Building .lancet is optional — commands work identically with or without an index, and auto mode checks disk freshness on every query. Terminal Copy # 1. Optional: build the local trigram index once lancet index . # 2. Map folders first, then rank core symbols by lexical usage lancet fd --tree --dirs -d 2 . lancet refs --rank '*Service' --kind class src --limit 8 # 3. Search with ripgrep syntax or LQL boolean/proximity queries lancet rg -w execute_one src lancet 'near(\"gradient\", \"clip\", 30) in function | expand parent' # 4. Read exact lines or symbols and capture `rev` lancet read src/search.rs --symbol execute_one --json # 5. Preview a dry-run diff, then commit atomically with --rev and --apply lancet edit src/search.rs --find 'let limit = 20;' --with 'let limit = 50;' --rev <REV> --apply One-Screen Cheat Sheet Job Command Key Guarantee Folder layout lancet fd --tree --dirs -d 2 . Respects .gitignore Recent/typed files lancet fd -t f -e rs --changed-within 7d Index-accelerated Drop-in grep lancet rg -w -t rs 'pat' src Byte-identical to rg + --docs Boolean/fuzzy search lancet '(\"a\" OR \"b\") NOT \"c\" in function' Scan == Auto File skeleton lancet outline src/main.rs Functions, Markdown headings, sheets, ZIPs Exact slice lancet read f.rs --lines 10:50 --budget-tokens 800 Returns rev + next_line Symbol read lancet read f.rs --symbol my_fn Includes doc comments & attributes Document / ZIP lancet read r.pdf -p 2:3 · a."
+    },
+    {
+      "path": "migration.html",
+      "group": "Getting Started",
+      "title": "Coming from rg, fd, ast-grep, sed, patch & rga",
+      "description": "Side-by-side Rosetta Stone, intentional behavioral differences, and when to keep specialized tools.",
+      "keywords": "migration ripgrep rg fd ast-grep sg sed patch rga pcre2 differences",
+      "headings": [
+        {
+          "id": "from-rg",
+          "text": "Coming from ripgrep (rg)"
+        },
+        {
+          "id": "from-fd",
+          "text": "Coming from fd / find"
+        },
+        {
+          "id": "from-ast",
+          "text": "Coming from ast-grep (sg)"
+        },
+        {
+          "id": "from-sed-patch",
+          "text": "Coming from cat / sed / patch / rga"
+        },
+        {
+          "id": "when-not",
+          "text": "When NOT to Replace Specialized Tools"
+        }
+      ],
+      "text": "If you already use ripgrep , fd , ast-grep , sed , patch , or rga , you do not have to relearn everything at once. Lancet provides direct drop-in entrypoints alongside tighter guarantees across steps. Coming from ripgrep (rg) lancet rg shares ripgrep's flag names, Rust regex engine, .gitignore / .ignore / .rgignore rules, exit codes ( 0 hit, 1 miss, 2 error), and output formats — tested byte-for-byte against ripgrep 15.2. ripgrep Command lancet Equivalent Notes rg foo src lancet rg foo src Line numbers on by default; pass -N to hide rg -i -w -t py tok lancet rg -i -w -t py tok Identical -i / -s / -S , -w , and --type rules rg -g '*.toml' -C 2 pat lancet rg -g '*.toml' -C 2 pat Supports --passthru , --type-add , -L , --max-depth rg --files -t rs lancet rg --files -t rs Deterministic path-sorted list rg -P '(?<=a)b' lancet 'before(\"a\", \"b\", 1)' or Rust regex -P / PCRE2 intentionally omitted (linear-time + sound trigram lowering) rg --pre pdftotext pat lancet rg --docs pat In-process PDF/Office/HWP/archive extraction without spawning subprocesses Intentional differences in lancet rg Always path-sorted: equivalent to rg --sort path (deterministic across threads). -n enabled by default: stays on even when stdout is piped; use -N to disable. No grouped headings: always prints path:line:text , with --color auto disabled when piped. Coming from fd / find fd / find lancet fd Difference / Extra Capability fd -e rs -d 2 src lancet fd -e rs -d 2 src Backed by .lancet index when available fd -t d -d 2 lancet fd --tree --dirs -d 2 . Clean folder hierarchy view without file clutter find . -mtime -7 lancet fd --changed-within 7d Units: s , m , h , d , w find . -name '*.pdf' lancet fd --type-class document Built-in classes: code , document , spreadsheet , archive , etc. fd pat dir1 dir2 Invoke per root or use LQL path: lancet fd takes a single optional [PATH] ; use -p pat if pattern looks like a dir Coming from ast-grep (sg) ast-grep lancet ast Important Nuance sg -p '$X.unwrap()' -l rs lancet ast '$X.unwrap()' -l rs Uses .lancet trigram prefilter when pattern contains a literal sg -p 'f($$$A)' -r 'g($$$A)' -U lancet ast 'f($$$A)' -r 'g($$$A)' --apply Dry-run diff by default; --apply writes atomically sg -p 'if ($C) $S' lancet ast 'if ($C) $S' Semantic difference: Lancet matches shape strictly ( if without else ); if-else is a separate node sg -l cpp ... lancet ast ... -l cpp Lancet --lang cpp includes .h headers in addition to .cpp / .cc Coming from cat / sed / patch / rga Legacy Chain Lancet Replacement Failure Mode Eliminated sed -n '10,50p' f.rs lancet read f.rs --lines 10:50 Returns XXH3-64 rev + respects --budget-tokens Two sed -i edits from one rg lancet edit f.rs --edits - --rev REV --apply All hunks resolve against original lines; never shifts or breaks link"
+    },
+    {
+      "path": "guides/explore.html",
+      "group": "Guides & Recipes",
+      "title": "Exploring Unfamiliar Codebases with Low Context",
+      "description": "5-step exploration funnel using fd --dirs, refs --rank, outline, batch, and budget-tokens pagination.",
+      "keywords": "explore fd dirs tree refs rank outline batch budget-tokens pagination",
+      "headings": [
+        {
+          "id": "step1",
+          "text": "1. Map Folders Without File Noise"
+        },
+        {
+          "id": "step2",
+          "text": "2. Rank Core Declarations with refs --rank"
+        },
+        {
+          "id": "step3",
+          "text": "3. Read Skeletons Before Bodies (outline)"
+        },
+        {
+          "id": "step4",
+          "text": "4. Batch Multiple Searches & Refine with Pipes"
+        },
+        {
+          "id": "step5",
+          "text": "5. Paginate Reads by Token Budget"
+        }
+      ],
+      "text": "The fastest way for a developer or AI agent to burn context tokens and stall is to read whole files blindly. Lancet supports a 5-step funnel that narrows thousands of files down to the exact lines you need. 1. Map Folders Without File Noise Start with directory structure before listing files or running searches: Terminal Copy lancet fd --tree --dirs --max-depth 2 . lancet fd --changed-within 2d -t f src Adding --dirs (equivalent to -t d ) renders only folders under --tree , giving an architectural map in a couple dozen lines. 2. Rank Core Declarations with refs --rank When entering an unfamiliar repository, find which classes, structs, interfaces, or functions are actually central by ranking them by lexical reference count: Terminal Copy # Top 10 most-referenced Service classes lancet refs --rank '*Service' --kind class src --limit 10 # Top referenced functions across a directory lancet refs --rank '*' --kind function --limit 10 src # Inspect definitions & call sites (excluding comments and strings) lancet refs SearchOptions src --lang rs --json Understanding shared names in --rank Lancet uses the trigram index (for globs with a literal run like Service ) and parses declarations across AST grammars. If an entry shows (name shared by N declarations) or definitions > 1 in JSON, multiple declarations share that identifier lexically. 3. Read Skeletons Before Bodies (outline) Use lancet outline to inspect declaration signatures, Markdown heading trees, Excel/ODS sheet names, or archive entries with exact line bounds: Terminal Copy lancet outline src/search.rs lancet outline docs/architecture.md lancet outline financial_model.xlsx lancet outline logs/bundle.zip 4. Batch Multiple Searches & Refine with Pipes If an agent needs answers to several related questions, lancet batch opens the index and walks the tree once for all of them. Combine with LQL pipe stages to compact output: Terminal Copy # One shared index open + tree walk for 3 queries lancet batch src \\ -q 'near(\"retry\", \"backoff\", 20) in function' \\ -q '\"Conflict\" in ext:rs' \\ -q 'fuzzy(\"idempotent\", 1) | files' # Discover top co-occurring terms and enforce a token cap lancet '\"trigram\" in ext:rs | terms top:10 | budget tokens:1200' src 5. Paginate Reads by Token Budget Read only the target symbol (including doc comments and attributes) or a slice bounded by --budget-tokens . When truncated, continue from next_line : Terminal Copy lancet read src/search.rs --symbol execute_one lancet read src/search.rs --lines 100:400 --budget-tokens 800 --json Measured context savings In the why-one-tool suite, targeting lines/symbols/budgets used 5–30× less context than reading whole files while preserving the exact line numbers and rev token needed for safe editing."
+    },
+    {
+      "path": "guides/editing.html",
+      "group": "Guides & Recipes",
+      "title": "Safe Editing, Multi-Hunk CAS, Patching & Local Rename",
+      "description": "Coordinate-safe edit --find/--symbol/--edits, multi-agent rev compare-and-swap, patch rollback, and tier-1 rename.",
+      "keywords": "edit edits find symbol rev conflict cas patch rename local scope tree-sitter",
+      "headings": [
+        {
+          "id": "single-hunk",
+          "text": "Single-Hunk Edits (--lines, --symbol, --find)"
+        },
+        {
+          "id": "multi-hunk",
+          "text": "Atomic Multi-Hunk Edits (--edits)"
+        },
+        {
+          "id": "cas-concurrency",
+          "text": "Multi-Agent Concurrency & Conflict Recovery"
+        },
+        {
+          "id": "patch",
+          "text": "Multi-File Unified Diffs (lancet patch)"
+        },
+        {
+          "id": "rename",
+          "text": "Scope-Proven Local Rename (lancet rename)"
+        }
+      ],
+      "text": "Hand-written sed commands and unguarded whole-file overwrites fail silently when lines shift or multiple agents touch the same file. Lancet treats every edit as an atomic, syntax-checked compare-and-swap (CAS) on shared coordinates. Every read returns line numbers and an XXH3-64 rev hash consumed directly by edit and rename . Single-Hunk Edits (--lines, --symbol, --find) Pick exactly one target ( --lines , --symbol , or --find ) and exactly one operation ( --with , --with-file , --delete , --insert-before , or --insert-after ). By default, lancet edit prints a dry-run unified diff without modifying disk; add --apply to commit. Terminal Copy # Edit exact lines read earlier (pass --rev for CAS) lancet edit src/net.rs --lines 12:15 --with ' timeout_ms: 5000,' --rev e70d5a898f122a62 --apply # Replace an entire symbol (NOTE: includes doc comments & attributes above it!) lancet edit src/net.rs --symbol retry_limit --with-file new_fn.rs --rev <REV> --apply # Unique exact-text replacement (matches LF and CRLF; add --all for every match) lancet edit src/net.rs --find 'let retries = 3;' --with 'let retries = 5;' --rev <REV> --apply Watch the --symbol boundary edit --symbol spans the exact range that read --symbol displays — including leading /// doc comments and #[attr] attributes. Include them in your replacement if you intend to keep them. Atomic Multi-Hunk Edits (--edits) When making multiple changes in one file, never chain separate line-numbered calls blindly — put all hunks into one --edits JSON array (from a file or - for stdin). Every hunk uses the original file's line numbers ; Lancet resolves all spans first, rejects overlaps, and commits all-or-nothing: Terminal Copy lancet edit src/net.rs --rev e70d5a898f122a62 --apply --edits - <<'JSON' [ {\"lines\": \"10:12\", \"with\": \"const RETRIES: u32 = 5;\"}, {\"symbol\": \"legacy_helper\", \"delete\": true}, {\"find\": \"old_metric(\", \"with\": \"new_metric(\", \"all\": true}, {\"lines\": \"40\", \"insert_after\": \" tracing::info!(\\\"updated\\\");\"} ] JSON Multi-Agent Concurrency & Conflict Recovery An exclusive OS lock re-verifies inode and rev before writing; stale revisions fail with conflict (exit 2) and 0 bytes changed. Read & capture rev : run lancet read file --json and save rev . Apply with --rev : if another writer commits first, your call returns status: \"conflict\" (exit code 2 ). Chain or recover: on success, pass the returned rev_after to your next edit. On conflict , lancet read the new content, re-compute your change, and retry with the new rev . Never strip --rev to force past a conflict. Tree-sitter syntax gate & file identity Syntax gate: edits, patches, and AST rewrites refuse any net increase in Tree-sitter syntax errors (so an already broken file can still be fixed incrementally). Pass --allow-syntax-errors only when"
+    },
+    {
+      "path": "guides/documents.html",
+      "group": "Guides & Recipes",
+      "title": "Searching & Reading PDFs, Office, HWP & Archives",
+      "description": "In-process extraction for PDF, DOCX, PPTX, HWP/HWPX, XLSX/ODS, EPUB, ZIP, and TAR with shared line numbers.",
+      "keywords": "pdf docx pptx odt hwp hwpx epub xlsx xls ods zip tar gz ocr",
+      "headings": [
+        {
+          "id": "formats",
+          "text": "Supported Formats & Selectors"
+        },
+        {
+          "id": "search-docs",
+          "text": "Searching Documents & Archives"
+        },
+        {
+          "id": "read-docs",
+          "text": "Coordinate-Exact Reading & Archives"
+        },
+        {
+          "id": "ocr-and-safety",
+          "text": "OCR, Safety Caps & Read-Only Contract"
+        }
+      ],
+      "text": "Workspaces rarely hold only source files — specs live in PDFs and Word/HWP files, lookup tables in spreadsheets, and crash logs inside zip/tar bundles. Lancet extracts them in-process so search hits and lancet read slices agree on the exact same line numbers. Supported Formats & Selectors Format / Extension In-Process Extractor Outline Support Read Selector .pdf Pure-Rust stream extraction ( --ocr optional) PDF outline / headings --page 2 or --page 2:5 .docx , .odt , .epub XML text & paragraph stream Document headings --lines START:END .pptx Slide XML text extractor Slide list --page 3 or --page 1:4 .hwp (5.0 OLE), .hwpx Native Korean Hangul document parser Section headings --lines START:END .xlsx , .xls , .xlsm , .xlsb , .ods Spreadsheet cell extractor Sheet names + dimensions --sheet NAME|1 --rows 1:30 --cols A:E .zip , .tar , .gz , .tgz , .tar.gz Streaming archive reader (16 MiB cap) Entry path manifest bundle.zip!path/inside.log or --entry Searching Documents & Archives There is one intentional difference between Lancet's native LQL search and its ripgrep compatibility mode: Default LQL search ( lancet 'query' ): searches code, documents, spreadsheets, and archives automatically (filter with type:document , type:spreadsheet , or type:archive ). lancet rg : skips binary/document/archive files by default so output stays 100% identical to ripgrep ; pass --docs to include them in-process. Terminal Copy # Search Korean/English clauses across PDFs and HWP files lancet 'near(\"계약\", \"해지\", 15) in type:document' contracts/ # Search inside archives and documents with ripgrep syntax lancet rg --docs -i 'timeout' ./artifacts Coordinate-Exact Reading & Archives Terminal Copy # Inspect structure first lancet outline q4_report.xlsx lancet outline crash_bundle.tar.gz # Read specific slides, spreadsheet ranges, or archive entries lancet read deck.pptx --page 4:6 lancet read q4_report.xlsx --sheet 1 --rows 1:30 --cols A:E lancet read logs/bundle.zip!worker_02/stderr.log --lines 120:180 --budget-tokens 600 OCR, Safety Caps & Read-Only Contract Scanned PDFs & images ( --ocr ): pass --ocr on lancet , read , outline , or index to enable external tesseract / pdftoppm fallback ( pdftoppm + tesseract must be on PATH ). Decompression bomb protection: archive entries and compressed Office/HWP XML streams are capped (16 MiB per member/stream) so malformed inputs cannot exhaust RAM. Read-only guarantee: binary documents and archive entries never return a rev field in JSON, and lancet edit refuses to write back to them. Minimal build without adapters: build with cargo install --no-default-features to strip document/archive adapters for a ~4 MB code/text-only binary."
+    },
+    {
+      "path": "guides/agents-mcp.html",
+      "group": "Guides & Recipes",
+      "title": "Integrating AI Agents: MCP Server & Official Skill",
+      "description": "Setup lancet mcp for Claude Code, Cursor, Claude Desktop, Antigravity, and Codex, plus skills/lancet.",
+      "keywords": "mcp claude cursor codex antigravity skill read-only root agents",
+      "headings": [
+        {
+          "id": "mcp-server",
+          "text": "Starting the Built-in MCP Server (lancet mcp)"
+        },
+        {
+          "id": "client-configs",
+          "text": "Client Configurations"
+        },
+        {
+          "id": "cfg-claude",
+          "text": "Claude Code"
+        },
+        {
+          "id": "cfg-cursor",
+          "text": "Cursor (.cursor/mcp.json or ~/.cursor/mcp.json)"
+        },
+        {
+          "id": "cfg-desktop",
+          "text": "Claude Desktop / Windsurf / Antigravity"
+        },
+        {
+          "id": "cfg-codex",
+          "text": "OpenAI Codex (~/.codex/config.toml)"
+        },
+        {
+          "id": "official-skill",
+          "text": "Installing the Official Agent Skill"
+        },
+        {
+          "id": "tools-overview",
+          "text": "11 Tools & 2 Built-in Prompts"
+        }
+      ],
+      "text": "AI coding agents can invoke Lancet either through shell commands or natively through its zero-dependency stdio Model Context Protocol (MCP) server — paired with the cross-agent Official Skill in skills/lancet/ . Starting the Built-in MCP Server (lancet mcp) lancet mcp speaks newline-delimited JSON-RPC 2.0 over stdin / stdout (supporting MCP revisions 2025-03-26 and 2024-11-05 ) and executes Lancet's Rust engines directly in-process without async daemon overhead. Flag Default Behavior --root <DIR> . Default working directory for resolving relative paths in tool calls ( not a chroot/sandbox; absolute or .. paths work like the CLI) --read-only false Omits lancet_edit , lancet_patch , and lancet_rename from tools/list and refuses writes ( lancet_ast apply , mutating lancet_index actions) --trust-index false Sets default index_mode to trust instead of auto unless overridden per tool call -j, --threads <NUM> CPU count Rayon worker thread count Client Configurations Ready-to-copy templates are also shipped in skills/lancet/references/mcp-config.json . Claude Code Terminal Copy # Standard read/write server claude mcp add --transport stdio lancet -- lancet mcp --root . # Read-only exploration mode claude mcp add --transport stdio lancet -- lancet mcp --root . --read-only Cursor (.cursor/mcp.json or ~/.cursor/mcp.json) JSON Copy { \"mcpServers\": { \"lancet\": { \"command\": \"lancet\", \"args\": [\"mcp\", \"--root\", \".\"] } } } Claude Desktop / Windsurf / Antigravity Pass an absolute --root path when the desktop host launches outside your project directory: JSON Copy { \"mcpServers\": { \"lancet\": { \"command\": \"lancet\", \"args\": [\"mcp\", \"--root\", \"/abs/path/to/your/repo\"] } } } OpenAI Codex (~/.codex/config.toml) TOML Copy [mcp_servers.lancet] command = \"lancet\" args = [\"mcp\", \"--root\", \".\"] Installing the Official Agent Skill The cross-agent Skill package ( skills/lancet/ ) teaches agents LQL syntax, all 24 AST language aliases, compare-and-swap rev workflows, and when to prefer lancet over legacy tools. Terminal Copy # Project-local (.agents universal convention) mkdir -p .agents/skills && ln -s \"$(pwd)/skills/lancet\" .agents/skills/lancet # Claude Code / Codex / Antigravity personal skills mkdir -p ~/.claude/skills && cp -R skills/lancet ~/.claude/skills/lancet mkdir -p ~/.codex/skills && cp -R skills/lancet ~/.codex/skills/lancet mkdir -p ~/.gemini/config/skills && cp -R skills/lancet ~/.gemini/config/skills/lancet 11 Tools & 2 Built-in Prompts Every read/search tool treats 0 matches as a normal empty result ( isError: false ). Write operations default to apply: false (dry-run unified diff). See the full parameter and response schema tables in JSON & MCP Reference . Exploration & search: lancet_fd , lancet_outline , lancet_search , lancet_rg , lancet_refs (including rank: "
+    },
+    {
+      "path": "concepts/index-and-freshness.html",
+      "group": "Concepts & Design",
+      "title": "The .lancet Trigram LSM Index & Freshness",
+      "description": "How sound trigram lowering, (mtime, size, ctime, inode) + racy checks, and LSM compaction guarantee Scan == Auto.",
+      "keywords": "index trigram lsm auto trust-index no-index freshness ctime inode racy windows",
+      "headings": [
+        {
+          "id": "sound-lowering",
+          "text": "Sound Trigram Lowering & Exact Verification"
+        },
+        {
+          "id": "freshness",
+          "text": "How auto Mode Detects Edits Without a Daemon"
+        },
+        {
+          "id": "modes",
+          "text": "auto vs --trust-index vs --no-index"
+        },
+        {
+          "id": "lsm-ops",
+          "text": "LSM Segments, Ancestor Discovery & Compaction"
+        }
+      ],
+      "text": "Traditional indexed search tools fall out of sync until a file watcher catches up, or return approximate results from the index. Lancet takes the opposite design: the index only decides which files NOT to open . Measured on Linux v6.12 (86,218 files) for \"spin_lock\" in auto mode: 7,814 candidates verified, 7,073 true matches. Sound Trigram Lowering & Exact Verification Every query — whether LQL, lancet rg regex HIR, lancet ast pattern with a literal, or lancet refs — is lowered into a boolean expression over required byte trigrams (plus a sound q-gram threshold AtLeast(k) for fuzzy() ). Because any file missing the required trigrams provably cannot match, skipping it never creates false negatives. Every candidate file returned by the index — plus any modified file detected live — is verified by the exact same evaluator used in a scan without an index. That guarantees Scan == Auto by construction. How auto Mode Detects Edits Without a Daemon Auto mode catches modified and untracked files immediately with zero background daemon. In default auto mode, Lancet walks file metadata once and checks four attributes stored per indexed file: mtime + size + ctime + inode (on Unix/macOS) Plus a racy-timestamp guard : files modified within the same timestamp window as the index write are always treated as potentially stale and re-scanned live. This catches same-size edits (where length didn't change), restored mtime tricks (caught by ctime / inode ), and sub-second edits. Honest Windows Caveat Rust's standard library currently exposes only mtime and size stably on Windows (without ctime / inode ). On Windows, edits that preserve both file size and mtime are outside metadata detection; run lancet index or --no-index if a tool explicitly backdates timestamps on Windows. auto vs --trust-index vs --no-index Mode Disk Metadata Walk? Reads Changed Files Live? Latency (Linux 86k files) When to Use auto (default) Yes (~100 ms) Yes ~148 ms (rare literal) Interactive coding & AI agents (always fresh) --trust-index No No ~40 ms (or 3 ms no-hit) Read-only exploration of giant repos when index is known fresh --no-index Full scan Yes (every file) ~1,113 ms Debugging, baseline parity checks, or write-disabled dirs LSM Segments, Ancestor Discovery & Compaction On-disk layout: stored in PATH/.lancet using an immutable LSM segment format ( LANCET04 ) with tombstones and mmap'd posting lists. Ancestor resolution: running a query inside src/query/ automatically discovers and uses a parent repo's .lancet index unless overridden with --index-dir . Incremental updates & maintenance: run lancet index . to absorb stale/new files into a new segment, lancet index --compact to merge segments and purge tombstones, or lancet index --rebuild to recreate from scratch. Inspect selectivity: run la"
+    },
+    {
+      "path": "concepts/architecture-and-benchmarks.html",
+      "group": "Concepts & Design",
+      "title": "Architecture, Failure Modes & Honest Benchmarks",
+      "description": "7 failure modes fixed, 8-codebase benchmarks vs rg/zoekt/ast-grep, and honest comparison against tgrep/grix/aft.",
+      "keywords": "benchmarks suite competitors zoekt tgrep grix aft failure modes performance",
+      "headings": [
+        {
+          "id": "failure-modes",
+          "text": "7 Failure Modes Reproduced & Eliminated"
+        },
+        {
+          "id": "core-bench",
+          "text": "Core Benchmark Suite (8 Codebases)"
+        },
+        {
+          "id": "competitors",
+          "text": "Indexed & Agent Tool Comparison (Honest Tradeoffs)"
+        }
+      ],
+      "text": "Tools built separately assume a human bridges the gaps between them. When an autonomous agent chains rg → sed → patch → pdftotext , mismatches turn into silent data loss. Lancet replaces the brittle handoffs inside one binary — and publishes exact benchmarks including where competitors are faster. 7 Failure Modes Reproduced & Eliminated Every row was measured against real tools in bench/failure_modes.py . Line drift across edits: two sequential sed -i calls from one rg -n hit the wrong line cleanly (exit 0). lancet edit --edits resolves all hunks on original coordinates. Silent concurrent overwrites: 4 concurrent read-modify-write agents lose 600 / 800 updates silently; lancet edit --rev loses 0 / 800 . Half-applied patches: patch -p1 with one stale hunk mutates file A and rejects file B; lancet patch verifies all files first and rolls back on write races. Comment/string corruption: sed renames mutate 0.3–11.7% comments/strings; refs and ast ignore them cleanly, and rename re-resolves local scopes. Document extraction mismatch: rga + pandoc agree on 0 / 40 hit lines inside .docx ; Lancet shares one extraction pipeline (40 / 40). Post-edit index staleness: immediately after editing 20 files, zoekt finds new text in 0 and stale deleted text in 20; Lancet auto reports 20 and 0. Broken links & modes: sed -i / perl -pi destroy symlinks/hard links and drop mode 0640 ; Lancet writes symlink targets and updates multiply hard-linked files in-place. See the full design essay in docs/why-one-tool.md ( 한국어 ). Core Benchmark Suite (8 Codebases) Apple M4 Pro, warm cache, median of 5 hyperfine -N runs. Full tables: bench/results/SUITE.md . 4–25× faster builds, 9–30× smaller disk footprint, 3.2–5.0× lower peak RAM than zoekt. Every text output was verified byte-for-byte against ripgrep 15.2. Corpus Files lancet Index (build · disk · peak) zoekt Index (build · disk · peak) auto vs rg trust vs rg AST vs ast-grep Linux v6.12 (C) 86,680 3.3 s · 134 MB · 358 MB 82 s · 2.9 GB · 1.2 GB 5.8–7.5× 13–403× 4.0× LLVM 19.1 (C++) 146,319 4.7 s · 122 MB · 280 MB 53 s · 3.7 GB · 1.3 GB 6.1–8.0× 34–786× 2.3× rust 1.83 (Rust) 49,964 1.2 s · 29 MB · 184 MB 4.9 s · 327 MB · 739 MB 1.5–9.6× 2–273× 1.8× kubernetes 1.31 (Go) 26,232 1.0 s · 30 MB · 224 MB 4.1 s · 537 MB · 1.0 GB 3.5–5.8× 9–210× 1.9× VS Code 1.95 (TS) 7,708 0.4 s · 12 MB · 114 MB 2.4 s · 245 MB · 573 MB 2.1–3.9× 4–63× 2.7× Django 5.1 (Python) 6,815 0.2 s · 7 MB · 76 MB 1.2 s · 95 MB · 302 MB 2.4–2.9× 10–60× 1.4× CPython 3.13 (C/Py) 4,882 0.3 s · 10 MB · 116 MB 3.7 s · 227 MB · 509 MB 3.0–5.4× 5–30× 2.6× Spring 6.1 (Java) 10,163 0.3 s · 12 MB · 122 MB 1.9 s · 146 MB · 395 MB 2.9–5.3× 6–95× 3.1× Indexed & Agent Tool Comparison (Honest Tradeoffs) Measured via bench/competitors_agents.py across rg , ast-grep , tgrep (disk & dae"
+    },
+    {
+      "path": "reference/cli.html",
+      "group": "Reference",
+      "title": "Complete CLI & lancet rg Parity Reference",
+      "description": "Every subcommand, flag, exit code, and full ripgrep feature parity matrix.",
+      "keywords": "cli flags subcommands exit codes rg parity passthru type-add",
+      "headings": [
+        {
+          "id": "exit-codes",
+          "text": "Exit Codes"
+        },
+        {
+          "id": "subcommands",
+          "text": "All Subcommands & Flags"
+        },
+        {
+          "id": "rg-parity",
+          "text": "lancet rg — ripgrep Feature Parity Matrix"
+        },
+        {
+          "id": "rg-matching",
+          "text": "Patterns & Matching"
+        },
+        {
+          "id": "rg-output",
+          "text": "Output & Formatting"
+        },
+        {
+          "id": "rg-files",
+          "text": "File Traversal & Lancet Extensions"
+        }
+      ],
+      "text": "Every subcommand shares global traversal semantics ( .gitignore / .ignore / .rgignore ), deterministic sorting, and structured exit codes. Exit Codes Code Meaning Status Values 0 Success / match found complete 1 No matches found (or missing index in status ) empty 2 Invalid query/flags, unsupported op, conflict, or I/O error invalid_query , unsupported , conflict All Subcommands & Flags CLI Surface Copy lancet <QUERY> [PATH] [--json] [--no-index | --trust-index] [--index-dir DIR] [--ocr] [--hidden] [--no-ignore] [-j THREADS] [--max-lines N] [--max-cols N] [--stats] lancet rg [FLAGS] [PATTERN] [PATH...] [--docs] [--passthru] [--type-add TYPESPEC] [--no-index | --trust-index] [--index-dir DIR] lancet fd [PATTERN] [PATH] [-p PATTERN] [-t f|d] [-e EXT] [--type-class CLASS] [-g | -r] [-s] [-d DEPTH] [--changed-within DUR] [--min-size S] [--max-size S] [--tree] [--dirs] [--limit N] [--meta] [--no-index | --trust-index] [--index-dir DIR] [--json] [--stats] lancet ast <PATTERN> [PATH] [-l LANG] [-r TEMPLATE [--apply]] [--path GLOB] [--limit N] [--no-index | --trust-index] [--index-dir DIR] [--json] [--stats] lancet read <TARGET> [-l START:END] [-s SYMBOL] [-p PAGE] [--sheet S] [--rows R] [--cols C] [-e ENTRY] [--budget-tokens N] [--raw] [--ocr] [--json] lancet outline [PATH] [-d DEPTH] [-e EXT] [--limit N] [--hidden] [--no-ignore] [--ocr] [--json] lancet refs <SYMBOL> [PATH] [--rank [--kind KIND,...]] [-l LANG] [-e EXT] [--path GLOB] [--all-files] [--limit N] [--no-index | --trust-index] [--json] [--stats] lancet edit <PATH> (--lines RANGE | --symbol SYM | --find TEXT [--all] | --edits FILE) (--with TEXT | --with-file FILE | --delete | --insert-before TEXT | --insert-after TEXT) [--rev REV] [--apply] [--allow-syntax-errors] [--json] lancet patch [DIFF|-] [--root DIR] [-p N] [--apply] [--allow-syntax-errors] [--json] lancet rename <FILE:LINE[:COL]> <OLD> <NEW> [--rev REV] [--apply] [--json] lancet mcp [--root DIR] [--read-only] [--trust-index] [-j THREADS] lancet index [PATH] [--rebuild | --compact] [--index-dir DIR] [--ocr] [--hidden] [--no-ignore] [-j THREADS] lancet status [PATH] [--index-dir DIR] lancet parse <QUERY> lancet explain <QUERY> [PATH] [--index-dir DIR] [--no-index | --trust-index] [--hidden] [--no-ignore] lancet batch [PATH] (-q <QUERY>... [--name <NAME>...] | --queries-json <JSON>) [--no-index | --trust-index] [--index-dir DIR] [--ocr] [--json] lancet rg — ripgrep Feature Parity Matrix Verified against 68 edge-case fixtures in bench/rg_parity.py and full Linux kernel queries against ripgrep 15.2 . Patterns & Matching Flag Meaning Status Notes -e , --regexp <PAT> Search pattern (repeatable) Supported Combined with alternation -f , --file <FILE> Read patterns per line ( - stdin) Supported -F , --fixed-strings Treat patterns as literals Supporte"
+    },
+    {
+      "path": "reference/query-and-ast.html",
+      "group": "Reference",
+      "title": "Lancet Query Language (LQL v0.1) & 24-Language AST Spec",
+      "description": "Formal EBNF grammar, operator precedence, scopes, pipe stages, 24 AST language aliases, and metavariables.",
+      "keywords": "lql grammar near before fuzzy symbol regex ast metavariables languages",
+      "headings": [
+        {
+          "id": "lql-grammar",
+          "text": "LQL v0.1 Formal Grammar"
+        },
+        {
+          "id": "lql-semantics",
+          "text": "Matchers, Scopes & Pipe Stages"
+        },
+        {
+          "id": "ast-langs",
+          "text": "24 Supported AST Languages (--lang)"
+        },
+        {
+          "id": "ast-metavars",
+          "text": "Metavariable & Rewrite Semantics"
+        }
+      ],
+      "text": "Lancet Query Language ( LQL v0.1 ) compiles to a deterministic IR evaluated identically on indexed candidates and full scans. Unknown operators, filters, or trailing tokens never fail silently — they return status: \"invalid_query\" with an exact byte offset. LQL v0.1 Formal Grammar EBNF Copy query := [\"find\"] expr (\"in\" scope)* (\"|\" stage)* expr := or_expr or_expr := and_expr (\"OR\" and_expr)* and_expr:= unary ((\"AND\")? unary)* # adjacent terms form implicit AND unary := \"NOT\" unary | primary primary := string | word # unquoted single token -> literal | \"(\" expr \")\" | \"regex(\" string \")\" | \"fuzzy(\" string [\",\" uint] \")\" # k in 0..=3, default 1 | \"symbol(\" string \")\" | \"symbol:\" (string | word) | \"near(\" matcher \",\" matcher \",\" uint \")\" | \"before(\" matcher \",\" matcher \",\" uint \")\" matcher := string | word | \"regex(\" string \")\" | \"fuzzy(\" string [\",\" uint] \")\" | \"symbol(\" string \")\" | \"symbol:\" (string | word) scope := (\"line\" | \"block\" | \"file\" | \"function\" | \"type:\" values | \"ext:\" values | \"path:\" values)+ values := value | \"(\" value (\",\" value)* \")\" stage := \"limit\" uint # uint >= 1 | \"count\" | \"files\" | \"group\" \"file\" | \"expand\" (\"parent\" | \"unit\" | \"context:\" uint) | \"sort\" (\"count\" [\"asc\" | \"desc\"] | \"path\") | \"terms\" [\"top:\" uint] # 1..=100, default 15 | \"budget\" [\"tokens:\"] uint # uint >= 1 Operator precedence is NOT > AND (explicit or implicit) > OR . Run lancet parse '<QUERY>' to view the normalized canonical query and JSON IR. Matchers, Scopes & Pipe Stages Construct Exact Semantics \"text\" / bare token Case-insensitive (Unicode simple case folding) substring match. regex(\"pat\") Rust regex multi-line mode ( ^ / $ match line boundaries). Case-sensitive unless (?i) is set. fuzzy(\"word\", k) Word tokens within char-level Levenshtein distance 0 <= k <= 3 (default 1), accelerated by sound q-gram thresholds. symbol(\"name\") / symbol:name Exact (case-insensitive) Tree-sitter symbol definition match ( .rs , .py , .js , .ts , .tsx , .go ). near(a, b, d) / before(a, b, d) Both match in unit with token distance |tok(b) - tok(a)| <= d ( before requires b strictly after a ). in file / in block / in line file (default), non-blank line runs ( block ), or single line (match [start, end) must lie inside the unit). in function Tree-sitter function/method AST nodes ( .rs , .py , .js , .ts , .tsx , .go ); sets symbol on hits. type: / ext: / path: Values inside a category OR; across categories AND. type: supports code , document , spreadsheet , config , log , data , archive , image , other . | limit / files / count / group file Compact projections and deterministic hit caps. | expand / sort / terms / budget Expand surrounding parent/context, sort by hit count/path, extract co-occurring tokens, or enforce estimated token cap. 24 Supported AST Languages (--lang) Suppo"
+    },
+    {
+      "path": "reference/json-and-mcp.html",
+      "group": "Reference",
+      "title": "JSON Output Schemas, MCP 11-Tool Spec & Troubleshooting",
+      "description": "Exact JSON response payloads verified against Rust structs, all 11 MCP tools, and error recovery recipes.",
+      "keywords": "json schema response mcp tools status conflict troubleshooting recovery",
+      "headings": [
+        {
+          "id": "status-enum",
+          "text": "Shared Status & Error Envelope"
+        },
+        {
+          "id": "json-schemas",
+          "text": "Command JSON Schemas"
+        },
+        {
+          "id": "mcp-tools",
+          "text": "MCP 11-Tool Reference (lancet mcp)"
+        },
+        {
+          "id": "troubleshooting",
+          "text": "Troubleshooting & Refusal Recovery"
+        }
+      ],
+      "text": "When invoked with --json (or over lancet mcp ), every command returns stable, snake_case JSON structs backed directly by Lancet's Rust types. Shared Status & Error Envelope Every JSON response carries a status field (and optional error: {\"message\": string, \"pos\"?: number} ): \"complete\" (exit 0 ) — finished with results or applied/dry-run edit. \"empty\" (exit 1 ) — finished cleanly with 0 hits. \"invalid_query\" (exit 2 ) — malformed LQL, invalid range/flag, or non-unique --find . \"unsupported\" (exit 2 ) — unsupported language, read-only document target, or disallowed rename site. \"conflict\" (exit 2 ) — stale --rev or concurrent modification detected under OS file lock; 0 bytes written. Command JSON Schemas Response (lancet '<QUERY>' --json) Copy { \"status\": \"complete\", \"query\": \"\"spin_lock\" in file\", \"mode\": \"auto\", \"matched\": 7073, \"matched_is_lower_bound\": false, \"returned\": 20, \"truncated\": true, \"results\": [ { \"id\": \"...\", \"path\": \"kernel/locking/spinlock.c\", \"unit\": \"file\", \"start_line\": 12, \"end_line\": 44, \"symbol\": \"raw_spin_lock\", \"lines\": [{ \"line\": 12, \"text\": \"void __lockfunc raw_spin_lock(raw_spinlock_t *lock)\" }], \"more_lines\": 0 } ], \"terms\": [{ \"term\": \"spinlock\", \"count\": 42, \"files\": 19 }], \"budget\": { \"limit_tokens\": 1500, \"used_tokens\": 1120, \"estimated\": true }, \"stats\": { \"files_considered\": 86218, \"files_searched\": 7814, \"files_matched\": 7073, \"binary_skipped\": 0, \"read_errors\": 0, \"index_candidates\": 7814, \"stale_files\": 0, \"elapsed_ms\": 141.3 } } ReadResponse & EditResponse & RenameResponse Copy // ReadResponse (rev omitted on PDFs, Office, HWP, archives) { \"status\": \"complete\", \"path\": \"src/net.rs\", \"rev\": \"e70d5a898f122a62\", \"section\": \"fn retry_limit\", \"total_lines\": 80, \"start_line\": 1, \"end_line\": 4, \"returned_lines\": 4, \"truncated\": false, \"next_line\": null, \"estimated_tokens\": 28, \"lines\": [{ \"num\": 1, \"text\": \"pub fn retry_limit() -> u32 {\" }], \"elapsed_ms\": 0.4 } // EditResponse (mode: \"dry-run\" | \"applied\", hunks in original file lines) { \"status\": \"complete\", \"mode\": \"applied\", \"path\": \"src/net.rs\", \"rev\": \"e70d5a898f122a62\", \"rev_after\": \"1486bdffbc06c68f\", \"start_line\": 2, \"end_line\": 2, \"hunks\": [[2, 2]], \"applied\": true, \"diff\": \"--- a/src/net.rs\\n+++ b/src/net.rs\\n...\", \"elapsed_ms\": 1.1 } // RenameResponse (tier: \"local-scope\") { \"status\": \"complete\", \"mode\": \"applied\", \"path\": \"src/search.rs\", \"old\": \"old_name\", \"new\": \"new_name\", \"tier\": \"local-scope\", \"rev\": \"...\", \"rev_after\": \"...\", \"declaration\": { \"line\": 40, \"col\": 9 }, \"sites\": [{ \"line\": 40, \"col\": 9 }, { \"line\": 45, \"col\": 14 }], \"comment_mentions\": 1, \"applied\": true, \"elapsed_ms\": 2.3 } PatchResponse & RefsResponse & RankResponse & AstResponse Copy // PatchResponse: { status, mode, applied, files: [{ path, action, from?, hunks, offsets, rev?, rev_aft"
+    }
+  ],
+  "ko": [
+    {
+      "path": "index.html",
+      "group": "시작하기",
+      "title": "Lancet 공식 문서 — 소개 · 설치 · 치트시트",
+      "description": "Lancet 설치 방법, 60초 빠른 시작, 한 화면 CLI 치트시트 안내.",
+      "keywords": "설치 homebrew cargo curl windows 치트시트 개요",
+      "headings": [
+        {
+          "id": "install",
+          "text": "설치"
+        },
+        {
+          "id": "walkthrough",
+          "text": "60초 빠른 시작"
+        },
+        {
+          "id": "cheat-sheet",
+          "text": "한 화면 치트시트"
+        },
+        {
+          "id": "explore-docs",
+          "text": "문서 둘러보기"
+        }
+      ],
+      "text": "Lancet 은 파일 탐색( fd ), 트라이그램 인덱스 기반 검색( rg / LQL), 24개 언어 구조적 AST 검색·치환( ast ), 범위·문서 정밀 열람( read / outline ), compare-and-swap 편집( edit / patch / rename ), 내장 stdio MCP 서버( mcp )를 바이너리 하나에 담은 Rust 도구입니다. 시작 전 핵심 규칙 하나 모든 검색 결과, AST 매치, 읽기 조각, 편집 구간이 1부터 시작하는 동일한 줄 번호 와 XXH3-64 rev 해시 를 공유합니다. PDF, 오피스, HWP/HWPX, 압축 파일 내부조차 검색과 read 가 같은 줄 번호를 씁니다. 설치 macOS, Linux(glibc 및 정적 musl), Windows용 사전 빌드 바이너리를 제공합니다. Rust 툴체인 없이 바로 설치할 수 있습니다. macOS / Linux (Homebrew) 복사 brew tap CREE1116/lancet https://github.com/CREE1116/lancet brew install CREE1116/lancet/lancet macOS / Linux (릴리스 설치 스크립트) 복사 curl -fsSL https://raw.githubusercontent.com/CREE1116/lancet/main/install.sh | sh Windows (PowerShell) 복사 irm https://raw.githubusercontent.com/CREE1116/lancet/main/install.ps1 | iex 소스 빌드 (Cargo) 복사 # 전체 바이너리 (~40 MB, Tree-sitter 24개 언어 + PDF/오피스/HWP 어댑터) cargo binstall --git https://github.com/CREE1116/lancet lancet # 텍스트·코드 전용 경량 바이너리 (~4 MB, 문서 어댑터 제외) cargo install --git https://github.com/CREE1116/lancet --no-default-features 60초 빠른 시작 .lancet 인덱스는 선택 사항입니다. 인덱스가 없어도 동일하게 동작하며, 기본 auto 모드는 매 쿼리마다 파일 변경 여부를 확인합니다. 터미널 복사 # 1. 선택: 로컬 트라이그램 인덱스 한 번 빌드 lancet index . # 2. 폴더 구조 먼저 확인 후 참조 빈도순 핵심 심볼 찾기 lancet fd --tree --dirs -d 2 . lancet refs --rank '*Service' --kind class src --limit 8 # 3. ripgrep 문법 또는 LQL 논리·근접 쿼리로 검색 lancet rg -w execute_one src lancet 'near(\"gradient\", \"clip\", 30) in function | expand parent' # 4. 필요한 함수/범위만 읽고 `rev` 확보 lancet read src/search.rs --symbol execute_one --json # 5. dry-run diff 확인 후 --rev와 --apply로 원자적 반영 lancet edit src/search.rs --find 'let limit = 20;' --with 'let limit = 50;' --rev <REV> --apply 한 화면 치트시트 작업 명령어 보장 폴더 레이아웃 lancet fd --tree --dirs -d 2 . .gitignore 반영 최근/확장자 필터 lancet fd -t f -e rs --changed-within 7d 인덱스 가속 rg 그대로 쓰기 lancet rg -w -t rs 'pat' src rg 와 바이트 동일 + --docs 논리·유사 검색 lancet '(\"a\" OR \"b\") NOT \"c\" in function' Scan == Auto 파일 뼈대 보기 lancet outline src/main.rs 함수·마크다운 제목·시트·압축 목록 토큰 제한 읽기 lancet read f.rs --lines 10:50 --budget-tokens 800 rev + next_line 반환 심볼 단위 읽기 lancet read f.rs --symbol my_fn 문서 주석·어트리뷰트 포함 문서·압축파일 lancet read r.pdf -p 2:3 · a.zip!app.log 검색과 동일한 줄 번호 참조 랭킹 lancet refs --rank '*Service' --kind class src 어휘 참조 횟수 내림차순 AST 검색·치환 lancet ast '$X.unwrap()' src -l rs -r '$X?' 24개 언어, --apply 전엔 dry-run CAS 다중 편집 lancet edit f.rs --edits - --rev REV --apply 원본 좌표 유지, 전부 아니면 무효 Unified Diff git diff | lancet patch --apply 사전 검증 + 충돌 시 롤백 로컬 이름 변경 lancet rename f.rs:42 old new --rev REV --apply 스코프 재해석으로 캡처 차단 MCP 서버 lancet mcp --root . 11개 도구 stdio JSON-RPC 인덱스 점검 lancet explain 'pat' · lancet status 필요 트라이그램·후보 비율 출력 문서 둘러보기 시작하기 기존 도구에서 전환하기 rg, fd, ast-grep, sed, patch, rga 사용자가 바로 옮겨 탈 수 있는 대조표와 의도적 차이점. 실전 가이드 낯선 코드베이스 탐색 fd --dirs, refs --rank, outline, batch, budget-tokens 페이지네이션으로 토큰"
+    },
+    {
+      "path": "migration.html",
+      "group": "시작하기",
+      "title": "기존 도구(rg, fd, ast-grep, sed, patch, rga)에서 전환하기",
+      "description": "ripgrep, fd, ast-grep, sed, patch, rga 사용자용 1:1 대조표와 의도적 차이, 도구 선택 경계.",
+      "keywords": "전환 마이그레이션 ripgrep rg fd ast-grep sg sed patch rga pcre2 차이",
+      "headings": [
+        {
+          "id": "from-rg",
+          "text": "ripgrep(rg)에서 오셨다면"
+        },
+        {
+          "id": "from-fd",
+          "text": "fd / find에서 오셨다면"
+        },
+        {
+          "id": "from-ast",
+          "text": "ast-grep(sg)에서 오셨다면"
+        },
+        {
+          "id": "from-sed-patch",
+          "text": "cat / sed / patch / rga에서 오셨다면"
+        },
+        {
+          "id": "when-not",
+          "text": "전문 도구를 그대로 써야 할 때"
+        }
+      ],
+      "text": "이미 ripgrep , fd , ast-grep , sed , patch , rga 에 익숙하다면 한 번에 다 바꿀 필요가 없습니다. Lancet은 기존 플래그를 그대로 받는 호환 진입점과 단계 간 이음새 오류를 없애는 안전장치를 함께 제공합니다. ripgrep(rg)에서 오셨다면 lancet rg 는 ripgrep의 플래그, Rust regex 엔진, .gitignore / .ignore / .rgignore 규칙, 종료 코드( 0 매치, 1 없음, 2 오류), 출력 형식을 그대로 구현했습니다(ripgrep 15.2와 바이트 단위 검증). ripgrep 명령 lancet 대안 참고 rg foo src lancet rg foo src 줄 번호가 기본 ON; 끄려면 -N rg -i -w -t py tok lancet rg -i -w -t py tok -i / -s / -S , -w , --type 규칙 동일 rg -g '*.toml' -C 2 pat lancet rg -g '*.toml' -C 2 pat --passthru , --type-add , -L , --max-depth 지원 rg --files -t rs lancet rg --files -t rs 경로순으로 결정적 정렬 출력 rg -P '(?<=a)b' lancet 'before(\"a\", \"b\", 1)' 또는 Rust regex -P / PCRE2는 의도적으로 미지원(선형 시간 + 건전한 트라이그램 컴파일 보장) rg --pre pdftotext pat lancet rg --docs pat 외부 프로세스 없이 인프로세스로 PDF/오피스/HWP/압축 검색 lancet rg의 의도적 차이 3가지 항상 경로순 정렬: rg --sort path 와 동일하며 스레드 수와 무관하게 결정적입니다. 줄 번호( -n ) 기본 활성화: 파이프 출력에서도 켜져 있으며 -N 으로 끕니다. 파일명 헤더 없음: 항상 path:line:text 형식으로 출력하며 --color auto 는 파이프 시 색상을 끕니다. fd / find에서 오셨다면 fd / find lancet fd 차이점 및 확장 기능 fd -e rs -d 2 src lancet fd -e rs -d 2 src .lancet 인덱스가 있으면 바로 활용 fd -t d -d 2 lancet fd --tree --dirs -d 2 . 파일 없이 폴더 트리만 깔끔하게 출력 find . -mtime -7 lancet fd --changed-within 7d 단위: s , m , h , d , w find . -name '*.pdf' lancet fd --type-class document 내장 분류: code , document , spreadsheet , archive 등 fd pat dir1 dir2 경로마다 호출하거나 LQL path: 사용 lancet fd 는 [PATH] 1개만 받음; 패턴이 경로처럼 보이면 -p pat 사용 ast-grep(sg)에서 오셨다면 ast-grep lancet ast 중요한 차이 sg -p '$X.unwrap()' -l rs lancet ast '$X.unwrap()' -l rs 패턴에 리터럴이 있으면 .lancet 트라이그램 프리필터 가속 sg -p 'f($$$A)' -r 'g($$$A)' -U lancet ast 'f($$$A)' -r 'g($$$A)' --apply 기본은 dry-run diff; --apply 일 때만 원자적 기록 sg -p 'if ($C) $S' lancet ast 'if ($C) $S' 의미 차이: Lancet은 모양을 엄격히 매치함( if-else 는 별개 구문 노드) sg -l cpp ... lancet ast ... -l cpp Lancet --lang cpp 는 .cpp / .cc 외에 .h 헤더도 함께 스캔 cat / sed / patch / rga에서 오셨다면 기존 도구 사슬 Lancet 대체 해결된 실패 사례 sed -n '10,50p' f.rs lancet read f.rs --lines 10:50 XXH3-64 rev 반환 + --budget-tokens 상한 지원 하나의 rg 결과로 sed -i 2회 lancet edit f.rs --edits - --rev REV --apply 모든 hunk가 원본 줄 번호 기준; 심볼릭/하드 링크·권한 유지 patch -p1 < diff lancet patch diff --apply 모든 파일 사전 검증, 충돌 시 롤백(반쪽 패치 없음) rga + pdftotext / pandoc lancet 'pat' + lancet read f.pdf -p 2 단일 추출 파이프라인으로 줄 번호 100% 일치 전문 도구를 그대로 써야 할 때 적용 범위 경계 버전 관리: git 은 그대로 사용하세요. Lancet은 작업 트리를 검색하고( .gitignore 준수) git diff 를 lancet patch 로 안전하게 적용합니다. 여러 파일에 걸친 타입 기반 리팩터링: 공개 API, 구조체 필드, 메서드 이름 일괄 변경은 LSP( rust-analyzer , tsserver , gopls )를 사용하세요. Lancet은 어휘 기반 refs 와 단일 파일 스코프 증명 기반 lancet rename 을 제공합니다."
+    },
+    {
+      "path": "guides/explore.html",
+      "group": "실전 가이드",
+      "title": "컨텍스트를 아끼며 낯선 코드베이스 탐색하기",
+      "description": "fd --dirs, refs --rank, outline, batch, budget-tokens 페이지네이션을 활용한 5단계 탐색 워크플로우.",
+      "keywords": "탐색 fd dirs tree refs rank outline batch budget-tokens 페이지네이션",
+      "headings": [
+        {
+          "id": "step1",
+          "text": "1. 파일 소음 없이 폴더 구조 먼저 파악하기"
+        },
+        {
+          "id": "step2",
+          "text": "2. refs --rank로 핵심 선언 순위 찾기"
+        },
+        {
+          "id": "step3",
+          "text": "3. 본문 전에 뼈대만 보기 (outline)"
+        },
+        {
+          "id": "step4",
+          "text": "4. 여러 쿼리 한 번에 실행(batch) & 파이프 정제"
+        },
+        {
+          "id": "step5",
+          "text": "5. 토큰 예산(budget-tokens) 기반 페이지네이션 읽기"
+        }
+      ],
+      "text": "개발자나 AI 에이전트가 컨텍스트 토큰을 낭비하고 길을 잃는 가장 흔한 원인은 파일 전체를 닥치는 대로 읽는 것입니다. Lancet은 수만 개 파일에서 정확히 필요한 줄까지 좁혀 내려가는 5단계 탐색 깔때기 를 제공합니다. 1. 파일 소음 없이 폴더 구조 먼저 파악하기 파일 목록이나 검색을 돌리기 전에 디렉터리 골격부터 확인합니다. 터미널 복사 lancet fd --tree --dirs --max-depth 2 . lancet fd --changed-within 2d -t f src --tree 에 --dirs ( -t d 와 동일)를 붙이면 폴더만 계층으로 보여 주어 프로젝트 아키텍처를 수십 줄 안에 파악할 수 있습니다. 2. refs --rank로 핵심 선언 순위 찾기 낯선 저장소에서는 어떤 클래스·구조체·인터페이스·함수가 실제로 많이 쓰이는지 어휘 참조 수 순위로 바로 뽑아낼 수 있습니다. 터미널 복사 # 가장 많이 참조되는 *Service 클래스 상위 10개 lancet refs --rank '*Service' --kind class src --limit 10 # 디렉터리 내 가장 많이 호출되는 함수 상위 10개 lancet refs --rank '*' --kind function --limit 10 src # 정의와 참조 위치 상세 조회 (주석·문자열 자동 제외) lancet refs SearchOptions src --lang rs --json --rank의 중복 이름 표시 이해하기 글롭에 리터럴(예: Service )이 포함되면 트라이그램 인덱스로 후보를 좁힌 뒤 AST 선언을 수집합니다. 출력에 (name shared by N declarations) 또는 JSON의 definitions > 1 이 표시되면 여러 선언이 같은 이름을 공유한다는 뜻입니다. 3. 본문 전에 뼈대만 보기 (outline) lancet outline 으로 코드 선언 시그니처, 마크다운 제목 목차, 엑셀 시트 목록, 압축 파일 내부 경로와 정확한 줄 범위를 먼저 확인하세요. 터미널 복사 lancet outline src/search.rs lancet outline docs/architecture.md lancet outline financial_model.xlsx lancet outline logs/bundle.zip 4. 여러 쿼리 한 번에 실행(batch) & 파이프 정제 서로 관련된 여러 질문을 던져야 할 때는 lancet batch 로 인덱스와 디렉터리 순회를 딱 1번만 열고 모든 쿼리를 평가합니다. LQL 파이프로 출력을 더 줄일 수 있습니다. 터미널 복사 # 인덱스 열기·워크 1회 공유로 쿼리 3개 동시 실행 lancet batch src \\ -q 'near(\"retry\", \"backoff\", 20) in function' \\ -q '\"Conflict\" in ext:rs' \\ -q 'fuzzy(\"idempotent\", 1) | files' # 동시 출현 상위 키워드 추출 및 토큰 상한 적용 lancet '\"trigram\" in ext:rs | terms top:10 | budget tokens:1200' src 5. 토큰 예산(budget-tokens) 기반 페이지네이션 읽기 전체 파일 대신 해당 심볼(문서 주석·어트리뷰트 포함)이나 토큰 상한을 지정해 읽으세요. 잘렸다면 반환된 next_line 부터 이어서 읽습니다. 터미널 복사 lancet read src/search.rs --symbol execute_one lancet read src/search.rs --lines 100:400 --budget-tokens 800 --json 실측 컨텍스트 절감 why-one-tool 실험에서 줄·심볼·토큰 예산을 지정해 읽은 경우 전체 파일 읽기보다 컨텍스트 사용량이 5~30배 줄었으며, 안전한 편집에 필요한 줄 번호와 rev 토큰도 그대로 유지했습니다."
+    },
+    {
+      "path": "guides/editing.html",
+      "group": "실전 가이드",
+      "title": "안전한 편집, 다중 구간 CAS, 패치 & 로컬 이름 변경",
+      "description": "edit --find/--symbol/--edits, 멀티 에이전트 rev CAS, patch 롤백, 스코프 증명 기반 local rename.",
+      "keywords": "편집 edit edits find symbol rev conflict cas patch rename 로컬 스코프",
+      "headings": [
+        {
+          "id": "single-hunk",
+          "text": "단일 구간 편집 (--lines, --symbol, --find)"
+        },
+        {
+          "id": "multi-hunk",
+          "text": "원자적 다중 구간 편집 (--edits)"
+        },
+        {
+          "id": "cas-concurrency",
+          "text": "멀티 에이전트 동시성과 conflict 복구"
+        },
+        {
+          "id": "patch",
+          "text": "다중 파일 Unified Diff 적용 (lancet patch)"
+        },
+        {
+          "id": "rename",
+          "text": "스코프 증명 기반 로컬 이름 변경 (lancet rename)"
+        }
+      ],
+      "text": "줄 번호를 수동으로 계산해 sed 를 여러 번 돌리거나 잠금 없이 파일을 덮어쓰면, 줄 밀림이나 에이전트 간 경합으로 변경 사항이 소리 없이 사라집니다. Lancet은 모든 쓰기를 공유 좌표계 위의 compare-and-swap(CAS) 으로 처리합니다. 모든 read 가 반환하는 줄 번호와 XXH3-64 rev 를 edit 과 rename 이 그대로 사용합니다. 단일 구간 편집 (--lines, --symbol, --find) 대상 하나 ( --lines , --symbol , --find 중 택1)와 연산 하나 ( --with , --with-file , --delete , --insert-before , --insert-after 중 택1)를 고릅니다. 기본은 디스크를 건드리지 않는 dry-run diff이며 --apply 를 붙일 때만 반영됩니다. 터미널 복사 # read에서 본 줄 번호 그대로 수정 (--rev로 CAS 검증) lancet edit src/net.rs --lines 12:15 --with ' timeout_ms: 5000,' --rev e70d5a898f122a62 --apply # 심볼 전체 교체 (주의: 위쪽 문서 주석과 어트리뷰트도 범위에 포함됨!) lancet edit src/net.rs --symbol retry_limit --with-file new_fn.rs --rev <REV> --apply # 고유 문자열 치환 (LF/CRLF 모두 매치; 전체 치환은 --all 추가) lancet edit src/net.rs --find 'let retries = 3;' --with 'let retries = 5;' --rev <REV> --apply --symbol 범위 주의 edit --symbol 은 read --symbol 이 보여 주는 것과 똑같이 선언 바로 위의 /// 문서 주석과 #[attr] 어트리뷰트까지 포함합니다. 유지하려면 새 내용에 함께 넣으세요. 원자적 다중 구간 편집 (--edits) 한 파일에서 여러 곳을 고칠 때는 절대 줄 번호 기반 호출을 따로 이어 붙이지 말고, 하나의 --edits JSON 배열(파일 또는 stdin - )로 묶어 보내세요. 모든 항목은 처음 읽은 원본 파일의 줄 번호 를 쓰며, 겹침이 있으면 거절되고 전부 성공하거나 한 줄도 쓰지 않습니다. 터미널 복사 lancet edit src/net.rs --rev e70d5a898f122a62 --apply --edits - <<'JSON' [ {\"lines\": \"10:12\", \"with\": \"const RETRIES: u32 = 5;\"}, {\"symbol\": \"legacy_helper\", \"delete\": true}, {\"find\": \"old_metric(\", \"with\": \"new_metric(\", \"all\": true}, {\"lines\": \"40\", \"insert_after\": \" tracing::info!(\\\"updated\\\");\"} ] JSON 멀티 에이전트 동시성과 conflict 복구 배타적 OS 파일 잠금 아래 inode 와 rev 를 재검증하며, 낡은 리비전은 conflict (종료 2)를 내고 1바이트도 쓰지 않습니다. 읽고 rev 보관: lancet read file --json 에서 rev 를 얻습니다. --rev 로 반영: 그사이 다른 에이전트가 먼저 쓰면 status: \"conflict\" (종료 코드 2 )로 거절됩니다. 연쇄 적용 또는 복구: 성공 시 반환된 rev_after 를 다음 편집에 넘깁니다. conflict 가 나면 lancet read 로 최신 내용을 다시 읽고 새 rev 로 재시도하세요. 충돌을 피하려고 --rev 를 빼고 덮어쓰면 안 됩니다. Tree-sitter 구문 검사 게이트와 파일 정체성 구문 게이트: edit , patch , ast --rewrite 는 Tree-sitter 구문 오류가 순증가 하는 수정을 거부합니다(이미 망가진 파일을 단계적으로 고치는 것은 허용). 의도적인 경우에만 --allow-syntax-errors 를 쓰세요. 파일 정체성: 심볼릭 링크는 대상 파일에 기록해 링크를 유지하고, 다중 하드 링크 파일은 제자리 갱신하며 권한·소유자를 보존합니다. 다중 파일 Unified Diff 적용 (lancet patch) lancet patch 는 git diff 또는 diff -u 를 여러 파일에 걸쳐 원자적으로 적용합니다. 터미널 복사 # Dry-run 사전 검증 lancet patch changes.diff # stdin으로 받아 하위 디렉터리에 적용 (-p 1이 기본으로 a/, b/ 제거) git diff | lancet patch --root subdir -p 1 --apply 이름 변경( git diff -M ), 권한 변경( chmod +x ), 빈 파일 생성·삭제를 처리합니다. 모든 hunk는 정확히 일치해야 하며(줄 위치가 밀렸을 때는 고유한 최근접 정확 일치 위치로만 재배치, 퍼지 매칭 안 함), 전체 파일을 사전 검증한 뒤 쓰기 경합 발생 시 이전 파일까지 롤백합니다. 바이너리 diff와 복사는 거부합니다. 스코프 증명 기반 로컬 이름 변경 (lancet rename) lancet rename 은 한 파일 내부의 지역 바인딩(변수, 루프 변수, 클로저 매개변수, Python 제외 함수 매개변수)을 6개 언어 (Rust, Python, JavaScript, TypeScript, TSX, Go)에서 안전하게 바꿉니다. 터미널 복사 # 해당 줄에 OLD 이름의 바인딩이 하나뿐이면 COL 생략 가능 lancet rename src/search.rs:42 old_name new_name lancet rename src/search"
+    },
+    {
+      "path": "guides/documents.html",
+      "group": "실전 가이드",
+      "title": "PDF, 오피스, 한글(HWP) & 압축 파일 검색·열람",
+      "description": "PDF, DOCX, PPTX, HWP/HWPX, XLSX/ODS, EPUB, ZIP, TAR의 인프로세스 추출과 공유 줄 번호 좌표.",
+      "keywords": "pdf docx pptx odt hwp hwpx epub xlsx xls ods zip tar gz ocr 문서",
+      "headings": [
+        {
+          "id": "formats",
+          "text": "지원 포맷 및 전용 선택자"
+        },
+        {
+          "id": "search-docs",
+          "text": "문서와 압축 파일 검색하기"
+        },
+        {
+          "id": "read-docs",
+          "text": "동일 좌표로 문서·압축 파일 읽기"
+        },
+        {
+          "id": "ocr-and-safety",
+          "text": "OCR, 압축 폭탄 방어 및 읽기 전용 보장"
+        }
+      ],
+      "text": "실제 작업공간에는 소스 코드만 있지 않습니다. 명세서는 PDF나 워드·한글(HWP) 문서에, 설정표는 스프레드시트에, 장애 로그는 zip/tar 압축 안에 있습니다. Lancet은 이를 외부 도구 없이 인프로세스로 추출 하므로 검색과 lancet read 가 정확히 같은 줄 번호를 사용합니다. 지원 포맷 및 전용 선택자 포맷 / 확장자 인프로세스 추출기 Outline 지원 Read 선택자 .pdf Pure-Rust 스트림 추출 ( --ocr 선택) PDF 목차 / 제목 --page 2 또는 --page 2:5 .docx , .odt , .epub XML 본문·문단 추출기 문서 제목 계층 --lines START:END .pptx 슬라이드 XML 텍스트 추출기 슬라이드 목록 --page 3 또는 --page 1:4 .hwp (5.0 OLE), .hwpx 한글 문서 네이티브 파서 섹션 제목 --lines START:END .xlsx , .xls , .xlsm , .xlsb , .ods 스프레드시트 셀 추출기 시트 이름 + 크기 --sheet NAME|1 --rows 1:30 --cols A:E .zip , .tar , .gz , .tgz , .tar.gz 스트리밍 압축 리더 (16 MiB 상한) 내부 경로 목록 bundle.zip!path/inside.log 또는 --entry 문서와 압축 파일 검색하기 Lancet의 기본 LQL 검색과 ripgrep 호환 모드는 문서 포함 여부에 의도적인 차이가 있습니다. 기본 LQL 검색 ( lancet 'query' ): 코드뿐 아니라 문서·스프레드시트·압축 파일까지 자동으로 검색합니다( type:document , type:spreadsheet , type:archive 필터 지원). lancet rg : ripgrep 과 출력을 바이트까지 맞추기 위해 기본적으로 문서/바이너리를 건너뛰며, --docs 를 붙일 때만 인프로세스 문서를 함께 검색합니다. 터미널 복사 # PDF와 HWP 문서 안에서 근접 검색 lancet 'near(\"계약\", \"해지\", 15) in type:document' contracts/ # ripgrep 문법 그대로 압축파일과 문서까지 검색 lancet rg --docs -i 'timeout' ./artifacts 동일 좌표로 문서·압축 파일 읽기 터미널 복사 # 먼저 뼈대/목록 확인 lancet outline q4_report.xlsx lancet outline crash_bundle.tar.gz # 슬라이드, 셀 범위, 압축 내부 파일 읽기 lancet read deck.pptx --page 4:6 lancet read q4_report.xlsx --sheet 1 --rows 1:30 --cols A:E lancet read logs/bundle.zip!worker_02/stderr.log --lines 120:180 --budget-tokens 600 OCR, 압축 폭탄 방어 및 읽기 전용 보장 스캔된 PDF 및 이미지( --ocr ): lancet , read , outline , index 에 --ocr 을 넘기면 외부 tesseract / pdftoppm 으로 텍스트를 추출합니다. 압축 폭탄 상한: 압축 파일 멤버와 압축 XML 스트림은 16 MiB 상한으로 제한해 악의적/손상된 파일로 인한 메모리 고갈을 막습니다. 읽기 전용 보장: 문서와 압축 항목은 JSON에 rev 를 내지 않으며 lancet edit 이 수정을 거부합니다. 문서 어댑터 제외 빌드: cargo install --no-default-features 로 빌드하면 어댑터를 제외한 약 4 MB 순수 텍스트·코드 전용 바이너리가 됩니다."
+    },
+    {
+      "path": "guides/agents-mcp.html",
+      "group": "실전 가이드",
+      "title": "AI 에이전트 연동: 내장 MCP 서버 & 공식 스킬",
+      "description": "Claude Code, Cursor, Claude Desktop, Antigravity, Codex용 lancet mcp 설정과 skills/lancet 설치.",
+      "keywords": "mcp claude cursor codex antigravity 스킬 skill read-only root 에이전트",
+      "headings": [
+        {
+          "id": "mcp-server",
+          "text": "내장 MCP 서버 실행 (lancet mcp)"
+        },
+        {
+          "id": "client-configs",
+          "text": "클라이언트별 설정 예시"
+        },
+        {
+          "id": "cfg-claude",
+          "text": "Claude Code"
+        },
+        {
+          "id": "cfg-cursor",
+          "text": "Cursor (.cursor/mcp.json 또는 ~/.cursor/mcp.json)"
+        },
+        {
+          "id": "cfg-desktop",
+          "text": "Claude Desktop / Windsurf / Antigravity"
+        },
+        {
+          "id": "cfg-codex",
+          "text": "OpenAI Codex (~/.codex/config.toml)"
+        },
+        {
+          "id": "official-skill",
+          "text": "공식 에이전트 스킬 설치"
+        },
+        {
+          "id": "tools-overview",
+          "text": "11개 도구 & 내장 프롬프트 2종"
+        }
+      ],
+      "text": "AI 코딩 에이전트는 셸 CLI로 직접 쓰거나, 의존성 없는 내장 Model Context Protocol (MCP) stdio 서버와 skills/lancet/ 공식 스킬 패키지로 연동해 쓸 수 있습니다. 내장 MCP 서버 실행 (lancet mcp) lancet mcp 는 stdin / stdout 위에서 줄바꿈 구분 JSON-RPC 2.0(MCP 버전 2025-03-26 / 2024-11-05 )을 구사하며, 별도 데몬 없이 Lancet의 Rust 엔진을 인프로세스로 즉시 호출합니다. 플래그 기본값 동작 --root <DIR> . 도구 호출의 상대 경로 해석 기준 디렉터리 (chroot/샌드박스가 아님 ; CLI처럼 절대 경로나 .. 도 허용됨) --read-only false tools/list 에서 lancet_edit , lancet_patch , lancet_rename 을 숨기고 쓰기( lancet_ast apply , 인덱스 변경)를 거부 --trust-index false 개별 호출에서 덮어쓰지 않는 한 기본 index_mode 를 trust 로 설정 -j, --threads <NUM> CPU 코어 수 Rayon 워커 스레드 수 클라이언트별 설정 예시 복사해서 바로 쓸 수 있는 JSON 템플릿은 skills/lancet/references/mcp-config.json 에도 있습니다. Claude Code 터미널 복사 # 기본 읽기·쓰기 모드 claude mcp add --transport stdio lancet -- lancet mcp --root . # 읽기 전용 탐색 모드 claude mcp add --transport stdio lancet -- lancet mcp --root . --read-only Cursor (.cursor/mcp.json 또는 ~/.cursor/mcp.json) JSON 복사 { \"mcpServers\": { \"lancet\": { \"command\": \"lancet\", \"args\": [\"mcp\", \"--root\", \".\"] } } } Claude Desktop / Windsurf / Antigravity 데스크톱 앱이 저장소 밖에서 실행되는 경우 절대 경로로 --root 를 지정하세요. JSON 복사 { \"mcpServers\": { \"lancet\": { \"command\": \"lancet\", \"args\": [\"mcp\", \"--root\", \"/abs/path/to/your/repo\"] } } } OpenAI Codex (~/.codex/config.toml) TOML 복사 [mcp_servers.lancet] command = \"lancet\" args = [\"mcp\", \"--root\", \".\"] 공식 에이전트 스킬 설치 skills/lancet/ 패키지는 에이전트에게 LQL 문법, 24개 AST 언어 별칭, rev 기반 CAS 편집 흐름, 기존 도구 대비 선택 기준을 알려 줍니다. 터미널 복사 # 프로젝트 로컬 (.agents 공통 규약) mkdir -p .agents/skills && ln -s \"$(pwd)/skills/lancet\" .agents/skills/lancet # Claude Code / Codex / Antigravity 개인 설정 mkdir -p ~/.claude/skills && cp -R skills/lancet ~/.claude/skills/lancet mkdir -p ~/.codex/skills && cp -R skills/lancet ~/.codex/skills/lancet mkdir -p ~/.gemini/config/skills && cp -R skills/lancet ~/.gemini/config/skills/lancet 11개 도구 & 내장 프롬프트 2종 모든 조회·검색 도구는 결과 0건을 정상적인 empty ( isError: false )로 처리하며, 쓰기 도구는 기본값이 apply: false (dry-run unified diff)입니다. 전체 파라미터와 스키마는 JSON · MCP 명세 를 참고하세요. 탐색·검색: lancet_fd , lancet_outline , lancet_search , lancet_rg , lancet_refs ( rank: true 포함), lancet_ast , lancet_read . 안전한 수정: lancet_edit , lancet_patch , lancet_rename , 그리고 apply: true 를 준 lancet_ast . 인덱스 관리: lancet_index ( status , sync , rebuild , compact ). 내장 프롬프트: prompts/list 의 lancet-explore , lancet-safe-edit . AGENTS.md / CLAUDE.md 한 줄 규칙 탐색·검색·범위 읽기·CAS 편집(read --rev -> edit --apply)에는 rg/fd/ast-grep/cat/sed 대신 lancet(lancet_* MCP 또는 CLI)을 우선 사용한다."
+    },
+    {
+      "path": "concepts/index-and-freshness.html",
+      "group": "핵심 개념",
+      "title": ".lancet 트라이그램 LSM 인덱스와 최신성 보장",
+      "description": "건전한 트라이그램 컴파일, (mtime, size, ctime, inode)+racy 검사, LSM 컴팩션으로 Scan == Auto를 보장하는 원리.",
+      "keywords": "인덱스 트라이그램 lsm auto trust-index no-index 최신성 ctime inode racy windows",
+      "headings": [
+        {
+          "id": "sound-lowering",
+          "text": "건전한 트라이그램 컴파일 & 동일 평가기 검증"
+        },
+        {
+          "id": "freshness",
+          "text": "데몬 없이 auto 모드가 수정을 즉시 감지하는 법"
+        },
+        {
+          "id": "modes",
+          "text": "auto vs --trust-index vs --no-index"
+        },
+        {
+          "id": "lsm-ops",
+          "text": "LSM 세그먼트, 상위 인덱스 탐색 & 컴팩션"
+        }
+      ],
+      "text": "기존 인덱스 기반 검색 도구는 백그라운드 워처가 따라잡을 때까지 낡은 결과를 내거나, 인덱스 내용만으로 근사치를 반환하곤 합니다. Lancet은 반대로 설계했습니다: 인덱스는 열지 않아도 되는 파일만 거릅니다. Linux v6.12(86,218개 파일)에서 \"spin_lock\" auto 모드 실측: 7,814개 후보만 열어 7,073개 정확히 일치. 건전한 트라이그램 컴파일 & 동일 평가기 검증 LQL, lancet rg 정규식 HIR, 리터럴이 있는 lancet ast 패턴, lancet refs 까지 모두 필수 바이트 트라이그램 논리식(및 fuzzy() 용 건전한 q-gram 하한 AtLeast(k) )으로 낮춰집니다. 필수 트라이그램이 없는 파일은 수학적으로 매치할 수 없으므로 건너뛰어도 누락이 발생하지 않습니다. 인덱스에서 걸러진 후보와 수정된 파일은 인덱스 없는 풀스캔과 완전히 동일한 평가기 로 검증합니다. 따라서 구조적으로 Scan == Auto 가 성립합니다. 데몬 없이 auto 모드가 수정을 즉시 감지하는 법 auto 모드는 상주 데몬 없이도 방금 수정되거나 새로 생긴 파일을 즉시 감지합니다. 기본 auto 모드는 파일 메타데이터를 한 번 순회하며 인덱스된 파일마다 다음 4가지 속성을 대조합니다: mtime + size + ctime + inode (Unix/macOS) 더해 racy-timestamp 검사 : 인덱스 기록 시각과 같은 타임스탬프 구간에서 바뀐 파일은 무조건 stale로 보고 실시간 스캔합니다. 덕분에 길이가 같은 수정( size 동일), mtime 을 되돌린 트릭( ctime / inode 로 포착), 밀리초 미만 연속 수정도 놓치지 않습니다. Windows 플랫폼의 정직한 한계 Rust 표준 라이브러리는 Windows에서 ctime 과 inode 를 안정적으로 노출하지 않고 mtime 과 size 만 제공합니다. 따라서 Windows에서 파일 크기와 mtime 을 동시에 유지한 채 덮어쓰는 특수한 경우에는 lancet index 또는 --no-index 가 필요합니다. auto vs --trust-index vs --no-index 모드 디스크 stat 순회 수정 파일 실시간 스캔 지연 (Linux 8.6만 파일) 추천 용도 auto (기본값) 예 (~100 ms) 예 ~148 ms (희귀 리터럴) 실제 개발 & AI 에이전트 작업(항상 최신) --trust-index 아니오 아니오 ~40 ms (0건 시 3 ms) 인덱스가 최신임이 확실한 초대형 저장소 읽기 전용 탐색 --no-index 전체 스캔 예 (모든 파일) ~1,113 ms 디버깅, 기준선 비교, 쓰기 불가 환경 LSM 세그먼트, 상위 인덱스 탐색 & 컴팩션 디스크 구조: PATH/.lancet 안에 불변 LSM 세그먼트( LANCET04 ), 삭제 툼스톤, mmap 포스팅 리스트로 저장됩니다. 상위 디렉터리 자동 탐색: src/query/ 안에서 실행해도 상위 저장소 루트의 .lancet 를 자동으로 찾아 사용합니다( --index-dir 로 재지정 가능). 증분 갱신 및 유지보수: lancet index . 는 바뀐 파일만 새 세그먼트로 추가하고, lancet index --compact 는 세그먼트를 병합하고 툼스톤을 정리하며, --rebuild 는 처음부터 다시 만듭니다. 선택도 진단: lancet status 로 인덱스·stale 파일 수를 확인하고, lancet explain '<QUERY>' 로 추출된 트라이그램과 후보 비율을 볼 수 있습니다."
+    },
+    {
+      "path": "concepts/architecture-and-benchmarks.html",
+      "group": "핵심 개념",
+      "title": "아키텍처, 실패 사례 방지 & 정직한 벤치마크",
+      "description": "7가지 도구 체인 실패 사례, 8개 코드베이스 벤치마크, tgrep/grix/aft와의 가감 없는 경쟁 비교.",
+      "keywords": "벤치마크 suite competitors zoekt tgrep grix aft 실패 사례 아키텍처 성능",
+      "headings": [
+        {
+          "id": "failure-modes",
+          "text": "직접 재현해 막아낸 7가지 실패 사례"
+        },
+        {
+          "id": "core-bench",
+          "text": "핵심 벤치마크 스위트 (코드베이스 8개)"
+        },
+        {
+          "id": "competitors",
+          "text": "인덱스·에이전트 도구 경쟁 비교 (정직한 트레이드오프)"
+        }
+      ],
+      "text": "도구들이 서로 다른 전제로 설계되어 있으면 에이전트가 rg → sed → patch → pdftotext 를 잇는 틈에서 조용한 데이터 손실이 터집니다. Lancet은 한 바이너리 안에서 좌표와 잠금을 통합하는 동시에, 경쟁 도구 대비 느린 부분까지 투명하게 공개합니다. 직접 재현해 막아낸 7가지 실패 사례 모든 수치는 bench/failure_modes.py 가 실제 도구로 직접 재현한 결과입니다. 연속 편집 시 줄 밀림: rg -n 한 번으로 sed -i 를 두 번 치면 두 번째가 잘못된 줄을 고치고도 종료 0을 냅니다. lancet edit --edits 는 모든 hunk를 원본 줄 번호로 해석합니다. 동시 수정 유실: 4개 에이전트가 읽기→쓰기를 반복하면 일반 파일에서는 800개 중 600개 가 유실되고, lancet edit --rev 는 800개 중 0개 가 유실됩니다. 반쪽 적용 패치: patch -p1 은 한 파일만 고치고 실패해도 되돌리지 않습니다. lancet patch 는 사전 검증과 쓰기 경합 시 롤백으로 원자성을 지킵니다. 주석·문자열 오염: sed 일괄 치환은 주석·문자열까지 0.3~11.7% 바꿉니다. refs 와 ast 는 이를 제외하며, rename 은 로컬 스코프를 재검증합니다. 문서 좌표 불일치: .docx 에서 rga → pandoc 조합은 40줄 중 0줄만 일치했고, Lancet은 단일 추출 파이프라인으로 40/40 일치했습니다. 수정 직후 인덱스 지연: 파일 20개를 고친 직후 zoekt는 새 텍스트를 0건 찾고 지운 텍스트를 20건 찾았지만, Lancet auto 는 20건·0건을 정확히 반환했습니다. 링크·권한 손상: sed -i / perl -pi 는 심볼릭/하드 링크를 끊고 0640 권한을 날리지만, Lancet은 대상 파일과 권한·소유자를 보존합니다. 전체 배경 에세이: docs/why-one-tool.ko.md ( English ). 핵심 벤치마크 스위트 (코드베이스 8개) Apple M4 Pro, 웜 캐시, hyperfine -N 5회 중앙값. 전체 표: bench/results/SUITE.md . zoekt 대비 빌드 4~25배 빠르고, 디스크 9~30배 작으며, 피크 RAM 3.2~5.0배 적음. 모든 텍스트 출력은 ripgrep 15.2와 바이트 단위 일치. 코퍼스 파일 lancet 인덱스 (빌드 · 디스크 · 피크) zoekt 인덱스 (빌드 · 디스크 · 피크) auto 대 rg trust 대 rg AST 대 ast-grep Linux v6.12 (C) 86,680 3.3 s · 134 MB · 358 MB 82 s · 2.9 GB · 1.2 GB 5.8~7.5배 13~403배 4.0배 LLVM 19.1 (C++) 146,319 4.7 s · 122 MB · 280 MB 53 s · 3.7 GB · 1.3 GB 6.1~8.0배 34~786배 2.3배 rust 1.83 (Rust) 49,964 1.2 s · 29 MB · 184 MB 4.9 s · 327 MB · 739 MB 1.5~9.6배 2~273배 1.8배 kubernetes 1.31 (Go) 26,232 1.0 s · 30 MB · 224 MB 4.1 s · 537 MB · 1.0 GB 3.5~5.8배 9~210배 1.9배 VS Code 1.95 (TS) 7,708 0.4 s · 12 MB · 114 MB 2.4 s · 245 MB · 573 MB 2.1~3.9배 4~63배 2.7배 Django 5.1 (Python) 6,815 0.2 s · 7 MB · 76 MB 1.2 s · 95 MB · 302 MB 2.4~2.9배 10~60배 1.4배 CPython 3.13 (C/Py) 4,882 0.3 s · 10 MB · 116 MB 3.7 s · 227 MB · 509 MB 3.0~5.4배 5~30배 2.6배 Spring 6.1 (Java) 10,163 0.3 s · 12 MB · 122 MB 1.9 s · 146 MB · 395 MB 2.9~5.3배 6~95배 3.1배 인덱스·에이전트 도구 경쟁 비교 (정직한 트레이드오프) bench/competitors_agents.py 로 rg , ast-grep , tgrep (디스크·상주 데몬 serve ), grix , aft , tensor-grep , probe 를 동일 조건에서 측정했습니다 ( COMPETITORS.md ): Lancet이 우위인 지점: 데몬 없이 수정 직후 0 ms 최신성 20/20 ( aft 워처 지연과 서버리스 tgrep 는 0/20); aft / tgrep 대비 디스크 인덱스 1/3~1/7 크기 (Linux 기준 141.8 MB vs 368.5 MB / 955.2 MB); grix 대비 빌드 피크 RAM 약 1/3 (Linux 353.5 MB vs 1,001.6 MB); rg 줄 수 20/20 완전 일치 ; 테스트한 4개 코퍼스 모두에서 가장 빠른 리터럴 AST 검색. 상주 데몬이나 특화 도구가 더 빠른 지점: 상주 데몬인 tgrep serve 는 Rust(119.2 ms vs 508.7 ms)와 LLVM(19.9 ms vs 295.8 ms)의 regex with literal , 그리고 Django(15.4 ms)/Rust(60.9 ms)의 리터럴 없는 정규식에서 데몬 없는 lancet auto 보다 빠릅니다. grix --no-auto-index 는 Linux 희귀 리터럴에서 lancet --trust-index 보다 빠릅니다(11.5 ms vs 43.6 ms). 상주 aft (587~1,260 MB RAM 점유)는 Rust 희귀 리터럴에서 8.5 ms vs 73.5 ms로 더 빠릅니다. 리터럴 없는 정규식과 AST 패턴은 각각 r"
+    },
+    {
+      "path": "reference/cli.html",
+      "group": "레퍼런스",
+      "title": "전체 CLI & lancet rg 호환성 레퍼런스",
+      "description": "모든 하위 명령, 플래그, 종료 코드, ripgrep 15.2 기능 대조표.",
+      "keywords": "cli 플래그 하위명령 종료코드 rg 호환성 passthru type-add",
+      "headings": [
+        {
+          "id": "exit-codes",
+          "text": "종료 코드"
+        },
+        {
+          "id": "subcommands",
+          "text": "전체 하위 명령 & 플래그"
+        },
+        {
+          "id": "rg-parity",
+          "text": "lancet rg — ripgrep 호환성 표"
+        },
+        {
+          "id": "rg-matching",
+          "text": "패턴 & 매칭"
+        },
+        {
+          "id": "rg-output",
+          "text": "출력 & 형식"
+        },
+        {
+          "id": "rg-files",
+          "text": "파일 순회 & Lancet 확장"
+        }
+      ],
+      "text": "모든 하위 명령은 .gitignore / .ignore / .rgignore 순회 규칙, 결정적 정렬, 구조화된 종료 코드를 공유합니다. 종료 코드 코드 의미 상태 값 (JSON status ) 0 성공 / 결과 있음 complete 1 결과 없음 (또는 status 에서 인덱스 없음) empty 2 잘못된 쿼리·인자, 미지원 동작, 수정 충돌, I/O 오류 invalid_query , unsupported , conflict 전체 하위 명령 & 플래그 CLI 전체 목록 복사 lancet <QUERY> [PATH] [--json] [--no-index | --trust-index] [--index-dir DIR] [--ocr] [--hidden] [--no-ignore] [-j THREADS] [--max-lines N] [--max-cols N] [--stats] lancet rg [FLAGS] [PATTERN] [PATH...] [--docs] [--passthru] [--type-add TYPESPEC] [--no-index | --trust-index] [--index-dir DIR] lancet fd [PATTERN] [PATH] [-p PATTERN] [-t f|d] [-e EXT] [--type-class CLASS] [-g | -r] [-s] [-d DEPTH] [--changed-within DUR] [--min-size S] [--max-size S] [--tree] [--dirs] [--limit N] [--meta] [--no-index | --trust-index] [--index-dir DIR] [--json] [--stats] lancet ast <PATTERN> [PATH] [-l LANG] [-r TEMPLATE [--apply]] [--path GLOB] [--limit N] [--no-index | --trust-index] [--index-dir DIR] [--json] [--stats] lancet read <TARGET> [-l START:END] [-s SYMBOL] [-p PAGE] [--sheet S] [--rows R] [--cols C] [-e ENTRY] [--budget-tokens N] [--raw] [--ocr] [--json] lancet outline [PATH] [-d DEPTH] [-e EXT] [--limit N] [--hidden] [--no-ignore] [--ocr] [--json] lancet refs <SYMBOL> [PATH] [--rank [--kind KIND,...]] [-l LANG] [-e EXT] [--path GLOB] [--all-files] [--limit N] [--no-index | --trust-index] [--json] [--stats] lancet edit <PATH> (--lines RANGE | --symbol SYM | --find TEXT [--all] | --edits FILE) (--with TEXT | --with-file FILE | --delete | --insert-before TEXT | --insert-after TEXT) [--rev REV] [--apply] [--allow-syntax-errors] [--json] lancet patch [DIFF|-] [--root DIR] [-p N] [--apply] [--allow-syntax-errors] [--json] lancet rename <FILE:LINE[:COL]> <OLD> <NEW> [--rev REV] [--apply] [--json] lancet mcp [--root DIR] [--read-only] [--trust-index] [-j THREADS] lancet index [PATH] [--rebuild | --compact] [--index-dir DIR] [--ocr] [--hidden] [--no-ignore] [-j THREADS] lancet status [PATH] [--index-dir DIR] lancet parse <QUERY> lancet explain <QUERY> [PATH] [--index-dir DIR] [--no-index | --trust-index] [--hidden] [--no-ignore] lancet batch [PATH] (-q <QUERY>... [--name <NAME>...] | --queries-json <JSON>) [--no-index | --trust-index] [--index-dir DIR] [--ocr] [--json] lancet rg — ripgrep 호환성 표 bench/rg_parity.py 의 68개 엣지 케이스 픽스처와 Linux 커널 전체 쿼리를 ripgrep 15.2 와 바이트 단위로 대조했습니다. 패턴 & 매칭 플래그 의미 상태 비고 -e , --regexp <PAT> 검색 패턴 (중복 지정 가능) 지원 선택(alternation)으로 결합 -f , --file <FILE> 파일에서 줄당 하나씩 패턴 읽기 ( - stdin) 지원 -F , --fixed-strings 리터럴 문자열로 취급 지원 -i / -s / -S 대소문자 무시 / 구분 / 스마트 지원 마지막 플래그 우선; AST 기반 -S ( \\W 등은 무시 유지) -w / -x / -v 단어 경계 / 줄 전체 / 반전 매치 지원 rg 단어 경계 규칙과 동일 -U , --multiline-dotall 여러 줄 매치 및 . 에 개행 허용 지원 -P , --pcre2 PCRE2 전후방 탐색·역참조 미지원 선형 시간과 건전한 트라이그램 컴파일 보장을 위해 Rust regex 만 사용 출력 & 형식 플래그 의미"
+    },
+    {
+      "path": "reference/query-and-ast.html",
+      "group": "레퍼런스",
+      "title": "Lancet Query Language(LQL v0.1) & 24개 언어 AST 명세",
+      "description": "EBNF 정식 문법, 연산자 우선순위, 스코프, 파이프 단계, 24개 언어 별칭, AST 메타변수 규칙.",
+      "keywords": "lql 문법 near before fuzzy symbol regex ast 메타변수 언어",
+      "headings": [
+        {
+          "id": "lql-grammar",
+          "text": "LQL v0.1 정식 문법"
+        },
+        {
+          "id": "lql-semantics",
+          "text": "매처, 스코프 & 파이프 단계 의미론"
+        },
+        {
+          "id": "ast-langs",
+          "text": "지원되는 AST 24개 언어 (--lang)"
+        },
+        {
+          "id": "ast-metavars",
+          "text": "메타변수 & 리라이트 규칙"
+        }
+      ],
+      "text": "Lancet Query Language( LQL v0.1 )는 결정적인 중간 표현(IR)으로 컴파일되어 인덱스 후보와 풀스캔에서 동일하게 평가됩니다. 알 수 없는 연산자나 필터는 조용히 무시하지 않고 정확한 바이트 위치와 함께 status: \"invalid_query\" 를 반환합니다. LQL v0.1 정식 문법 EBNF 복사 query := [\"find\"] expr (\"in\" scope)* (\"|\" stage)* expr := or_expr or_expr := and_expr (\"OR\" and_expr)* and_expr:= unary ((\"AND\")? unary)* # 공백으로 인접한 항은 암묵적 AND unary := \"NOT\" unary | primary primary := string | word # 따옴표 없는 단일 토큰 -> 리터럴 | \"(\" expr \")\" | \"regex(\" string \")\" | \"fuzzy(\" string [\",\" uint] \")\" # k는 0..=3, 기본 1 | \"symbol(\" string \")\" | \"symbol:\" (string | word) | \"near(\" matcher \",\" matcher \",\" uint \")\" | \"before(\" matcher \",\" matcher \",\" uint \")\" matcher := string | word | \"regex(\" string \")\" | \"fuzzy(\" string [\",\" uint] \")\" | \"symbol(\" string \")\" | \"symbol:\" (string | word) scope := (\"line\" | \"block\" | \"file\" | \"function\" | \"type:\" values | \"ext:\" values | \"path:\" values)+ values := value | \"(\" value (\",\" value)* \")\" stage := \"limit\" uint # uint >= 1 | \"count\" | \"files\" | \"group\" \"file\" | \"expand\" (\"parent\" | \"unit\" | \"context:\" uint) | \"sort\" (\"count\" [\"asc\" | \"desc\"] | \"path\") | \"terms\" [\"top:\" uint] # 1..=100, 기본 15 | \"budget\" [\"tokens:\"] uint # uint >= 1 연산자 우선순위는 NOT > AND (명시적 또는 암묵적) > OR 입니다. lancet parse '<QUERY>' 로 정규화된 쿼리와 JSON IR을 바로 확인할 수 있습니다. 매처, 스코프 & 파이프 단계 의미론 구문 정확한 동작 \"text\" / 일반 토큰 대소문자 무시(Unicode simple case folding) 부분 문자열 매치. regex(\"pat\") 멀티라인 모드 Rust regex ( ^ / $ 가 줄 경계). 기본 대소문자 구분( (?i) 로 해제). fuzzy(\"word\", k) 문자 단위 레벤슈타인 거리 0 <= k <= 3 (기본 1) 단어 토큰 매치, 건전한 q-gram 임계값으로 인덱스 가속. symbol(\"name\") / symbol:name Tree-sitter 심볼 정의 정확 매치(대소문자 무시; .rs , .py , .js , .ts , .tsx , .go ). near(a, b, d) / before(a, b, d) 단위 안에서 토큰 거리 |tok(b) - tok(a)| <= d ( before 는 b 가 반드시 a 뒤). in file / in block / in line file (기본), 빈 줄 없는 문단( block ), 단일 줄( line ; 매치 전체 [start, end) 가 단위 안에 있어야 함). in function Tree-sitter 함수·메서드 AST 노드( .rs , .py , .js , .ts , .tsx , .go ); 결과에 symbol 채움. type: / ext: / path: 같은 카테고리 값은 OR, 서로 다른 카테고리는 AND. type: 는 code , document , spreadsheet , config , log , data , archive , image , other . | limit / files / count / group file 간결한 투영 및 결정적 결과 수 제한. | expand / sort / terms / budget 상위 문맥 확장, 횟수/경로 정렬, 동시 출현 어휘 추출, 추정 토큰 상한 적용. 지원되는 AST 24개 언어 (--lang) lancet ast 와 lancet refs 모두 아래 별칭을 지원합니다. 언어 --lang 별칭 언어 --lang 별칭 Rust rs , rust Scala scala , sc Python py , python , pyi Swift swift JavaScript js , javascript , mjs , cjs , jsx Ruby rb , ruby TypeScript ts , typescript , mts , cts PHP php TSX tsx Bash sh , bash , zsh , shell Go go , golang Lua lua C c HCL / Terraform hcl , tf , tfvars , terraform C++ cpp , c++ , cxx , cc , hpp , hxx , hh HTML html , htm Zig zig CSS css Java java JSON json , jsonc C# cs , csharp , c# YAML yaml , yml Kotlin kt , kts , kotlin TOML toml 메타변수 & 리라이트 규칙 $VAR : 명명된 단일 AST 노드에 매치; 같은 이름을 반복하면"
+    },
+    {
+      "path": "reference/json-and-mcp.html",
+      "group": "레퍼런스",
+      "title": "JSON 출력 스키마, MCP 11개 도구 명세 & 문제 해결",
+      "description": "Rust 구조체 기반 실제 JSON 응답 스키마, 11개 MCP 도구, 오류·거절 사유별 복구 가이드.",
+      "keywords": "json 스키마 응답 mcp 도구 status conflict 문제해결 복구",
+      "headings": [
+        {
+          "id": "status-enum",
+          "text": "공통 Status & Error 규격"
+        },
+        {
+          "id": "json-schemas",
+          "text": "명령별 JSON 응답 스키마"
+        },
+        {
+          "id": "mcp-tools",
+          "text": "MCP 11개 도구 상세 (lancet mcp)"
+        },
+        {
+          "id": "troubleshooting",
+          "text": "문제 해결 및 거절 사유별 복구법"
+        }
+      ],
+      "text": "--json 플래그나 lancet mcp 로 호출하면 모든 명령이 Rust 구조체에서 직접 직렬화된 일관된 snake_case JSON을 반환합니다. 공통 Status & Error 규격 모든 JSON 응답에는 status 필드(필요 시 error: {\"message\": string, \"pos\"?: number} )가 포함됩니다: \"complete\" (종료 0 ) — 검색 완료 또는 편집·패치 적용/검증 완료. \"empty\" (종료 1 ) — 오류 없이 결과 0건. \"invalid_query\" (종료 2 ) — 잘못된 LQL, 잘못된 줄 범위, 중복된 --find 등. \"unsupported\" (종료 2 ) — 미지원 언어, 읽기 전용 문서 수정 시도, 거절된 rename 위치. \"conflict\" (종료 2 ) — --rev 가 현재 디스크 상태와 달라 OS 파일 잠금 하에 0바이트만 쓰고 중단됨. 명령별 JSON 응답 스키마 Response (lancet '<QUERY>' --json) 복사 { \"status\": \"complete\", \"query\": \"\"spin_lock\" in file\", \"mode\": \"auto\", \"matched\": 7073, \"matched_is_lower_bound\": false, \"returned\": 20, \"truncated\": true, \"results\": [ { \"id\": \"...\", \"path\": \"kernel/locking/spinlock.c\", \"unit\": \"file\", \"start_line\": 12, \"end_line\": 44, \"symbol\": \"raw_spin_lock\", \"lines\": [{ \"line\": 12, \"text\": \"void __lockfunc raw_spin_lock(raw_spinlock_t *lock)\" }], \"more_lines\": 0 } ], \"terms\": [{ \"term\": \"spinlock\", \"count\": 42, \"files\": 19 }], \"budget\": { \"limit_tokens\": 1500, \"used_tokens\": 1120, \"estimated\": true }, \"stats\": { \"files_considered\": 86218, \"files_searched\": 7814, \"files_matched\": 7073, \"binary_skipped\": 0, \"read_errors\": 0, \"index_candidates\": 7814, \"stale_files\": 0, \"elapsed_ms\": 141.3 } } ReadResponse · EditResponse · RenameResponse 복사 // ReadResponse (PDF, 오피스, HWP, 압축 항목에서는 rev 생략) { \"status\": \"complete\", \"path\": \"src/net.rs\", \"rev\": \"e70d5a898f122a62\", \"section\": \"fn retry_limit\", \"total_lines\": 80, \"start_line\": 1, \"end_line\": 4, \"returned_lines\": 4, \"truncated\": false, \"next_line\": null, \"estimated_tokens\": 28, \"lines\": [{ \"num\": 1, \"text\": \"pub fn retry_limit() -> u32 {\" }], \"elapsed_ms\": 0.4 } // EditResponse (mode: \"dry-run\" | \"applied\", hunks는 원본 파일 기준 줄 범위) { \"status\": \"complete\", \"mode\": \"applied\", \"path\": \"src/net.rs\", \"rev\": \"e70d5a898f122a62\", \"rev_after\": \"1486bdffbc06c68f\", \"start_line\": 2, \"end_line\": 2, \"hunks\": [[2, 2]], \"applied\": true, \"diff\": \"--- a/src/net.rs\\n+++ b/src/net.rs\\n...\", \"elapsed_ms\": 1.1 } // RenameResponse (tier: \"local-scope\") { \"status\": \"complete\", \"mode\": \"applied\", \"path\": \"src/search.rs\", \"old\": \"old_name\", \"new\": \"new_name\", \"tier\": \"local-scope\", \"rev\": \"...\", \"rev_after\": \"...\", \"declaration\": { \"line\": 40, \"col\": 9 }, \"sites\": [{ \"line\": 40, \"col\": 9 }, { \"line\": 45, \"col\": 14 }], \"comment_mentions\": 1, \"applied\": true, \"elapsed_ms\": 2.3 } PatchResponse · RefsResponse · RankResponse · AstResponse 복사 // PatchResponse: { status, mode, applied, files: [{ path, action, from?, hunks, offsets, rev?, rev_after?, diff }], elapsed_ms } // RefsResponse: { status, mode, symbol, definitions: [RefHit], references: [RefHit], total_references, truncated, stats } // RankResponse: { status, mode, pattern, entries: [{ name, kind, path, line, references, definitions }], total, trunca"
+    }
+  ]
+}

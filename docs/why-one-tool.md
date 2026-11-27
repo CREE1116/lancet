@@ -178,6 +178,6 @@ query times are in the same range.
 | "`(mtime, size)` misses same-size edits, restored mtimes, coarse timestamps." | ctime + inode + racy window; regression tests and differential fuzzing that fail under the old rule. |
 | "Daemonless means a full stat walk per query." | Measured (~100 ms / 87k files); a history-based shortcut was built and rejected for correctness; `--trust-index` is the explicit fast path. |
 | "Literal-free AST patterns aren't benchmarked." | Now in every corpus (section 7 has the losses); worst-case `$$$` backtracking bounded by memoisation and a step budget. |
-| "Syntax-only `refs` will mislead refactors." | Documented as lexical; rename-by-refs was deliberately not shipped. |
+| "Syntax-only `refs` will mislead refactors." | `refs` stays explicitly documented as lexical (cross-file rename-by-refs is not shipped); single-file `lancet rename` uses per-language scope resolution plus re-resolution shadowing/capture checks and refuses anything ambiguous. |
 | "Heavy to build and install." | Done: prebuilt binaries for macOS, Linux (glibc and static musl) and Windows on every release, via Homebrew, `install.sh`, `install.ps1` and `cargo binstall`; `--no-default-features` builds a ~4 MB text/code-only binary. |
 | "No agent-level benchmark." | Open: turns, tokens and patch success with real models are the next step. |

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lancet Query Language (LQL v0.1) & 24-Language AST Spec — lancet Docs</title>
+<meta name="description" content="Formal EBNF grammar, operator precedence, scopes, pipe stages, 24 AST language aliases, and metavariables.">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://cree1116.github.io/lancet/docs/reference/query-and-ast.html">
+<link rel="alternate" hreflang="en" href="https://cree1116.github.io/lancet/docs/reference/query-and-ast.html">
+<link rel="alternate" hreflang="ko" href="https://cree1116.github.io/lancet/ko/docs/reference/query-and-ast.html">
+<link rel="alternate" hreflang="x-default" href="https://cree1116.github.io/lancet/docs/reference/query-and-ast.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="lancet">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://cree1116.github.io/lancet/docs/reference/query-and-ast.html">
+<meta property="og:title" content="Lancet Query Language (LQL v0.1) & 24-Language AST Spec — lancet Docs">
+<meta property="og:description" content="Formal EBNF grammar, operator precedence, scopes, pipe stages, 24 AST language aliases, and metavariables.">
+<meta property="og:image" content="https://cree1116.github.io/lancet/assets/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 27 L24 6 l3 3 L8 28 Z' fill='%2336c2a0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../../assets/docs.css?v=1">
+</head>
+<body data-docs-root="../" data-search-url="../../assets/docs-search.json">
+
+<header class="doc-header">
+  <div class="doc-header-in">
+    <button class="menu-btn" id="menu-btn" type="button" aria-label="Open documentation menu" aria-expanded="false">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg>
+    </button>
+    <a class="doc-brand" href="../../index.html">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 27 L24 6 l3 3 L8 28 Z" fill="currentColor" style="color:var(--accent)"/></svg>
+      lancet
+    </a>
+    <a class="doc-badge" href="../index.html">Docs</a>
+    <button class="search-trigger" id="search-trigger" type="button">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <span>Search docs…</span>
+      <kbd>/</kbd>
+    </button>
+    <nav class="header-links" aria-label="Primary">
+      <a href="../../index.html" class="hide-sm">Home</a>
+      <a href="../../ko/docs/reference/query-and-ast.html" hreflang="ko" lang="ko">한국어</a>
+      <a class="header-gh" href="https://github.com/CREE1116/lancet" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span class="hide-sm">GitHub</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+
+<div class="doc-shell">
+  <aside class="doc-sidebar" aria-label="Documentation navigation">
+    <div class="nav-group"><div class="nav-group-title">Getting Started</div><ul class="nav-list"><li><a href="../index.html">Introduction & Cheat Sheet</a></li><li><a href="../migration.html">Migration from rg, fd, sg, sed</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Guides & Recipes</div><ul class="nav-list"><li><a href="../guides/explore.html">Exploring Codebases</a></li><li><a href="../guides/editing.html">Safe Editing, Patch & Rename</a></li><li><a href="../guides/documents.html">PDFs, Office, HWP & Archives</a></li><li><a href="../guides/agents-mcp.html">AI Agents, MCP & Skill</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Concepts & Design</div><ul class="nav-list"><li><a href="../concepts/index-and-freshness.html">Index & Freshness Model</a></li><li><a href="../concepts/architecture-and-benchmarks.html">Architecture & Benchmarks</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul class="nav-list"><li><a href="cli.html">CLI & lancet rg Reference</a></li><li><a href="query-and-ast.html" class="active">LQL & 24 AST Languages</a></li><li><a href="json-and-mcp.html">JSON Schemas, MCP & Recovery</a></li></ul></div>
+  </aside>
+
+  <main class="doc-main">
+    <article class="doc-article">
+      <div class="crumb">Reference</div>
+      <h1>Lancet Query Language (LQL v0.1) & 24-Language AST Spec</h1>
+      <p class="lede">Formal EBNF grammar, matcher/scope semantics, 24 --lang aliases, and AST metavariable rules.</p>
+      
+<p>Lancet Query Language (<strong>LQL v0.1</strong>) compiles to a deterministic IR evaluated identically on indexed candidates and full scans. Unknown operators, filters, or trailing tokens never fail silently — they return <code>status: "invalid_query"</code> with an exact byte offset.</p>
+
+<h2 id="lql-grammar">LQL v0.1 Formal Grammar<a class="heading-anchor" href="#lql-grammar" aria-label="Link to section">#</a></h2>
+<div class="doc-code"><div class="doc-code-head"><span>EBNF</span><button class="copy-btn" type="button">Copy</button></div><pre><code>query   := [&quot;find&quot;] expr (&quot;in&quot; scope)* (&quot;|&quot; stage)*
+expr    := or_expr
+or_expr := and_expr (&quot;OR&quot; and_expr)*
+and_expr:= unary ((&quot;AND&quot;)? unary)*          # adjacent terms form implicit AND
+unary   := &quot;NOT&quot; unary | primary
+primary := string
+         | word                            # unquoted single token -&gt; literal
+         | &quot;(&quot; expr &quot;)&quot;
+         | &quot;regex(&quot; string &quot;)&quot;
+         | &quot;fuzzy(&quot; string [&quot;,&quot; uint] &quot;)&quot;  # k in 0..=3, default 1
+         | &quot;symbol(&quot; string &quot;)&quot; | &quot;symbol:&quot; (string | word)
+         | &quot;near(&quot; matcher &quot;,&quot; matcher &quot;,&quot; uint &quot;)&quot;
+         | &quot;before(&quot; matcher &quot;,&quot; matcher &quot;,&quot; uint &quot;)&quot;
+
+matcher := string | word | &quot;regex(&quot; string &quot;)&quot; | &quot;fuzzy(&quot; string [&quot;,&quot; uint] &quot;)&quot;
+         | &quot;symbol(&quot; string &quot;)&quot; | &quot;symbol:&quot; (string | word)
+
+scope   := (&quot;line&quot; | &quot;block&quot; | &quot;file&quot; | &quot;function&quot;
+         |  &quot;type:&quot; values | &quot;ext:&quot; values | &quot;path:&quot; values)+
+values  := value | &quot;(&quot; value (&quot;,&quot; value)* &quot;)&quot;
+
+stage   := &quot;limit&quot; uint                    # uint &gt;= 1
+         | &quot;count&quot;
+         | &quot;files&quot;
+         | &quot;group&quot; &quot;file&quot;
+         | &quot;expand&quot; (&quot;parent&quot; | &quot;unit&quot; | &quot;context:&quot; uint)
+         | &quot;sort&quot; (&quot;count&quot; [&quot;asc&quot; | &quot;desc&quot;] | &quot;path&quot;)
+         | &quot;terms&quot; [&quot;top:&quot; uint]           # 1..=100, default 15
+         | &quot;budget&quot; [&quot;tokens:&quot;] uint       # uint &gt;= 1</code></pre></div>
+<p>Operator precedence is <code>NOT</code> &gt; <code>AND</code> (explicit or implicit) &gt; <code>OR</code>. Run <code>lancet parse '&lt;QUERY&gt;'</code> to view the normalized canonical query and JSON IR.</p>
+
+<h2 id="lql-semantics">Matchers, Scopes &amp; Pipe Stages<a class="heading-anchor" href="#lql-semantics" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Construct</th><th>Exact Semantics</th></tr></thead><tbody><tr><td><code>"text"</code> / bare token</td><td>Case-insensitive (Unicode simple case folding) substring match.</td></tr><tr><td><code>regex("pat")</code></td><td>Rust <code>regex</code> multi-line mode (<code>^</code>/<code>$</code> match line boundaries). Case-sensitive unless <code>(?i)</code> is set.</td></tr><tr><td><code>fuzzy("word", k)</code></td><td>Word tokens within char-level Levenshtein distance <code>0 &lt;= k &lt;= 3</code> (default 1), accelerated by sound q-gram thresholds.</td></tr><tr><td><code>symbol("name")</code> / <code>symbol:name</code></td><td>Exact (case-insensitive) Tree-sitter symbol definition match (<code>.rs</code>, <code>.py</code>, <code>.js</code>, <code>.ts</code>, <code>.tsx</code>, <code>.go</code>).</td></tr><tr><td><code>near(a, b, d)</code> / <code>before(a, b, d)</code></td><td>Both match in unit with token distance <code>|tok(b) - tok(a)| &lt;= d</code> (<code>before</code> requires <code>b</code> strictly after <code>a</code>).</td></tr><tr><td><code>in file</code> / <code>in block</code> / <code>in line</code></td><td><code>file</code> (default), non-blank line runs (<code>block</code>), or single line (match <code>[start, end)</code> must lie inside the unit).</td></tr><tr><td><code>in function</code></td><td>Tree-sitter function/method AST nodes (<code>.rs</code>, <code>.py</code>, <code>.js</code>, <code>.ts</code>, <code>.tsx</code>, <code>.go</code>); sets <code>symbol</code> on hits.</td></tr><tr><td><code>type:</code> / <code>ext:</code> / <code>path:</code></td><td>Values inside a category OR; across categories AND. <code>type:</code> supports <code>code</code>, <code>document</code>, <code>spreadsheet</code>, <code>config</code>, <code>log</code>, <code>data</code>, <code>archive</code>, <code>image</code>, <code>other</code>.</td></tr><tr><td><code>| limit</code> / <code>files</code> / <code>count</code> / <code>group file</code></td><td>Compact projections and deterministic hit caps.</td></tr><tr><td><code>| expand</code> / <code>sort</code> / <code>terms</code> / <code>budget</code></td><td>Expand surrounding parent/context, sort by hit count/path, extract co-occurring tokens, or enforce estimated token cap.</td></tr></tbody></table></div>
+
+<h2 id="ast-langs">24 Supported AST Languages (--lang)<a class="heading-anchor" href="#ast-langs" aria-label="Link to section">#</a></h2>
+<p>Supported by both <code>lancet ast</code> and <code>lancet refs</code>:</p>
+<div class="table-wrap"><table><thead><tr><th>Language</th><th>--lang Aliases</th><th>Language</th><th>--lang Aliases</th></tr></thead><tbody><tr><td>Rust</td><td><code>rs</code>, <code>rust</code></td><td>Scala</td><td><code>scala</code>, <code>sc</code></td></tr><tr><td>Python</td><td><code>py</code>, <code>python</code>, <code>pyi</code></td><td>Swift</td><td><code>swift</code></td></tr><tr><td>JavaScript</td><td><code>js</code>, <code>javascript</code>, <code>mjs</code>, <code>cjs</code>, <code>jsx</code></td><td>Ruby</td><td><code>rb</code>, <code>ruby</code></td></tr><tr><td>TypeScript</td><td><code>ts</code>, <code>typescript</code>, <code>mts</code>, <code>cts</code></td><td>PHP</td><td><code>php</code></td></tr><tr><td>TSX</td><td><code>tsx</code></td><td>Bash</td><td><code>sh</code>, <code>bash</code>, <code>zsh</code>, <code>shell</code></td></tr><tr><td>Go</td><td><code>go</code>, <code>golang</code></td><td>Lua</td><td><code>lua</code></td></tr><tr><td>C</td><td><code>c</code></td><td>HCL / Terraform</td><td><code>hcl</code>, <code>tf</code>, <code>tfvars</code>, <code>terraform</code></td></tr><tr><td>C++</td><td><code>cpp</code>, <code>c++</code>, <code>cxx</code>, <code>cc</code>, <code>hpp</code>, <code>hxx</code>, <code>hh</code></td><td>HTML</td><td><code>html</code>, <code>htm</code></td></tr><tr><td>Zig</td><td><code>zig</code></td><td>CSS</td><td><code>css</code></td></tr><tr><td>Java</td><td><code>java</code></td><td>JSON</td><td><code>json</code>, <code>jsonc</code></td></tr><tr><td>C#</td><td><code>cs</code>, <code>csharp</code>, <code>c#</code></td><td>YAML</td><td><code>yaml</code>, <code>yml</code></td></tr><tr><td>Kotlin</td><td><code>kt</code>, <code>kts</code>, <code>kotlin</code></td><td>TOML</td><td><code>toml</code></td></tr></tbody></table></div>
+
+<h2 id="ast-metavars">Metavariable &amp; Rewrite Semantics<a class="heading-anchor" href="#ast-metavars" aria-label="Link to section">#</a></h2>
+<ul>
+  <li><strong><code>$VAR</code>:</strong> matches a single named AST node; repeating the same name (<code>$X == $X</code>) enforces structural equality.</li>
+  <li><strong><code>$_</code>:</strong> anonymous single-node wildcard (not captured into template output).</li>
+  <li><strong><code>$$$ARGS</code>:</strong> zero or more sibling AST nodes (bounded by memoization and a per-node step budget against catastrophic backtracking).</li>
+  <li><strong>Statement metavariables:</strong> C-like patterns such as <code>if ($C) $S</code> and <code>{ $$$B }</code> work; note that <code>if ($C) $S</code> strictly matches <code>if</code> without <code>else</code> (unlike <code>ast-grep</code>).</li>
+  <li><strong>Rewrite rules:</strong> <code>--rewrite</code> defaults to dry-run; <code>--apply</code> refuses <code>--limit</code>; nested overlapping matches in one file are skipped and counted in <code>skipped_overlaps</code>; <code>--lang cpp</code> includes <code>.h</code> headers as well as <code>.cpp</code>/<code>.cc</code>.</li>
+</ul>
+
+      <div class="pager"><a class="pager-card prev" href="cli.html"><small>← Previous</small><b>CLI & lancet rg Reference</b></a><a class="pager-card next" href="json-and-mcp.html"><small>Next →</small><b>JSON Schemas, MCP & Recovery</b></a></div>
+      <div class="meta-foot">
+        <span>MIT OR Apache-2.0 · Single Rust binary</span>
+        <a href="https://github.com/CREE1116/lancet/blob/main/docs/grammar.md" target="_blank" rel="noopener">View source on GitHub →</a>
+      </div>
+    </article>
+  </main>
+
+  <aside class="doc-toc" aria-label="On this page">
+    <div class="toc-title">On this page</div>
+    <ul class="toc-list" id="doc-toc"></ul>
+  </aside>
+</div>
+
+<div class="search-modal" id="search-modal" role="dialog" aria-modal="true" aria-label="Search docs…" hidden>
+  <div class="search-panel">
+    <div class="search-input-row">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <input id="search-input" type="search" placeholder="Search docs…" autocomplete="off" spellcheck="false">
+      <button class="search-esc" id="search-esc" type="button">Esc</button>
+    </div>
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../../assets/docs-search.js?v=1"></script>
+<script src="../../assets/docs.js?v=1"></script>
+</body>
+</html>
