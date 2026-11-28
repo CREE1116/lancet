@@ -28,7 +28,24 @@ def stats(f: str) -> dict:
         st["t0"] = st["t0"] or ts
         st["t1"] = ts or st["t1"]
         p = e.get("part", {})
-        if e["type"] == "step_finish":
+        it = e.get("item", {})
+        # Codex CLI (`codex exec --json`) events.
+        if e["type"] == "item.completed" and it.get("type") in ("command_execution", "file_change", "mcp_tool_call"):
+            st["calls"] += 1
+            c = it.get("command") or json.dumps(it.get("changes", it))
+            st["cmds"].append(f"{it['type']}: {c[:100]}".replace("\n", " "))
+            if "lancet: command not found" in str(it.get("aggregated_output", "")):
+                st["blocked"] += 1
+        elif e["type"] == "item.completed" and it.get("type") == "agent_message":
+            st["steps"] += 1
+            st["answer"] = it.get("text", "")
+        elif e["type"] == "turn.completed":
+            u = e.get("usage", {})
+            st["inp"] += u.get("input_tokens", 0)
+            st["out"] += u.get("output_tokens", 0) + u.get("reasoning_output_tokens", 0)
+        elif e["type"] in ("turn.failed", "error") and "item" not in e:
+            st["answer"] = "ERROR: " + json.dumps(e.get("error") or e.get("message"))[:200]
+        elif e["type"] == "step_finish":
             t = p.get("tokens", {})
             st["steps"] += 1
             st["inp"] += t.get("input", 0) + t.get("cache", {}).get("read", 0)
@@ -45,6 +62,12 @@ def stats(f: str) -> dict:
         elif e["type"] == "error":
             st["answer"] = "ERROR: " + json.dumps(e.get("error"))[:200]
     st["secs"] = round(((st["t1"] or 0) - (st["t0"] or 0)) / 1000)
+    # Codex events carry no timestamps: run_codex.sh writes the wall time to the .err.
+    err = f[: -len(".jsonl")] + ".err"
+    if os.path.exists(err):
+        m = re.search(r"^secs=(\d+)", open(err).read(), re.M)
+        if m:
+            st["secs"] = int(m.group(1))
     return st
 
 
