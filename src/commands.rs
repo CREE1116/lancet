@@ -33,7 +33,7 @@ const fn cmd(
 // Columns: name, usage, summary, writes, searches.
 #[rustfmt::skip]
 pub static COMMANDS: &[CommandSpec] = &[
-    cmd("fd", "fd [PATTERN] [PATH...]", "find files and folders (`--tree`, globs like '**/*.ts')", false, true),
+    cmd("fd", "fd [PATTERN] [PATH...]", "fd: find files by name, regex or `-g` glob (`--tree` for a layout)", false, true),
     cmd("rg", "rg [FLAGS] PATTERN [PATH...]", "ripgrep: same flags, output and exit codes", false, true),
     cmd("read", "read TARGET...", "lines, symbols, pages, sheets, archive entries (`--offset/--limit`)", false, false),
     cmd("edit", "edit PATH", "replace / delete / insert by lines, symbol or exact text (`--old-string`)", true, false),

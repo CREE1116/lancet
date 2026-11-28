@@ -1,5 +1,7 @@
 use lancet::ast_grep::{search_ast, AstOptions};
-use lancet::fd::{find_files, parse_duration, parse_size, render_tree, FdOptions, PatternMode};
+use lancet::fd::{
+    find_files, now_ns, parse_time, render_tree, FdOptions, PatternMode, SizeFilter, Types,
+};
 use lancet::index::{self, Index};
 use lancet::outline::{build_outline, OutlineOptions};
 use lancet::output::Status;
@@ -537,7 +539,7 @@ fn fd_filters_tree_and_trust_index() {
 
     // 2. Glob & Regex & extension & FileType filters
     let mut glob_rs = FdOptions::new(root);
-    glob_rs.pattern = Some("*.rs".into());
+    glob_rs.patterns = vec!["*.rs".into()];
     glob_rs.pattern_mode = PatternMode::Glob;
     let r_glob = find_files(&glob_rs);
     assert_eq!(
@@ -550,8 +552,10 @@ fn fd_filters_tree_and_trust_index() {
     );
 
     let mut rx_py_go = FdOptions::new(root);
-    rx_py_go.pattern = Some(r"^src/.*\.(py|go)$".into());
+    // As fd: the pattern meets the name, or the absolute path with `full_path`.
+    rx_py_go.patterns = vec![r"/src/[^/]+\.(py|go)$".into()];
     rx_py_go.pattern_mode = PatternMode::Regex;
+    rx_py_go.full_path = true;
     let r_rx = find_files(&rx_py_go);
     assert_eq!(
         r_rx.entries
@@ -576,7 +580,7 @@ fn fd_filters_tree_and_trust_index() {
     assert!(r_d1.entries.iter().all(|e| !rel(&e.path).contains('/')));
 
     let mut big_only = FdOptions::new(root);
-    big_only.min_size = Some(parse_size("5k").unwrap());
+    big_only.sizes = vec![SizeFilter::parse("+5ki").unwrap()];
     let r_big = find_files(&big_only);
     assert_eq!(
         r_big
@@ -588,8 +592,8 @@ fn fd_filters_tree_and_trust_index() {
     );
 
     let mut recent = FdOptions::new(root);
-    recent.include_files = true;
-    recent.changed_within_ns = Some(parse_duration("7d").unwrap());
+    recent.types = Types::parse(&["f".into()]).unwrap();
+    recent.changed_after_ns = Some(parse_time("7d", now_ns()).unwrap());
     let r_rec = find_files(&recent);
     assert!(r_rec.entries.iter().any(|e| rel(&e.path) == "src/train.py"));
     assert!(!r_rec
@@ -606,21 +610,21 @@ fn fd_filters_tree_and_trust_index() {
 
     let mut trust_opts = FdOptions::new(root);
     trust_opts.index = IndexMode::Trust;
-    trust_opts.include_files = true;
+    trust_opts.types = Types::parse(&["f".into()]).unwrap();
     let r_trust = find_files(&trust_opts);
     assert_eq!(r_trust.mode, "index_trusted");
     let mut scan_files_opts = FdOptions::new(root);
-    scan_files_opts.include_files = true;
+    scan_files_opts.types = Types::parse(&["f".into()]).unwrap();
     let r_scan_files = find_files(&scan_files_opts);
     assert_eq!(r_trust.entries, r_scan_files.entries);
 
     let mut sub_trust = FdOptions::new(root.join("src"));
     sub_trust.index = IndexMode::Trust;
-    sub_trust.include_files = true;
+    sub_trust.types = Types::parse(&["f".into()]).unwrap();
     let r_sub_trust = find_files(&sub_trust);
     assert_eq!(r_sub_trust.mode, "index_trusted");
     let mut sub_scan = FdOptions::new(root.join("src"));
-    sub_scan.include_files = true;
+    sub_scan.types = Types::parse(&["f".into()]).unwrap();
     assert_eq!(r_sub_trust.entries, find_files(&sub_scan).entries);
 }
 
@@ -2630,11 +2634,14 @@ fn cli_missing_paths_are_errors_and_fd_read_take_several_targets() {
             String::from_utf8_lossy(&o.stderr).into_owned(),
         )
     };
-    // A mistyped path is an error (exit 2), not "nothing found" (exit 1).
+    // A mistyped path is an error, not "nothing found": exit 2, or fd's 1 for fd.
+    for args in [&["fd", ".", "nope"][..], &["fd", "a/nope"]] {
+        let (code, _, err) = run(args);
+        assert_eq!(code, 1, "{args:?}: {err}");
+        assert!(err.contains("nope"), "{args:?}: {err}");
+    }
     for args in [
-        &["fd", ".", "nope"][..],
-        &["fd", "a/nope"],
-        &["rg", "x", "nope"],
+        &["rg", "x", "nope"][..],
         &["refs", "x", "nope"],
         &["ast", "$X", "nope", "--lang", "rs"],
         &["outline", "nope"],
@@ -2647,7 +2654,7 @@ fn cli_missing_paths_are_errors_and_fd_read_take_several_targets() {
     let (code, out, _) = run(&["fd", ".", "a", "b"]);
     assert_eq!(code, 0);
     assert_eq!(out, "a/x.rs\nb/y.rs\n");
-    let (_, out, _) = run(&["fd", "-e", "rs", "a", "b"]);
+    let (_, out, _) = run(&["fd", "-e", "rs", ".", "a", "b"]);
     assert_eq!(out, "a/x.rs\nb/y.rs\n");
     // read: several targets, each with its own header and rev.
     let (code, out, _) = run(&["read", "a/x.rs:2", "b/y.rs:1"]);

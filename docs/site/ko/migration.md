@@ -30,12 +30,12 @@ source: "https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md"
 
 | fd / find 명령 | lancet fd 대안 | 비고 및 추가 기능 |
 | --- | --- | --- |
-| `fd -e rs -d 2 src` | `lancet fd -e rs -d 2 src docs` | `.lancet` 인덱스 활용; `[PATTERN] [PATH...]` 다중 경로 지원 |
+| `fd -e rs -d 2 . src` | `lancet fd -e rs -d 2 . src` | 같은 플래그와 출력([fd 호환표](reference/fd-parity.md)), 경로순 정렬 |
 | `fd -t d -d 2` | `lancet fd --tree --dirs -d 2 .` | 파일 없이 폴더 트리만 간결하게 출력 |
-| `fd '*_test.go'` | `lancet fd '*_test.go'` | `*`, `?`, `[` 포함 시 자동으로 글롭(`-g`) 매치 |
-| `find . -mtime -7 -type f` | `lancet fd -t f --changed-within 7d` | 단위: `s`, `m`, `h`, `d`, `w` |
+| `fd -g '*_test.go'` | `lancet fd -g '*_test.go'` | fd처럼 기본은 정규식, `-g`면 글롭 |
+| `find . -mtime -7 -type f` | `lancet fd -t f --changed-within 7d` | fd의 기간·날짜 형식 |
 | `find . -name '*.pdf'` | `lancet fd --type-class document` | 확장자 나열 없이 9개 의미 클래스로 필터링 |
-| `fd config src` (패턴이 폴더명과 같을 때) | `lancet fd -p config src` | `-p`/`--pattern`으로 패턴과 경로를 명확히 구분 |
+| `fd -x CMD` / `fd -X CMD` | `lancet fd -0 … \| xargs -0 CMD` | lancet은 결과마다 프로세스를 띄우지 않음 |
 
 ## ast-grep(sg)에서 오셨다면 {#from-ast}
 

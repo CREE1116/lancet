@@ -16,6 +16,8 @@ source: "https://github.com/CREE1116/lancet/blob/main/src/commands.rs"
 | `1` | Nothing found (not an error) | `empty` |
 | `2` | Refused or invalid: bad arguments, unsupported file, a conflict (the file changed since its `rev`), I/O error | `invalid_query`, `unsupported`, `conflict` |
 
+`lancet fd` keeps fd's own codes: `0` even when nothing matched, `1` for its errors (a missing search path), `2` for invalid arguments.
+
 With `--json`, every command's response has `status`, and `error` when it failed; searching commands also report `warnings`.
 
 ## Find and search {#cmd-search}
@@ -23,7 +25,7 @@ With `--json`, every command's response has `status`, and `error` when it failed
 | Command | Flags |
 | --- | --- |
 | `lancet rg [FLAGS] PATTERN [PATH...]` | ripgrep's flags ([parity](rg-parity.md)), plus `--docs` (search documents and archives) |
-| `lancet fd [PATTERN] [PATH...]` | `-p/--pattern`, `-t f\|d`, `-e/--ext`, `--type-class`, `-g/--glob`, `-r/--regex`, `-s/--case-sensitive`, `-d/--max-depth`, `--changed-within DUR`, `--min-size`, `--max-size`, `--tree`, `--dirs`, `--limit N`, `--meta`, `--hidden`, `--no-ignore`, `-j`, `--json` |
+| `lancet fd [PATTERN] [PATH...]` | fd's flags ([parity](fd-parity.md)): `-g`, `-F`, `--exact`, `-p`, `-s`/`-i`, `-t`, `-e`, `-S`, `--changed-within`/`--changed-before`, `-o`, `-d`/`--min-depth`, `-E`, `-H`, `-I`, `-u`, `-a`, `-0`, `--format`, `--max-results`, `-q` … · lancet: `--tree`, `--dirs`, `--type-class`, `--json`, `--meta` |
 | `lancet refs SYMBOL [PATH...]` | `--rank` (SYMBOL is a glob; most referenced declarations first), `--kind KIND,...`, `-l/--lang`, `-e/--ext`, `--path GLOB`, `--all-files`, `--limit N`, `--hidden`, `--no-ignore`, `-j`, `--json` |
 | `lancet ast PATTERN [PATH...]` | `-l/--lang`, `-r/--rewrite TEMPLATE`, `--apply`, `--allow-syntax-errors`, `--path GLOB`, `--limit N`, `--hidden`, `--no-ignore`, `-j`, `--json` ([pattern syntax](ast-patterns.md)) |
 

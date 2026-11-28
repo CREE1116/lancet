@@ -55,3 +55,27 @@ jobs:
           echo "RG_BIN=$RUNNER_TEMP/$base/rg" >> "$GITHUB_ENV"
       - name: Compare stdout and exit codes on the fixture
         run: python3 bench/rg_parity.py --rg "$RG_BIN"
+
+  fd-parity:
+    name: fd parity (fd 10.5.2)
+    runs-on: ubuntu-latest
+    env:
+      FD_VERSION: 10.5.2
+      # From the GitHub release's asset digest.
+      FD_SHA256: 7e2d07fa2b8807642aaec67b7e2972a9fbe4db26fcb340a7372392db42b26694
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build lancet
+        run: cargo build --release
+      - name: Install fd ${{ env.FD_VERSION }}
+        run: |
+          base="fd-v$FD_VERSION-x86_64-unknown-linux-musl"
+          cd "$RUNNER_TEMP"
+          curl -fsSL -o "$base.tar.gz" "https://github.com/sharkdp/fd/releases/download/v$FD_VERSION/$base.tar.gz"
+          echo "$FD_SHA256  $base.tar.gz" | sha256sum -c
+          tar -xzf "$base.tar.gz"
+          echo "FD_BIN=$RUNNER_TEMP/$base/fd" >> "$GITHUB_ENV"
+      - name: Compare output and exit codes on the fixture
+        run: python3 bench/fd_parity.py --fd "$FD_BIN"

@@ -7,7 +7,7 @@
 [![CI](https://github.com/CREE1116/lancet/actions/workflows/ci.yml/badge.svg)](https://github.com/CREE1116/lancet/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-[Docs](https://cree1116.github.io/lancet/docs/) · [한국어](./README.ko.md) · [ripgrep parity](./docs/rg-parity.md) · [Agent instructions](./docs/agent-instructions.md) · [Design](./docs/lancet-design.md) · [Architecture](./docs/ARCHITECTURE.md) · [Benchmarks](#benchmarks)
+[Docs](https://cree1116.github.io/lancet/docs/) · [한국어](./README.ko.md) · [ripgrep parity](./docs/rg-parity.md) · [fd parity](./docs/fd-parity.md) · [Agent instructions](./docs/agent-instructions.md) · [Design](./docs/lancet-design.md) · [Architecture](./docs/ARCHITECTURE.md) · [Benchmarks](#benchmarks)
 
 </div>
 
@@ -78,10 +78,10 @@ git diff | lancet patch --apply                             # apply a unified di
 | Command | What it does |
 |---|---|
 | `lancet rg [FLAGS] PATTERN [PATH...]` | ripgrep-compatible flags (`-L`, `--max-depth`, `--max-filesize`, `--color`, `-U`, `-w`, `-A`/`-B`/`-C`, `--json`, etc.) on lancet's index & document extractors (`-n` stays on when piped; `-N` disables) — see [ripgrep parity](./docs/rg-parity.md) |
-| `lancet fd` | `.gitignore`-aware file & folder finder, `--tree` (`--dirs` for folders only), size / recency filters, `--trust-index` lookups |
+| `lancet fd [PATTERN] [PATH...]` | fd-compatible file finder (fd's flags, output and exit codes; 133 parity cases in CI) plus `--tree` (`--dirs` for folders only), `--type-class` and `--trust-index` lookups — see [fd parity](./docs/fd-parity.md) |
 | `lancet ast` | Tree-sitter structural search & `--rewrite` (`$X`, `$_`, `$$$ARGS`, plus statement metavariables like `if ($C) $S` and `{ $$$B }` in C-like languages) across **24 languages** |
 | `lancet read` | Exact line ranges, `--symbol`, PDF/PPTX `--page`, spreadsheet `--sheet --rows --cols`, `archive.zip!entry`, `--budget-tokens` with resume cursors |
-| `lancet edit` | Replace / delete / insert lines addressed like `read` (`--lines`, `--symbol`, exact text with `--find` that must be unique, or many hunks at once with `--edits`); a locked compare-and-swap on `--rev`, so concurrent agents never overwrite each other; refuses a net increase in syntax errors; dry-run unless `--apply` |
+| `lancet edit` | Replace / delete / insert lines addressed like `read` (`--lines`, `--symbol`, exact text with `--old-string` that must be unique, or many hunks at once with `--edits`); a locked compare-and-swap on `--rev`, so concurrent agents never overwrite each other; refuses a net increase in syntax errors; dry-run unless `--apply` |
 | `lancet write` | Create a file, or replace a whole file at the `--rev` you read; preview unless `--apply` |
 | `lancet patch` | Apply unified diffs (`git diff`, `diff -u`, including renames, mode changes and empty files; binary changes are refused) with exact hunk matching (unique nearest-offset relocation, never fuzzy), all-or-nothing multi-file verification with race rollback, and syntax-error refusal; dry-run unless `--apply` |
 | `lancet mcp` | Built-in Model Context Protocol (`stdio`) server with one `lancet` tool that takes CLI arguments, for clients without a shell (`--root`, `--read-only`, `--trust-index`) |

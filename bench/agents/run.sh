@@ -16,7 +16,7 @@ REPO=$(cd "$HERE/../.." && pwd)
 ws="$WORK/$SETUP-ws"
 out="$WORK/out"
 mkdir -p "$out"
-if [ "$SETUP" = lancet ]; then P="$REPO/target/release:$PATH"; else P="$WORK/nolancet:$PATH"; fi
+if [ "$SETUP" = lancet ]; then P="${LANCET_BIN_DIR:-$REPO/target/release}:$PATH"; else P="$WORK/nolancet:$PATH"; fi
 
 while IFS='|' read -r id task; do
   [ -n "$id" ] || continue

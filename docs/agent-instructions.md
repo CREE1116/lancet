@@ -7,8 +7,8 @@ Use `lancet` as your unified, deterministic CLI replacement for `rg`, `fd`, `ast
 
 - Map an unfamiliar directory first instead of blind globbing:
   - `lancet fd --tree --dirs --max-depth 2 .` (folders-only project layout)
-  - `lancet fd --tree --max-depth 2 src docs` (`fd` takes several paths)
-  - `lancet fd -t f -e rs src --changed-within 7d`
+  - `lancet fd --tree --max-depth 2 . src docs` (fd's syntax: pattern first, then several paths)
+  - `lancet fd -t f -e rs --changed-within 7d . src`
   - `lancet fd --trust-index --type-class document --json`
 - Inspect a file's symbol/heading/sheet/archive skeleton before reading the whole file:
   - `lancet outline src/rg.rs`

@@ -16,6 +16,8 @@ source: "https://github.com/CREE1116/lancet/blob/main/src/commands.rs"
 | `1` | 찾은 것이 없음(오류 아님) | `empty` |
 | `2` | 거부 또는 잘못됨: 잘못된 인자, 지원하지 않는 파일, 충돌(`rev` 이후 파일이 바뀜), I/O 오류 | `invalid_query`, `unsupported`, `conflict` |
 
+`lancet fd`는 fd의 종료 코드를 따릅니다: 찾은 것이 없어도 `0`, 자체 오류(없는 검색 경로)는 `1`, 잘못된 인자는 `2`.
+
 `--json`이면 모든 명령의 응답에 `status`가 있고, 실패하면 `error`가 있습니다. 검색 명령은 `warnings`도 알려 줍니다.
 
 ## 찾기와 검색 {#cmd-search}
@@ -23,7 +25,7 @@ source: "https://github.com/CREE1116/lancet/blob/main/src/commands.rs"
 | 명령 | 플래그 |
 | --- | --- |
 | `lancet rg [FLAGS] PATTERN [PATH...]` | ripgrep의 플래그([호환표](rg-parity.md)) + `--docs`(문서·압축 파일 검색) |
-| `lancet fd [PATTERN] [PATH...]` | `-p/--pattern`, `-t f\|d`, `-e/--ext`, `--type-class`, `-g/--glob`, `-r/--regex`, `-s/--case-sensitive`, `-d/--max-depth`, `--changed-within DUR`, `--min-size`, `--max-size`, `--tree`, `--dirs`, `--limit N`, `--meta`, `--hidden`, `--no-ignore`, `-j`, `--json` |
+| `lancet fd [PATTERN] [PATH...]` | fd의 플래그([호환표](fd-parity.md)): `-g`, `-F`, `--exact`, `-p`, `-s`/`-i`, `-t`, `-e`, `-S`, `--changed-within`/`--changed-before`, `-o`, `-d`/`--min-depth`, `-E`, `-H`, `-I`, `-u`, `-a`, `-0`, `--format`, `--max-results`, `-q` … · lancet: `--tree`, `--dirs`, `--type-class`, `--json`, `--meta` |
 | `lancet refs SYMBOL [PATH...]` | `--rank`(SYMBOL은 글롭, 참조가 많은 선언부터), `--kind KIND,...`, `-l/--lang`, `-e/--ext`, `--path GLOB`, `--all-files`, `--limit N`, `--hidden`, `--no-ignore`, `-j`, `--json` |
 | `lancet ast PATTERN [PATH...]` | `-l/--lang`, `-r/--rewrite TEMPLATE`, `--apply`, `--allow-syntax-errors`, `--path GLOB`, `--limit N`, `--hidden`, `--no-ignore`, `-j`, `--json` ([패턴 문법](ast-patterns.md)) |
 

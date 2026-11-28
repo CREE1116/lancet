@@ -64,5 +64,5 @@ lancet fd --type-class document,spreadsheet --changed-within 14d
 ## Symlinks, Depth & File-Size Bounds {#bounds}
 
 - **Symlinks (`-L` / `--follow`):** disabled by default. On `lancet rg -L --trust-index`, Lancet deliberately falls back to a live filesystem walk so symlinked targets absent from `.lancet` are never skipped.
-- **Depth & size:** `--max-depth N` (`1` = direct children only) and `--max-filesize NUM[K|M|G]` (in `rg`) or `--min-size`/`--max-size` (in `fd`) are enforced in both live walks and `--trust-index`.
-- **Multi-path `fd` & missing paths (v0.1.4):** `lancet fd [PATTERN] [PATH...]` accepts multiple paths (`lancet fd . a b` lists all entries under `a` and `b`). A nonexistent `PATH` across `fd`, `rg`, `refs`, and `ast` exits `2` with `PATH: No such file or directory` on stderr instead of returning silent `empty` (exit `1`). On `fd`, a lone argument containing `/` and no glob characters is treated as a path so typos like `lancet fd docs/imgaes` fail loudly.
+- **Depth & size:** `--max-depth N` (`1` = direct children only) and `--max-filesize NUM[K|M|G]` (in `rg`) or `-S` (in `fd`) are enforced in both live walks and `--trust-index`.
+- **Several paths & missing paths:** `lancet fd [PATTERN] [PATH...]` takes several paths after the pattern (`lancet fd . a b` lists everything under `a` and `b`). A nonexistent `PATH` given to `rg`, `refs` or `ast` exits `2` with `PATH: No such file or directory` instead of a silent `empty` (exit `1`); `fd` reports it as fd does (exit `1`), and refuses a pattern containing `/` (use `lancet fd . docs/images`).

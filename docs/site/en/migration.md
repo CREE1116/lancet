@@ -30,12 +30,12 @@ You can switch incrementally without rewriting muscle memory. Use `lancet rg` an
 
 | fd / find Command | lancet fd Equivalent | Note / Advantage |
 | --- | --- | --- |
-| `fd -e rs -d 2 src` | `lancet fd -e rs -d 2 src docs` | Uses `.lancet` when present; accepts `[PATTERN] [PATH...]` |
+| `fd -e rs -d 2 . src` | `lancet fd -e rs -d 2 . src` | Same flags and output ([fd parity](reference/fd-parity.md)); sorted by path |
 | `fd -t d -d 2` | `lancet fd --tree --dirs -d 2 .` | Folders-only ASCII tree for compact orientation |
-| `fd '*_test.go'` | `lancet fd '*_test.go'` | Patterns with `*`, `?`, `[` auto-switch to glob mode |
-| `find . -mtime -7 -type f` | `lancet fd -t f --changed-within 7d` | Units: `s`, `m`, `h`, `d`, `w` |
+| `fd -g '*_test.go'` | `lancet fd -g '*_test.go'` | Regex by default, glob with `-g`, as in fd |
+| `find . -mtime -7 -type f` | `lancet fd -t f --changed-within 7d` | fd's durations and dates |
 | `find . -name '*.pdf'` | `lancet fd --type-class document` | 9 semantic classes instead of listing extensions manually |
-| `fd config src` (if pattern matches dir name) | `lancet fd -p config src` | `-p`/`--pattern` disambiguates pattern from path |
+| `fd -x CMD` / `fd -X CMD` | `lancet fd -0 … \| xargs -0 CMD` | lancet doesn't run a process per result |
 
 ## Coming from ast-grep (sg) {#from-ast}
 

@@ -64,5 +64,5 @@ lancet fd --type-class document,spreadsheet --changed-within 14d
 ## 심볼릭 링크, 깊이 및 파일 크기 제한 {#bounds}
 
 - **심볼릭 링크 (`-L` / `--follow`):** 기본 비활성. `lancet rg -L --trust-index`에서는 `.lancet`에 빠진 링크 대상까지 놓치지 않도록 의도적으로 라이브 순회로 폴백합니다.
-- **깊이·크기 상한:** `--max-depth N`(`1`은 직계 자식만)과 `--max-filesize NUM[K|M|G]`(`rg`), `--min-size`/`--max-size`(`fd`)가 라이브 순회와 `--trust-index` 양쪽에서 모두 적용됩니다.
-- **`fd` 다중 경로 & 없는 경로 오류 처리 (v0.1.4):** `lancet fd [PATTERN] [PATH...]`는 여러 경로를 받습니다(`lancet fd . a b`는 `a`와 `b` 전체 나열). `fd`, `rg`, `refs`, `ast`에 존재하지 않는 `PATH`를 주면 조용히 `empty`(종료 1)를 내는 대신 stderr에 `PATH: No such file or directory`를 출력하고 종료 2를 반환합니다. `fd`에서 글롭 문자 없이 `/`가 들어간 단독 인자(`lancet fd docs/imgaes`)도 경로로 취급해 오타를 바로 오류로 보고합니다.
+- **깊이·크기 상한:** `--max-depth N`(`1`은 직계 자식만)과 `--max-filesize NUM[K|M|G]`(`rg`), `-S`(`fd`)가 라이브 순회와 `--trust-index` 양쪽에서 모두 적용됩니다.
+- **여러 경로 & 없는 경로:** `lancet fd [PATTERN] [PATH...]`는 패턴 뒤에 경로를 여러 개 받습니다(`lancet fd . a b`는 `a`와 `b` 아래 전체 나열). `rg`·`refs`·`ast`에 없는 `PATH`를 주면 조용한 `empty`(종료 1) 대신 `PATH: No such file or directory`와 종료 2를 냅니다. `fd`는 fd처럼 알리고(종료 1), `/`가 든 패턴은 거부합니다(`lancet fd . docs/images`를 쓰세요).

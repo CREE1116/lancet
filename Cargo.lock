@@ -658,6 +658,7 @@ dependencies = [
  "flate2",
  "globset",
  "ignore",
+ "libc",
  "memchr",
  "memmap2",
  "mimalloc",

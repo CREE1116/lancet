@@ -2,11 +2,11 @@
 nav_title: "lancet rg 호환성 표"
 title: "lancet rg — ripgrep 기능 호환성 매트릭스"
 description: "매칭, 출력, 순회, --passthru, --type-add, --docs, 의도적 차이까지 전체 플래그 대조표."
-lede: "ripgrep 15.2와 바이트 단위로 대조 검증한 전체 플래그 호환성 매트릭스."
+lede: "ripgrep 16.0과 바이트 단위로 대조 검증한 전체 플래그 호환성 매트릭스."
 keywords: "rg ripgrep 호환성 passthru type-add pcre2 pre docs max-depth max-filesize color"
 source: "https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md"
 ---
-`bench/rg_parity.py`의 68개 엣지 케이스 픽스처(유니코드 케이스 폴딩, CRLF, 마지막 개행 누락, 바이너리 건너뛰기, `-m`+`-C`, `--vimgrep`, `-L`, `--max-depth`, `--max-filesize`)와 Linux v6.12 전체 쿼리를 `ripgrep 15.2`와 바이트 단위로 대조 검증했습니다.
+`bench/rg_parity.py`의 150개 엣지 케이스 픽스처(CI에서 실행)(유니코드 케이스 폴딩, CRLF, 마지막 개행 누락, 바이너리 건너뛰기, `-m`+`-C`, `--vimgrep`, `-L`, `--max-depth`, `--max-filesize`)와 Linux v6.12 전체 쿼리를 `ripgrep 16.0`과 바이트 단위로 대조 검증했습니다.
 
 ## 패턴 & 매칭 {#matching}
 

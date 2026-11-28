@@ -11,7 +11,7 @@ One binary for find → read → change, used **instead of** the built-in file t
 |---|---|
 | **Read** (first 2000 lines unless you give a range) | `lancet read src/x.rs --offset 120 --limit 60` · `lancet read src/x.rs:120-180 src/y.rs:10-40` · `--symbol handle_request` · `report.pdf --page 3` (PDF, Office, HWP too; `--ocr` for scans) |
 | **Grep** | `lancet rg -w spin_lock src` (ripgrep's flags and output) |
-| **Glob** | `lancet fd '**/*.ts'` · `lancet fd -e proto` |
+| **Glob** | fd's syntax: `lancet fd -e ts` · `lancet fd -g '*.test.ts' src` (the pattern is a regex unless `-g`; paths come after it: `lancet fd . src docs`) |
 | **Edit** | `lancet edit src/x.rs --old-string 'retries = 3' --new-string 'retries = 5' --apply` (`--replace-all`) |
 | **Write** | `lancet write docs/new.md --with-file - --apply <<'EOF' … EOF` |
 | apply_patch | `lancet patch - --apply` (unified diff or Codex `*** Begin Patch`) |

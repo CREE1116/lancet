@@ -24,7 +24,7 @@ const TOOL_DESCRIPTION: &str = "\
 Run a lancet command in the workspace. `args` is the command line after `lancet`, \
 one array element per argument (no shell: no quoting, globbing, pipes or `&&`). \
 Output, flags and exit codes are the CLI's: exit 0 = done, 1 = nothing found (not an \
-error), 2 = refused or invalid (message on stderr).\n\
+error), 2 = refused or invalid (message on stderr); `fd` keeps fd's codes (0 even when nothing matched).\n\
 \n\
 Orient:   [\"fd\",\"--tree\",\"--dirs\",\"-d\",\"2\",\".\"]  [\"outline\",\"src/server.rs\"]  \
 [\"refs\",\"--rank\",\"*Service\",\"--kind\",\"class\",\".\"]\n\
@@ -432,10 +432,19 @@ fn run_tool(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Vec<Value>, b
         text.push_str(err.trim_end());
         text.push('\n');
     }
+    // fd's codes differ: 0 even when nothing matched, 1 for its own errors
+    // (except with -q, where 1 means nothing matched).
+    let fd_quiet = |a: &String| matches!(a.as_str(), "-q" | "--quiet" | "--has-results");
+    let fd_error = argv.first().is_some_and(|c| c == "fd") && !argv.iter().any(fd_quiet);
+    let error = code >= 2 || (code == 1 && fd_error);
     if code != 0 {
         text.push_str(&format!(
             "[exit {code}{}]\n",
-            if code == 1 { ": nothing found" } else { "" }
+            if code == 1 && !error {
+                ": nothing found"
+            } else {
+                ""
+            }
         ));
     }
     // `read` of an image: give the client the image itself, as its own Read would.
@@ -445,7 +454,7 @@ fn run_tool(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Vec<Value>, b
             content.push(json!({ "type": "image", "data": base64(&data), "mimeType": mime }));
         }
     }
-    Ok((content, code >= 2))
+    Ok((content, error))
 }
 
 #[cfg(test)]

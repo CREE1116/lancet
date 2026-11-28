@@ -26,8 +26,8 @@ Lancet의 모든 거절은 조용히 덮어쓰지 않고 종료 코드 `2`와 �
 | `ast --rewrite --apply`가 `--limit` 거절 | 개수 제한과 자동 적용의 조합은 의도치 않은 부분 수정을 유발함 | `--limit`을 빼고 `--path GLOB`로 대상 파일을 좁히세요. |
 | `ast 'if ($C) $S'`가 `if ... else` 누락 | Lancet은 `if`와 `if-else` AST 노드를 엄격히 구분함 | `else` 분기까지 포함하는 두 번째 패턴을 함께 실행하세요. |
 | `lancet rg -P` 실패 | PCRE2 전후방 탐색·역참조 미지원 | 룩어라운드 없이 작성하세요(넓게 찾은 뒤 거르거나, 구조는 `lancet ast`로). |
-| `PATH: No such file or directory` (stderr, 종료 `2`) | `fd`·`rg`·`refs`·`ast`에 존재하지 않는 경로나 오타(`fd docs/imgaes`) 전달 | 경로 철자를 확인하세요. v0.1.4+부터 없는 경로는 조용한 `empty`(종료 1)가 아니라 명시적 오류(종료 2)를 냅니다. |
-| `lancet fd '*.md'` 실행 시 stderr 글롭 안내 출력 | 패턴에 `*`, `?`, `[`가 포함되어 자동으로 글롭(`-g`) 매치됨 | v0.1.3+의 정상 동작입니다. 정규식이면 `-r`, 안내를 숨기려면 `-g`를 명시하세요. |
+| `PATH: No such file or directory` (stderr, 종료 `2`) | `rg`·`refs`·`ast`에 존재하지 않는 경로 전달 | 경로 철자를 확인하세요. 없는 경로는 조용한 `empty`(종료 1)가 아니라 명시적 오류(종료 2)를 냅니다. `fd`는 fd처럼 `Search path "…" is not a directory.`와 종료 코드 `1`을 냅니다. |
+| `lancet fd '*.md'`가 정규식 오류로 실패 | fd처럼 패턴은 정규식인데 `*.md`는 정규식이 아님 | `lancet fd -g '*.md'`나 `lancet fd -e md`를 쓰세요. `src/**/*.ts` 같은 Glob 도구식 패턴은 `lancet fd -g '*.ts' src`입니다. |
 
 ## 인덱스 · 문서 · MCP 문제 {#index-docs-mcp}
 

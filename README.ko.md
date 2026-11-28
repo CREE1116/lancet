@@ -7,7 +7,7 @@
 [![CI](https://github.com/CREE1116/lancet/actions/workflows/ci.yml/badge.svg)](https://github.com/CREE1116/lancet/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#라이선스)
 
-[공식 문서](https://cree1116.github.io/lancet/ko/docs/) · [English](./README.md) · [ripgrep 대조표](./docs/rg-parity.md) · [에이전트 지침](./docs/agent-instructions.md) · [설계](./docs/lancet-design.ko.md) · [구조](./docs/ARCHITECTURE.ko.md) · [벤치마크](#벤치마크)
+[공식 문서](https://cree1116.github.io/lancet/ko/docs/) · [English](./README.md) · [ripgrep 대조표](./docs/rg-parity.md) · [fd 대조표](./docs/fd-parity.md) · [에이전트 지침](./docs/agent-instructions.md) · [설계](./docs/lancet-design.ko.md) · [구조](./docs/ARCHITECTURE.ko.md) · [벤치마크](#벤치마크)
 
 </div>
 
@@ -78,10 +78,10 @@ git diff | lancet patch --apply                             # unified diff를 �
 | 명령 | 하는 일 |
 |---|---|
 | `lancet rg [FLAGS] PATTERN [PATH...]` | 항상 최신인 lancet 인덱스와 문서 추출기 위에서 동작하는 ripgrep 호환 플래그(`-L`, `--max-depth`, `--max-filesize`, `--color`, `-U`, `-w`, `-A`/`-B`/`-C`, `--json` 등; 파이프 시에도 `-n` 기본, `-N`으로 해제) — [ripgrep 대조표](./docs/rg-parity.md) 참고 |
-| `lancet fd` | `.gitignore` 인식 파일·폴더 탐색, `--tree`(폴더만 보려면 `--dirs`), 크기·수정 시각 필터, `--trust-index` 조회 |
+| `lancet fd [PATTERN] [PATH...]` | fd 호환 파일 탐색(fd의 플래그·출력·종료 코드, CI에서 대조 케이스 133개) + `--tree`(폴더만 보려면 `--dirs`), `--type-class`, `--trust-index` 조회. [fd 대조표](./docs/fd-parity.md) 참고 |
 | `lancet ast` | **24개 언어** Tree-sitter 구조 검색과 `--rewrite` (`$X`, `$_`, `$$$ARGS`, C 계열 언어의 `if ($C) $S`·`{ $$$B }` 같은 문장 메타변수 포함) |
 | `lancet read` | 정확한 줄 범위, `--symbol`, PDF/PPTX `--page`, 엑셀 `--sheet --rows --cols`, `archive.zip!항목`, 이어읽기 커서가 있는 `--budget-tokens` |
-| `lancet edit` | `read`와 같은 좌표(`--lines`, `--symbol`, 유일해야 하는 정확한 텍스트 `--find`, 여러 구간은 `--edits`)로 줄 교체·삭제·삽입. `--rev` 기준 잠금 compare-and-swap이라 여러 에이전트가 동시에 고쳐도 서로 덮어쓰지 않음. 구문 오류가 늘어나면 거부, `--apply` 전에는 dry-run |
+| `lancet edit` | `read`와 같은 좌표(`--lines`, `--symbol`, 유일해야 하는 정확한 텍스트 `--old-string`, 여러 구간은 `--edits`)로 줄 교체·삭제·삽입. `--rev` 기준 잠금 compare-and-swap이라 여러 에이전트가 동시에 고쳐도 서로 덮어쓰지 않음. 구문 오류가 늘어나면 거부, `--apply` 전에는 dry-run |
 | `lancet write` | 새 파일 만들기, 또는 읽을 때 받은 `--rev`로 파일 전체 교체. `--apply` 전에는 미리보기 |
 | `lancet patch` | unified diff(`git diff`, `diff -u`, rename·모드 변경·빈 파일 포함, 바이너리 변경은 거부) 적용: 정확한 hunk 매칭(줄 번호가 밀렸으면 가장 가까운 고유 위치 탐색, 퍼지 추측 없음), 전체 파일 검증 및 동시 쓰기 충돌 시 롤백, 구문 오류 증가 거부, `--apply` 전에는 dry-run |
 | `lancet mcp` | 내장 Model Context Protocol(`stdio`) 서버. CLI 인자를 그대로 받는 `lancet` 도구 하나를 제공하며, 셸이 없는 클라이언트용입니다(`--root`, `--read-only`, `--trust-index`) |

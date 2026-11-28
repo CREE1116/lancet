@@ -26,8 +26,8 @@ Every Lancet refusal returns exit code `2` with a specific diagnostic instead of
 | `ast --rewrite --apply` refuses `--limit` | Combining `--limit` with `--apply` risks partial unreviewed mutations | Remove `--limit` or narrow scope explicitly with `--path GLOB`. |
 | `ast 'if ($C) $S'` misses `if ... else` | Lancet matches strict AST shapes (`if` vs `if-else` are distinct) | Write a second pattern including the `else` branch if both forms are intended. |
 | `lancet rg -P` fails | PCRE2 lookarounds & backreferences are unsupported | Rewrite without lookarounds (match the wider text and filter, or use `lancet ast` for structure). |
-| `PATH: No such file or directory` (exit `2` on stderr) | Passed a nonexistent directory/file to `fd`, `rg`, `refs`, or `ast` (or typo like `fd docs/imgaes`) | Fix the path spelling; missing paths fail explicitly instead of silently returning `empty` (exit `1`). |
-| `lancet fd '*.md'` prints stderr glob notice | Pattern has `*`, `?`, or `[` so Lancet automatically switches to glob mode (`-g`) | Expected in v0.1.3+; pass `-r` for regex or keep `-g` explicitly to silence the note. |
+| `PATH: No such file or directory` (exit `2` on stderr) | Passed a nonexistent directory/file to `rg`, `refs`, or `ast` | Fix the path spelling; missing paths fail explicitly instead of silently returning `empty` (exit `1`). `fd` reports `Search path "…" is not a directory.` with fd's exit code `1`. |
+| `lancet fd '*.md'` fails with a regex error | As in fd, the pattern is a regex; `*.md` isn't one | Use `lancet fd -g '*.md'` or `lancet fd -e md`. A Glob-tool pattern like `src/**/*.ts` becomes `lancet fd -g '*.ts' src`. |
 
 ## Index, Documents & MCP Issues {#index-docs-mcp}
 

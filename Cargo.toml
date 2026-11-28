@@ -66,6 +66,10 @@ tree-sitter-zig = { version = "1.1", optional = true }
 zip = { version = "4", default-features = false, features = ["deflate"], optional = true }
 
 # musl's malloc is slow under many threads (ripgrep swaps it too); mimalloc builds on x86_64 and aarch64 musl.
+# fd's --owner and local dates (getpwnam, getgrnam, mktime); already in the dependency tree.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(all(target_env = "musl", target_pointer_width = "64"))'.dependencies]
 mimalloc = { version = "0.1", default-features = false }
 

@@ -17,9 +17,6 @@ pub(crate) mod write;
 pub(crate) use clap::{ArgAction, ArgGroup, Parser};
 pub(crate) use lancet::ast_grep::{print_ast_human, search_ast, AstOptions};
 pub(crate) use lancet::edit_cmd::{edit_file, EditOptions, Op, Target};
-pub(crate) use lancet::fd::{
-    find_files, parse_duration, parse_size, print_fd_human, FdOptions, PatternMode,
-};
 pub(crate) use lancet::index::Index;
 pub(crate) use lancet::outline::{
     build_outline, print_outline_human, OutlineOptions, OutlineResponse,

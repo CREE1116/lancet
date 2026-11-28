@@ -310,8 +310,10 @@ impl Drop for Flush<'_> {
 }
 
 /// Walk `root`, returning accepted files sorted by relative path.
-pub fn walk(root: &Path, opts: &WalkOpts, filter: &FileFilter, need_meta: bool) -> Vec<FileEntry> {
-    let out: Mutex<Vec<FileEntry>> = Mutex::new(Vec::new());
+/// The walker every command shares: hidden files, ignore rules (ripgrep's
+/// `.rgignore` included), symlinks, depth and size limits from `opts`, and the
+/// index directory left out.
+pub fn builder(root: &Path, opts: &WalkOpts) -> WalkBuilder {
     let mut b = WalkBuilder::new(root);
     let ig = !opts.no_ignore;
     let io = &opts.ignore;
@@ -335,10 +337,16 @@ pub fn walk(root: &Path, opts: &WalkOpts, filter: &FileFilter, need_meta: bool) 
     if !io.no_files {
         for f in &io.files {
             if let Some(e) = b.add_ignore(f) {
-                eprintln!("rg: {}: {e}", f.display());
+                eprintln!("lancet: {}: {e}", f.display());
             }
         }
     }
+    b
+}
+
+pub fn walk(root: &Path, opts: &WalkOpts, filter: &FileFilter, need_meta: bool) -> Vec<FileEntry> {
+    let out: Mutex<Vec<FileEntry>> = Mutex::new(Vec::new());
+    let mut b = builder(root, opts);
     if let Some(ov) = &filter.overrides {
         // In the walker, as in ripgrep: whitelist globs win over hidden/ignore rules
         // and `!dir/` prunes whole directories.
