@@ -16,7 +16,7 @@ AI 코딩 에이전트는 셸 CLI, 의존성 없는 내장 stdio **Model Context
 | --- | --- | --- |
 | `--root <DIR>` | `.` | 명령을 실행할 디렉터리. 상대 경로의 기준입니다 (chroot/샌드박스가 **아님**; CLI처럼 절대 경로나 `..` 경로도 허용됨) |
 | `--read-only` | `false` | 쓰는 명령을 거절: `edit`, `patch`, `rename`, `index`, 그리고 `--apply`가 들어간 모든 호출 |
-| `--trust-index` | `false` | 검색(`rg`, `fd`, `ast`, `refs`, `batch`, 쿼리)이 인덱스 모드를 직접 정하지 않으면 `--trust-index`를 붙임 |
+| `--trust-index` | `false` | 검색(`rg`, `fd`, `ast`, `refs`)이 인덱스 모드를 직접 정하지 않으면 `--trust-index`를 붙임 |
 | `-j, --threads <NUM>` | CPU 코어 수 | 같은 검색들에 `-j NUM`을 붙임(직접 지정하지 않은 경우) |
 
 ## 클라이언트별 설정 {#client-configs}
@@ -71,7 +71,7 @@ args = ["mcp", "--root", "."]
 
 ## 공식 에이전트 스킬 설치 {#skill-install}
 
-[`skills/lancet/`](https://github.com/CREE1116/lancet/tree/main/skills/lancet)는 `SKILL.md`와 LQL·24개 AST 언어·edit/patch/rename CAS 규칙·MCP 설정용 `references/` 문서를 포함합니다.
+[`skills/lancet/`](https://github.com/CREE1116/lancet/tree/main/skills/lancet)는 `SKILL.md`와 `rg`·AST 패턴·24개 AST 언어·edit/patch/rename CAS 규칙·MCP 설정용 `references/` 문서를 포함합니다.
 
 ```bash title="터미널"
 # 프로젝트 로컬 (.agents 공통 규약)

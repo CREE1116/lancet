@@ -6,7 +6,7 @@ lede: "Keep familiar flags from ripgrep, fd, and ast-grep while eliminating line
 keywords: "migration ripgrep rg fd ast-grep sg sed patch rga pcre2 lsp differences"
 source: "https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md"
 ---
-You can switch incrementally without rewriting muscle memory. Use `lancet rg` and `lancet patch` as drop-in replacements for existing flags and diff pipes, then adopt LQL, AST rewrites, and `--rev` CAS edits where multi-tool seams break.
+You can switch incrementally without rewriting muscle memory. Use `lancet rg` and `lancet patch` as drop-in replacements for existing flags and diff pipes, then adopt AST rewrites, symbol reads, and multi-file edits where multi-tool seams break.
 
 ## Coming from ripgrep (rg) {#from-rg}
 
@@ -18,7 +18,7 @@ You can switch incrementally without rewriting muscle memory. Use `lancet rg` an
 | `rg -i -w -t py tok` | `lancet rg -i -w -t py tok` | Last of `-i`/`-s`/`-S` wins; AST-aware smart case (`\W` keeps insensitive) |
 | `rg -g '*.toml' --passthru` | `lancet rg -g '*.toml' --passthru` | Last of `--passthru`/`-A`/`-B`/`-C` wins; prints unmatched files too |
 | `rg --type-add 'web:*.tsx'` | `lancet rg --type-add 'web:*.tsx' -t web` | Supports `name:glob` and `name:include:a,b` |
-| `rg -P '(?<=a)b'` | `lancet 'before("a", "b", 1)'` or Rust regex | `-P`/PCRE2 omitted for linear-time matching & sound trigram lowering |
+| `rg -P '(?<=a)b'` | Rust regex without look-around, or `lancet ast` | `-P`/PCRE2 omitted for linear-time matching & sound trigram lowering |
 | `rg --pre pdftotext pat` | `lancet rg --docs pat` | In-process PDF/Office/HWP/archive extraction instead of subprocesses |
 
 > [!NOTE] Intentional differences in lancet rg
@@ -53,7 +53,7 @@ You can switch incrementally without rewriting muscle memory. Use `lancet rg` an
 | `sed -n '10,50p' f.rs` | `lancet read f.rs --lines 10:50` | Returns XXH3-64 `rev` and respects `--budget-tokens` |
 | Two `sed -i` calls from one `rg -n` | `lancet edit f.rs --edits - --rev REV --apply` | Original coordinates for all hunks; preserves symlinks, hard links, mode |
 | `patch -p1 < diff` | `lancet patch diff --apply` | All-file pre-verification, exact relocation, CAS race rollback |
-| `rga` + `pdftotext`/`pandoc` | `lancet 'pat'` + `lancet read f.pdf -p 2` | Shared extraction means search hit line == read line |
+| `rga` + `pdftotext`/`pandoc` | `lancet rg --docs pat` + `lancet read f.pdf -p 2` | Shared extraction means search hit line == read line |
 
 ## When NOT to Replace Specialized Tools {#when-not}
 

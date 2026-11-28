@@ -1,7 +1,7 @@
 ---
 nav_title: "안전한 편집 & CAS"
 title: "줄·심볼·텍스트 찾기 & 다중 구간 CAS 편집"
-description: "lancet edit --lines, --symbol, --find, 원자적 --edits, XXH3-64 --rev CAS, Tree-sitter 구문 게이트."
+description: "lancet edit --old-string, --lines, --symbol, 원자적 --edits, XXH3-64 --rev CAS, Tree-sitter 구문 게이트."
 lede: "여러 구간을 고쳐도 줄 번호가 밀리지 않고, 여러 에이전트가 동시에 수정해도 덮어쓰기가 발생하지 않습니다."
 keywords: "edit edits find symbol lines insert-before insert-after rev rev_after conflict cas allow-syntax-errors"
 source: "https://github.com/CREE1116/lancet/blob/main/docs/agent-instructions.md"
@@ -10,12 +10,12 @@ source: "https://github.com/CREE1116/lancet/blob/main/docs/agent-instructions.md
 
 ![검색, 읽기, 심볼, 리비전, 편집이 하나의 좌표계를 공유합니다.](diagram:coordinates.ko.svg "`read`가 반환하는 줄 번호와 XXH3-64 `rev`를 `edit`와 `rename`이 그대로 소비합니다.")
 
-## 단일 구간 지정 (--lines, --symbol, --find) {#single-hunk}
+## 단일 구간 지정 (--old-string, --lines, --symbol) {#single-hunk}
 
 **대상 1개**와 **연산 1개**를 정확히 짝지어 지정합니다:
 
-- **대상:** `--lines START:END|LINE|START:` · `--symbol NAME` · `--find TEXT [--all]`
-- **연산:** `--with TEXT` · `--with-file PATH|-` · `--delete` · `--insert-before TEXT` · `--insert-after TEXT`
+- **대상:** `--old-string TEXT [--replace-all]` · `--lines START:END|LINE|START:` · `--symbol NAME`
+- **연산:** `--new-string TEXT` · `--with-file PATH|-` · `--delete` · `--insert-before TEXT` · `--insert-after TEXT`
 
 ```bash title="터미널"
 # 1. 줄 범위 교체
@@ -26,15 +26,15 @@ lancet edit src/net.rs --lines 12:15 --with '    timeout_ms: 5000,' \
 lancet edit src/net.rs --symbol retry_limit --with-file new_fn.rs --rev <REV> --apply
 
 # 3. 고유 텍스트 치환 (LF와 CRLF 개행 모두 매치)
-lancet edit src/net.rs --find 'let retries = 3;' --with 'let retries = 5;' --rev <REV> --apply
+lancet edit src/net.rs --old-string 'let retries = 3;' --new-string 'let retries = 5;' --apply
 
-# 4. 모든 일치 항목 일괄 치환 (--all 없으면 비고유 시 거절)
-lancet edit src/net.rs --find 'old_fn(' --with 'new_fn(' --all --rev <REV> --apply
+# 4. 모든 일치 항목 일괄 치환 (--replace-all 없으면 비고유 시 거절)
+lancet edit src/net.rs --old-string 'old_fn(' --new-string 'new_fn(' --replace-all --apply
 ```
 
 > [!WARNING] 자주 겪는 함정 두 가지
 > - **`--symbol` 경계:** `read --symbol`과 똑같이 선언 위쪽의 `///` 문서 주석과 `#[attr]` 어트리뷰트까지 포함합니다. 유지하려면 새 본문에도 함께 넣어야 합니다.
-> - **`--find` 고유성:** `--all` 없이 0회 또는 2회 이상 등장하면 `invalid_query`로 거절하고 해당 줄 번호를 출력해 주변 문맥을 넓히도록 안내합니다.
+> - **`--old-string` 고유성:** `--replace-all` 없이 0회 또는 2회 이상 등장하면 `invalid_query`로 거절하고 해당 줄 번호를 출력해 주변 문맥을 넓히도록 안내합니다.
 
 ## 원자적 다중 구간 편집 (--edits) {#multi-hunk}
 

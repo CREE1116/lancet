@@ -4,7 +4,7 @@ title: "구조적 AST 검색 & 안전한 치환 (24개 언어)"
 description: "$VAR, $_, $$$ARGS, 문장 메타변수, 구조 동등성, dry-run diff, 중첩 건너뛰기(skipped_overlaps)."
 lede: "트라이그램 프리필터와 dry-run diff 위에서 24개 Tree-sitter 언어의 구문 트리를 검색·변환합니다."
 keywords: "ast tree-sitter 메타변수 rewrite apply limit skipped_overlaps if else cpp 헤더"
-source: "https://github.com/CREE1116/lancet/blob/main/skills/lancet/references/query-and-ast.md"
+source: "https://github.com/CREE1116/lancet/blob/main/skills/lancet/references/rg-and-ast.md"
 ---
 `lancet ast`는 내장된 24개 Tree-sitter 문법으로 구문 트리를 매치합니다. 공백, 개행, 주석, 문자열 내용 차이를 무시하고 실제 코드 구조만 겨냥합니다.
 
@@ -38,7 +38,7 @@ lancet ast 'console.log($$$ARGS)' web/ --lang tsx
 
 1. **먼저 미리보기:** `--rewrite TEMPLATE`만 주면 디스크를 수정하지 않고 unified diff(`mode: "dry-run"`)를 출력합니다.
 2. **`skipped_overlaps` 확인:** 한 파일 안에 중첩된 매치(예: 중첩된 `$X.unwrap().foo.unwrap()`)가 있으면 가장 앞/바깥쪽 편집을 우선 적용하고 겹치는 안쪽 편집은 건너뛰어 오프셋 손상을 막습니다. 안쪽 잔여분은 한 번 더 실행하면 됩니다.
-3. **원자적 기록:** `--apply`를 추가하면 Tree-sitter 구문 검사 게이트와 `write_atomic`을 거쳐 반영합니다.
+3. **전부 쓰거나 하나도 안 쓰기:** `--apply`는 바뀌는 파일을 모두 쓰거나 하나도 쓰지 않습니다. 어느 파일이든 Tree-sitter 구문 오류를 늘리면 거부하고(`--allow-syntax-errors`로 무시), 읽은 뒤 바뀐 파일이 있으면 전체가 실패하며 이미 쓴 파일은 되돌립니다.
 
 > [!WARNING] 주의할 제약과 ast-grep과의 차이
 > - **`--apply`는 `--limit`과 병행 불가:** 일부 개수만 잘린 리라이트가 실수로 반영되지 않도록 `--limit`을 거절합니다. 대신 `--path` 글롭으로 대상을 좁히세요.

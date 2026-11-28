@@ -38,7 +38,7 @@ lancet fd -e rs --meta --limit 25 --json src
 
 ```bash title="터미널"
 # 단일 파일 AST 시그니처와 시작/끝 줄 범위
-lancet outline src/search.rs
+lancet outline src/scope.rs
 
 # 디렉터리 깊이·확장자 제한 요약
 lancet outline src -d 2 -e rs --limit 20 --json

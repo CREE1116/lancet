@@ -13,7 +13,7 @@ Lancet ships a cross-agent Skill package ([`skills/lancet/SKILL.md`](../skills/l
 | Flag | Default | Description |
 |---|---|---|
 | `--root <DIR>` | `.` | Directory commands run in, so relative paths resolve against it (not a chroot/sandbox; absolute or `..` paths work like the CLI) |
-| `--read-only` | `false` | Refuses commands that write: `edit`, `patch`, `rename`, `index`, and anything with `--apply` |
+| `--read-only` | `false` | Refuses commands that write: `edit`, `write`, `patch`, `rename`, `index` (except `index --status`), and anything with `--apply` |
 | `--trust-index` | `false` | Adds `--trust-index` to searches (`rg`, `fd`, `ast`, `refs`, `batch`, queries) that don't pick an index mode themselves |
 | `-j`, `--threads <NUM>` | CPU count | Adds `-j NUM` to those searches unless they set it |
 

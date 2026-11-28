@@ -12,13 +12,13 @@ source: "https://github.com/CREE1116/lancet/blob/main/docs/agent-instructions.md
 
 ```bash title="터미널"
 # 인라인 줄 범위 (file:10-50, file:42, --lines 100: 모두 지원)
-lancet read src/search.rs:100-160
+lancet read src/scope.rs:100-160
 
 # 한 번의 호출로 여러 파일/범위 동시 읽기 (v0.1.4+; 각각 `# PATH rev REV` 헤더 출력)
-lancet read src/search.rs:100-140 src/main.rs:1-40
+lancet read src/scope.rs:100-140 src/main.rs:1-40
 
 # Tree-sitter 선언 전체 읽기 (위쪽 문서 주석·어트리뷰트 포함!)
-lancet read src/search.rs --symbol execute_one --json
+lancet read src/scope.rs --symbol plan --json
 
 # 추정 토큰 수로 자르고 다음 이어 읽기 커서(next_line) 받기
 lancet read src/mcp.rs --lines 1:800 --budget-tokens 800 --json
@@ -43,12 +43,11 @@ lancet read src/lib.rs --lines 1:40 --raw
 
 ## 비텍스트 문서의 검색 vs 읽기 규칙 {#rg-docs}
 
-- **`lancet '<LQL>'`:** 문서·압축 어댑터를 기본 활성화해 인덱싱·검색합니다(`type:document`, `type:spreadsheet`, `type:archive` 필터).
 - **`lancet rg --docs`:** `lancet rg`는 `ripgrep`과 바이트 일치 출력을 지키기 위해 기본 OFF입니다. 문서를 포함하려면 `--docs`를 붙이세요.
 
 ```bash title="터미널"
 # 스프레드시트에서 키워드 위치 확인 후 해당 셀 범위만 읽기
-lancet '"EBITDA" in type:spreadsheet' ./finance
+lancet rg --docs -n EBITDA finance/
 lancet read finance/q4.xlsx --sheet 1 --rows 12:35 --cols A:F
 
 # 압축 파일 목록 확인 후 특정 로그만 스트리밍

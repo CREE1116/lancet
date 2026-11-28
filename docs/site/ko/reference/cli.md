@@ -1,50 +1,57 @@
 ---
-nav_title: "CLI 명령 · 종료 코드"
-title: "CLI 하위 명령, 플래그 & 종료 코드 레퍼런스"
-description: "src/main.rs 기준으로 검증된 15개 진입점별 플래그 테이블, 기본값, 종료 코드."
-lede: "15개 모든 하위 명령의 정확한 구문, 플래그 기본값, 종료 코드 명세."
-keywords: "cli 하위명령 플래그 종료코드 0 1 2 conflict invalid_query unsupported"
-source: "https://github.com/CREE1116/lancet/blob/main/src/main.rs"
+nav_title: "CLI 명령 & 종료 코드"
+title: "CLI 명령, 플래그, 종료 코드 레퍼런스"
+description: "Lancet의 모든 명령, 플래그와 기본값, 함께 쓰는 종료 코드."
+lede: "명령 12개, 종료 코드 한 벌, 좌표계 하나."
+keywords: "cli 명령 플래그 종료 코드 0 1 2 conflict invalid_query unsupported"
+source: "https://github.com/CREE1116/lancet/blob/main/src/commands.rs"
 ---
-모든 하위 명령은 결정적 종료 코드, `.gitignore` 순회, `--json` 구조화 출력을 공유합니다. `lancet rg`의 40여 개 플래그는 [`lancet rg` 호환성 표](rg-parity.md)를 참고하세요.
+`lancet --help`는 명령 목록을, `lancet COMMAND --help`는 명령별 플래그를 보여 줍니다. 둘 다 이 페이지와 같은 명령 표(`src/commands.rs`)에서 나옵니다. `lancet rg`의 ripgrep 플래그는 [`lancet rg` 호환 레퍼런스](rg-parity.md)를 보세요.
 
 ## 종료 코드 {#exit-codes}
 
-| 코드 | 의미 | JSON `status` 값 |
+| 코드 | 의미 | JSON `status` |
 | ---: | --- | --- |
-| `0` | 성공 / 1건 이상 매치 / 편집·패치 검증 및 적용 완료 | `complete` |
-| `1` | 0건 매치 (또는 `lancet status`에서 인덱스 없음) | `empty` |
-| `2` | 잘못된 쿼리·플래그, 미지원 대상/이름 변경, CAS 충돌, I/O 오류 | `invalid_query`, `unsupported`, `conflict` |
+| `0` | 완료: 찾은 것이 있음, 또는 변경을 미리 보거나 반영함 | `complete` |
+| `1` | 찾은 것이 없음(오류 아님) | `empty` |
+| `2` | 거부 또는 잘못됨: 잘못된 인자, 지원하지 않는 파일, 충돌(`rev` 이후 파일이 바뀜), I/O 오류 | `invalid_query`, `unsupported`, `conflict` |
 
-## lancet <QUERY> · batch · parse · explain {#cmd-search}
+`--json`이면 모든 명령의 응답에 `status`가 있고, 실패하면 `error`가 있습니다. 검색 명령은 `warnings`도 알려 줍니다.
 
-| 명령 / 플래그 | 기본값 / 값 | 설명 |
-| --- | --- | --- |
-| `lancet <QUERY> [PATH]` | `PATH = .` | 디렉터리 또는 파일에서 LQL 쿼리 평가 |
-| `--json` · `--stats` | `false` | 기계 판독용 JSON · stderr 실행 통계 |
-| `--no-index` \| `--trust-index` \| `--index-dir DIR` | `auto`, `PATH/.lancet` | 인덱스 최신성 전략 또는 위치 지정 |
-| `--hidden` · `--no-ignore` · `-j THREADS` · `--ocr` | `false`, 코어 수, `false` | 숨김/무시 파일 및 OCR 토글 |
-| `--max-lines N` · `--max-cols N` | `20`, `240` | 결과 단위당 표시 줄/열 상한 |
-| `lancet batch [PATH] -q Q... [--name N...] [--queries-json JSON]` | — | 인덱스 열기·워크 1회 공유로 다수 LQL 실행 |
-| `lancet parse <QUERY>` | — | 정규화된 쿼리 및 JSON IR 출력 |
-| `lancet explain <QUERY> [PATH]` | — | 필수 트라이그램, 후보 수, 선택도 % 출력 |
+## 찾기와 검색 {#cmd-search}
 
-## lancet fd · outline · refs · read {#cmd-discover}
-
-| 하위 명령 | 플래그 및 인자 |
+| 명령 | 플래그 |
 | --- | --- |
-| `lancet fd [PATTERN] [PATH...]` | `-p/--pattern`, `-t f\|d`, `-e/--ext` (쉼표/반복), `--type-class`, `-g` (글롭; `*`/`?`/`[` 시 자동 선택), `-r` (정규식), `-s` (대소문자 구분), `-d/--max-depth`, `--changed-within DUR`, `--min-size`, `--max-size`, `--tree`, `--dirs`, `--limit N`, `--meta`, `--no-index`, `--trust-index`, `--index-dir`, `--hidden`, `--no-ignore`, `-j`, `--json`, `--stats` |
-| `lancet outline [PATH]` | `-d/--max-depth`, `-e/--ext`, `--limit N`, `--hidden`, `--no-ignore`, `-j`, `--ocr`, `--json` |
-| `lancet refs <SYMBOL> [PATH]` | `--rank`, `--kind KIND,...` (`--rank` 필요), `-l/--lang`, `-e/--ext`, `--path GLOB`, `--all-files`, `--limit N`, `--no-index`, `--trust-index`, `--index-dir`, `--hidden`, `--no-ignore`, `-j`, `--json`, `--stats` |
-| `lancet read <TARGET>...` | 다중 타깃 지원 (`file:10-50`, `zip!entry`), `-l/--lines`, `-s/--symbol`, `-p/--page`, `--sheet`, `--rows`, `--cols`, `-e/--entry`, `--budget-tokens`, `--raw`, `--ocr`, `--json` |
+| `lancet rg [FLAGS] PATTERN [PATH...]` | ripgrep의 플래그([호환표](rg-parity.md)) + `--docs`(문서·압축 파일 검색) |
+| `lancet fd [PATTERN] [PATH...]` | `-p/--pattern`, `-t f\|d`, `-e/--ext`, `--type-class`, `-g/--glob`, `-r/--regex`, `-s/--case-sensitive`, `-d/--max-depth`, `--changed-within DUR`, `--min-size`, `--max-size`, `--tree`, `--dirs`, `--limit N`, `--meta`, `--hidden`, `--no-ignore`, `-j`, `--json` |
+| `lancet refs SYMBOL [PATH...]` | `--rank`(SYMBOL은 글롭, 참조가 많은 선언부터), `--kind KIND,...`, `-l/--lang`, `-e/--ext`, `--path GLOB`, `--all-files`, `--limit N`, `--hidden`, `--no-ignore`, `-j`, `--json` |
+| `lancet ast PATTERN [PATH...]` | `-l/--lang`, `-r/--rewrite TEMPLATE`, `--apply`, `--allow-syntax-errors`, `--path GLOB`, `--limit N`, `--hidden`, `--no-ignore`, `-j`, `--json` ([패턴 문법](ast-patterns.md)) |
 
-## lancet ast · edit · patch · rename · index · mcp {#cmd-mutate}
+검색 명령은 인덱스가 있으면 자동으로 씁니다. `--no-index`와 `--trust-index`로 모드를 직접 고를 수 있습니다([인덱스와 신선도](../concepts/index-and-freshness.md)).
 
-| 하위 명령 | 플래그 및 인자 |
+## 읽기 {#cmd-read}
+
+| 명령 | 플래그 |
 | --- | --- |
-| `lancet ast <PATTERN> [PATH]` | `-l/--lang`, `-r/--rewrite TEMPLATE`, `--apply`, `--path GLOB` (반복), `--limit N`, `--no-index`, `--trust-index`, `--index-dir`, `--hidden`, `--no-ignore`, `-j`, `--json`, `--stats` |
-| `lancet edit <PATH>` | 대상 (택1): `--lines`, `--symbol`, `--find [--all]`, 또는 `--edits FILE\|-` · 연산 (택1): `--with`, `--with-file FILE\|-`, `--delete`, `--insert-before`, `--insert-after` · 안전: `--rev REV`, `--apply`, `--allow-syntax-errors`, `--json` |
-| `lancet patch [DIFF\|-]` | `--root DIR` (`.`), `-p/--strip N` (`1`), `--apply`, `--allow-syntax-errors`, `--json` |
-| `lancet rename <FILE:LINE[:COL]> <OLD> <NEW>` | `--rev REV`, `--apply`, `--json` |
-| `lancet index [PATH]` · `status [PATH]` | `--rebuild` \| `--compact`, `--index-dir`, `--ocr`, `--hidden`, `--no-ignore`, `-j` |
-| `lancet mcp` | `--root DIR` (`.`), `--read-only`, `--trust-index`, `-j/--threads` |
+| `lancet read TARGET...` | 대상: `file`, `file:10-50`, `file:42`, `archive.zip!inner.log`, 한 번에 여러 개 · `-l/--lines`, `--offset N --limit N`, `-s/--symbol`, `-p/--page`, `--sheet`, `--rows`, `--cols`, `-e/--entry`, `--budget-tokens N`, `--raw`, `--ocr`, `--json` |
+| `lancet outline [PATH...]` | `-d/--max-depth`, `-e/--ext`, `--limit N`, `--hidden`, `--no-ignore`, `-j`, `--ocr`, `--json` |
+
+`read`는 범위를 주지 않으면 최대 2,000줄을 출력하고, 첫 줄은 `# PATH rev REV`입니다.
+
+## 고치기 {#cmd-change}
+
+모든 변경은 `--apply` 전까지 미리보기입니다. 모든 쓰기는 compare-and-swap이고, 여러 파일 변경은 전부 쓰거나 하나도 안 씁니다([쓰기 안전성](../concepts/write-safety.md)).
+
+| 명령 | 플래그 |
+| --- | --- |
+| `lancet edit PATH` | 대상: `--old-string TEXT`(`--replace-all`, `--expected-replacements N`), `--lines`, `--symbol` · 연산: `--new-string TEXT`, `--with-file FILE\|-`, `--delete`, `--insert-before`, `--insert-after` · `--edits FILE\|-`(여러 구간·파일 한 번에) · `--rev REV`, `--apply`, `--allow-syntax-errors`, `--json` |
+| `lancet write PATH` | `--content TEXT` 또는 `--with-file FILE\|-`, `--rev REV`(있는 파일을 바꿀 때 필수), `--apply`, `--allow-syntax-errors`, `--json` |
+| `lancet patch [DIFF\|-]` | unified diff 또는 Codex `*** Begin Patch` · `--root DIR`(`.`), `-p/--strip N`(`1`), `--apply`, `--allow-syntax-errors`, `--json` |
+| `lancet rename FILE:LINE[:COL] OLD NEW` | `--rev REV`, `--apply`, `--json` |
+
+## 기반 {#cmd-infra}
+
+| 명령 | 플래그 |
+| --- | --- |
+| `lancet index [PATH]` | `--status`(인덱스 상태를 JSON으로 출력, 아무것도 바꾸지 않음), `--rebuild`, `--compact`, `--index-dir DIR`, `--hidden`, `--no-ignore`, `--ocr`, `-j` |
+| `lancet mcp` | `--root DIR`(`.`), `--read-only`(`edit`, `write`, `patch`, `rename`, `index`, `--apply` 거부), `--trust-index`, `-j` |

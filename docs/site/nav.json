@@ -32,7 +32,7 @@
     {"group": "internals", "path": "concepts/benchmarks.md"},
     {"group": "reference", "path": "reference/cli.md"},
     {"group": "reference", "path": "reference/rg-parity.md"},
-    {"group": "reference", "path": "reference/lql-and-ast.md"},
+    {"group": "reference", "path": "reference/ast-patterns.md"},
     {"group": "reference", "path": "reference/json-and-mcp.md"},
     {"group": "reference", "path": "reference/troubleshooting.md"}
   ]

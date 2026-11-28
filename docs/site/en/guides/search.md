@@ -1,65 +1,54 @@
 ---
-nav_title: "Text Search, LQL & Batch"
-title: "Text Search: lancet rg, LQL & Multi-Query Batching"
-description: "Choose between lancet rg, LQL proximity/fuzzy/boolean operators, pipe stages, lancet batch, parse, and explain."
-lede: "Express boolean, proximity, fuzzy, and AST-scoped queries or run multiple queries over one shared walk."
-keywords: "lql search near before fuzzy terms budget batch parse explain selectivity"
-source: "https://github.com/CREE1116/lancet/blob/main/docs/grammar.md"
+nav_title: "Text Search (lancet rg)"
+title: "Text Search: lancet rg on an Always-Fresh Index"
+description: "ripgrep's flags, output and exit codes on lancet's trigram index: index modes, several paths, --in/--in0, documents with --docs."
+lede: "Type the ripgrep command you already know; the index makes it faster without changing a byte of the output."
+keywords: "rg ripgrep regex index trust-index no-index docs in in0 max-bytes parity"
+source: "https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md"
 ---
-Lancet offers two complementary search syntaxes backed by the exact same trigram index and evaluator: `lancet rg` (regexes and UNIX flags) and **LQL** (structured boolean logic, token proximity, fuzzy matching, AST scopes, and pipes).
+`lancet rg` is ripgrep: the same flags, the same Rust `regex` engine, the same traversal rules (`.gitignore`, `.ignore`, `.rgignore`, `--ignore-file`), the same output and the same exit codes (`0` match, `1` no match, `2` error). The only difference is underneath: when a `.lancet` index exists, files that cannot match are never opened.
 
-## When to Use lancet rg vs LQL vs lancet batch {#rg-vs-lql}
+## Everyday searches {#recipes}
 
-| Need | Use | Why |
+```bash title="Terminal"
+lancet rg -w spin_lock src                 # whole word
+lancet rg -n -C 2 'fn \w+_locked\(' src    # regex with context
+lancet rg -i -l 'connection reset' .       # files only, case-insensitive
+lancet rg -t rs -g '!*_test.rs' unwrap .   # types and globs
+lancet rg --json 'TODO' src                # ripgrep's JSON events
+lancet rg -c ThreadPoolBuilder a/ b/ c.rs  # several paths in one call
+```
+
+Every supported flag and its exact behaviour is listed in the [ripgrep parity reference](../reference/rg-parity.md). Output is compared with ripgrep 16.0 byte for byte on 150 cases in CI.
+
+## How the index is used {#index-modes}
+
+| Mode | Flag | What happens |
 | --- | --- | --- |
-| Standard regex, context lines (`-A/-B/-C`), `--vimgrep`, `-c`, `-r` | `lancet rg` | Drop-in ripgrep flags, zero query-language friction |
-| Multi-term `AND`/`OR`/`NOT`, `near()`, `fuzzy()`, `in function`, `\| budget` | `lancet '<LQL>'` | Single-pass compound query with token cap |
-| Multiple LQL queries over the same repository | `lancet batch` | Opens `.lancet` and walks directory entries once |
+| auto | (default) | The regex is turned into a trigram formula; only files that can contain it are read. Files changed since the index was built (`mtime`, size, `ctime`, inode) are read directly, so results are always fresh. |
+| scan | `--no-index` | No index: a plain parallel scan, within a few percent of ripgrep. |
+| trust | `--trust-index` | Skips the freshness check. Fastest; an explicit choice, never a silent default. |
 
-## LQL Practical Patterns {#lql-recipes}
+Building the index is optional (`lancet index .`). Without one, `lancet rg` behaves exactly like ripgrep. The index only ever *removes* files that cannot match: when lancet cannot derive a requirement from a pattern (for example `\w+`), it reads every file rather than guess.
 
-```bash title="Terminal"
-# 1. Boolean logic in a single line (implicit AND + explicit OR/NOT)
-lancet '("OOM" OR "out of memory") NOT "CPU" in line' src/
-
-# 2. Word proximity within a Tree-sitter function body + parent expansion
-lancet 'near("retry", "backoff", 25) in function | expand parent | limit 8' src/
-
-# 3. Ordered proximity (B appears within 15 tokens AFTER A)
-lancet 'before("lock", "write_atomic", 15) in function' src/
-
-# 4. Typo-tolerant search (Levenshtein distance k <= 3, trigram q-gram accelerated)
-lancet 'fuzzy("idempotnt", 2) | limit 10' src/
-
-# 5. Inspect co-occurring keywords for iterative query refinement
-lancet '"trigram" in ext:rs | terms top:15' src/
-
-# 6. Hard cap output to estimated token budget
-lancet '"SearchOptions" in ext:rs | expand context:3 | budget tokens:1500' src/
-```
-
-## Sharing One Walk Across Many Queries (lancet batch) {#batch-queries}
-
-Agents often run 3–5 exploratory searches back-to-back. `lancet batch` opens the index and caches the directory walk in memory across every query in the batch:
+## Paths from a file: --in and --in0 {#in-files}
 
 ```bash title="Terminal"
-# Using repeatable -q / --name flags
-lancet batch src \
-  -q '"Conflict" in function' --name conflicts \
-  -q 'near("mtime", "ctime", 20)' --name freshness \
-  -q 'fuzzy("compaction", 1) | files' --name compact
-
-# Or passing JSON object / array directly
-lancet batch src --queries-json '{"errors": "Status::Unsupported", "locks": "lock_shared OR lock()"}'
+git diff --name-only | lancet rg --in - 'unsafe'
+fd -0 -e rs | lancet rg --in0 - 'unsafe'
 ```
 
-## Inspecting Query Plans (lancet parse & lancet explain) {#debug-query}
+Listed paths keep the order you gave, mixed with positional paths exactly as ripgrep 16 orders them.
 
-Before running a query on an 80k-file repo, use `parse` to inspect canonical normalization and `explain` to verify which trigrams were extracted and how selective the index is:
+## Documents and archives: --docs {#docs}
+
+By default `lancet rg` searches what ripgrep searches, so its output stays identical. Add `--docs` to also search inside PDFs, Office files, HWP/HWPX, EPUB and archives. Line numbers are those of `lancet read`, so a hit can be read back directly:
 
 ```bash title="Terminal"
-lancet parse '("alpha" OR "beta") NOT NOT "gamma" in line | limit 5'
-lancet explain 'near("gradient", "clip", 30)' ./repo
+lancet rg --docs -n 'indemnity' contracts/
+lancet read contracts/msa.docx:120-140
 ```
 
-`explain` prints `trigram_req`, `files_considered`, `index_candidates`, `stale_files`, and `selectivity_pct` so you immediately see whether a regex or short token causes a fallback full scan.
+## What is not supported {#unsupported}
+
+`-P` / PCRE2 (look-around, backreferences) is refused: the Rust engine keeps matching linear-time and lets the index derive a sound filter from every pattern. `--pre` with a command is refused: lancet doesn't run a process per file, and reads documents and archives in-process with `--docs`. See the [parity reference](../reference/rg-parity.md) for the full list.

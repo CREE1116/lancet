@@ -1,7 +1,7 @@
 ---
 nav_title: "Safe Editing & CAS"
 title: "Line, Symbol, Find & Multi-Hunk CAS Editing"
-description: "Use lancet edit with --lines, --symbol, --find, atomic --edits, XXH3-64 --rev CAS, and Tree-sitter syntax verification."
+description: "Use lancet edit with --old-string, --lines, --symbol, atomic --edits, XXH3-64 --rev CAS, and Tree-sitter syntax verification."
 lede: "Zero line drift across multi-hunk edits and zero silent overwrites when multiple agents edit concurrently."
 keywords: "edit edits find symbol lines insert-before insert-after rev rev_after conflict cas allow-syntax-errors"
 source: "https://github.com/CREE1116/lancet/blob/main/docs/agent-instructions.md"
@@ -10,31 +10,31 @@ source: "https://github.com/CREE1116/lancet/blob/main/docs/agent-instructions.md
 
 ![Search hits, read slices, symbols, and edits share one coordinate system.](diagram:coordinates.svg "`read` returns 1-based line numbers and XXH3-64 `rev` consumed directly by `edit` and `rename`.")
 
-## Targeting One Hunk (--lines, --symbol, --find) {#single-hunk}
+## Targeting One Hunk (--old-string, --lines, --symbol) {#single-hunk}
 
 Choose **exactly one target** and **exactly one operation**:
 
-- **Targets:** `--lines START:END|LINE|START:` · `--symbol NAME` · `--find TEXT [--all]`
-- **Operations:** `--with TEXT` · `--with-file PATH|-` · `--delete` · `--insert-before TEXT` · `--insert-after TEXT`
+- **Targets:** `--old-string TEXT [--replace-all]` · `--lines START:END|LINE|START:` · `--symbol NAME`
+- **Operations:** `--new-string TEXT` · `--with-file PATH|-` · `--delete` · `--insert-before TEXT` · `--insert-after TEXT`
 
 ```bash title="Terminal"
 # 1. Replace exact line span
-lancet edit src/net.rs --lines 12:15 --with '    timeout_ms: 5000,' \
+lancet edit src/net.rs --lines 12:15 --new-string '    timeout_ms: 5000,' \
   --rev e70d5a898f122a62 --apply
 
 # 2. Replace declaration by AST symbol (includes doc comments & attributes!)
 lancet edit src/net.rs --symbol retry_limit --with-file new_fn.rs --rev <REV> --apply
 
 # 3. Unique exact text replacement (matches both LF and CRLF line endings)
-lancet edit src/net.rs --find 'let retries = 3;' --with 'let retries = 5;' --rev <REV> --apply
+lancet edit src/net.rs --old-string 'let retries = 3;' --new-string 'let retries = 5;' --apply
 
-# 4. Replace every match explicitly (--find refuses non-unique unless --all)
-lancet edit src/net.rs --find 'old_fn(' --with 'new_fn(' --all --rev <REV> --apply
+# 4. Replace every match explicitly (--old-string refuses non-unique unless --replace-all)
+lancet edit src/net.rs --old-string 'old_fn(' --new-string 'new_fn(' --replace-all --apply
 ```
 
 > [!WARNING] Two common traps to avoid
 > - **`--symbol` boundaries:** matches `read --symbol` literally — leading `///` doc comments and `#[attr]` attributes are part of the span and will be removed if omitted from your replacement.
-> - **`--find` uniqueness:** without `--all`, matching 0 or >1 times refuses with `invalid_query` and prints the offending line numbers so you can add surrounding context cleanly.
+> - **`--old-string` uniqueness:** without `--replace-all`, matching 0 or >1 times refuses with `invalid_query` and prints the offending line numbers so you can add surrounding context cleanly.
 
 ## Atomic Multi-Hunk Editing (--edits) {#multi-hunk}
 

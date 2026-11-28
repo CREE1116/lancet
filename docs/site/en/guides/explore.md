@@ -38,7 +38,7 @@ Inspect structure before opening lines. `lancet outline` understands AST declara
 
 ```bash title="Terminal"
 # Single file AST skeleton with line spans & signatures
-lancet outline src/search.rs
+lancet outline src/scope.rs
 
 # Directory outline capped to depth & extension
 lancet outline src -d 2 -e rs --limit 20 --json

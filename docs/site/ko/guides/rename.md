@@ -14,10 +14,10 @@ source: "https://github.com/CREE1116/lancet/blob/main/skills/lancet/references/e
 
 ```bash title="터미널"
 # Dry-run diff (해당 줄에 OLD 바인딩이 하나뿐이면 COL 생략 가능)
-lancet rename src/search.rs:42 old_name new_name
+lancet rename src/scope.rs:42 old_name new_name
 
 # 열(1-based byte offset, `lancet rg --column`과 동일) + CAS rev 지정
-lancet rename src/search.rs:42:9 old_name new_name --rev <REV> --apply
+lancet rename src/scope.rs:42:9 old_name new_name --rev <REV> --apply
 ```
 
 `FILE:LINE[:COL]`은 **선언 위치**나 스코프 내부의 **사용 위치** 어느 쪽을 가리켜도 됩니다. 스코프 내 주석의 언급은 바꾸지 않고 JSON `comment_mentions` 횟수로만 보고합니다.

@@ -15,7 +15,7 @@ pub(crate) struct McpCli {
     /// Directory commands run in (relative paths resolve against it)
     #[arg(long, default_value = ".")]
     root: PathBuf,
-    /// Refuse commands that write: edit, patch, rename, index, and anything with --apply
+    /// Refuse commands that write: edit, write, patch, rename, index, and anything with --apply
     #[arg(long)]
     read_only: bool,
     /// Add --trust-index to searches that don't pick an index mode themselves

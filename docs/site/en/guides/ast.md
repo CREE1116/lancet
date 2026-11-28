@@ -4,7 +4,7 @@ title: "Structural AST Search & Safe Rewrites (24 Languages)"
 description: "Pattern matching with $VAR, $_, $$$ARGS, C-like statements, structural equality, dry-run diffs, and overlap skipping."
 lede: "Match and transform syntax trees across 24 Tree-sitter languages with trigram prefiltering and dry-run diffs."
 keywords: "ast tree-sitter metavariables rewrite apply limit skipped_overlaps if else cpp header"
-source: "https://github.com/CREE1116/lancet/blob/main/skills/lancet/references/query-and-ast.md"
+source: "https://github.com/CREE1116/lancet/blob/main/skills/lancet/references/rg-and-ast.md"
 ---
 `lancet ast` parses syntax trees with 24 compiled-in Tree-sitter grammars. Unlike plain regexes, patterns match true syntactic structure — ignoring whitespace differences, formatting, comments, and string contents.
 
@@ -38,7 +38,7 @@ lancet ast 'console.log($$$ARGS)' web/ --lang tsx
 
 1. **Preview first:** passing `--rewrite TEMPLATE` prints unified diffs (`mode: "dry-run"`) without modifying disk.
 2. **Inspect `skipped_overlaps`:** when one match is nested inside another match in the same file (for example nested `$X.unwrap().foo.unwrap()`), Lancet keeps the earliest/outermost edit and skips overlapping inner edits cleanly rather than corrupting offsets; check `skipped_overlaps` and re-run once for inner leftovers.
-3. **Apply atomically:** add `--apply` to write each file through Lancet's Tree-sitter syntax gate and atomic `write_atomic` writer.
+3. **Apply all or nothing:** `--apply` writes every rewritten file or none. A rewrite that adds Tree-sitter syntax errors to any file is refused (`--allow-syntax-errors` overrides), and a file changed since it was read makes the whole rewrite fail with the files already written put back.
 
 > [!WARNING] Important constraints & ast-grep differences
 > - **`--apply` refuses `--limit`:** Lancet refuses capped partial rewrites so you don't mutate the first N matches accidentally; narrow with `--path` globs instead.
