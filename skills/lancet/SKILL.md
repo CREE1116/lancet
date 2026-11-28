@@ -15,7 +15,8 @@ One binary for find → read → change, used **instead of** the built-in file t
 | **Edit** | `lancet edit src/x.rs --old-string 'retries = 3' --new-string 'retries = 5' --apply` (`--replace-all`) |
 | **Write** | `lancet write docs/new.md --with-file - --apply <<'EOF' … EOF` |
 | apply_patch | `lancet patch - --apply` (unified diff or Codex `*** Begin Patch`) |
-| Rename a local | `lancet rename src/x.rs:42 count total --apply` (Rust, Python, JS/TS, Go; checks scopes) |
+| Rename a local | `lancet rename src/x.rs:42 count total --apply` (locals and parameters only; Rust, Python, JS/TS, Go; checks scopes) |
+| Rename a function / type used across files | `lancet refs NAME src` to see every use, then one `lancet edit --edits - --apply` with a hunk per file (`replace_all` where every hit is it) |
 | Definitions + uses | `lancet refs SearchOptions src` (code only; skips other types' `.name` and same-named locals) |
 | Layout | `lancet fd --tree --dirs -d 2 .` · `lancet outline src/server.rs src/db.rs` |
 | AST search / rewrite | `lancet ast '$X.unwrap()' src --lang rs` (`--rewrite '$X?' --apply`) |
