@@ -553,7 +553,8 @@ fn fd_filters_tree_and_trust_index() {
 
     let mut rx_py_go = FdOptions::new(root);
     // As fd: the pattern meets the name, or the absolute path with `full_path`.
-    rx_py_go.patterns = vec![r"/src/[^/]+\.(py|go)$".into()];
+    // The absolute path uses the OS separator (`\` on Windows), as in fd.
+    rx_py_go.patterns = vec![r"[/\\]src[/\\][^/\\]+\.(py|go)$".into()];
     rx_py_go.pattern_mode = PatternMode::Regex;
     rx_py_go.full_path = true;
     let r_rx = find_files(&rx_py_go);
