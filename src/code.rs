@@ -789,17 +789,28 @@ mod imp {
             let root = self.tree.root_node();
             let mut syms = Vec::new();
             let mut counts = std::collections::HashMap::new();
-            visit_dfs(root, |node| {
+            // Comments and strings are skipped whole on the way down: asking each
+            // leaf for its ancestors costs O(depth²) (tree-sitter nodes have no
+            // parent pointer).
+            visit_dfs_pruned(root, |node| {
+                if is_comment_or_string_kind(node.kind()) {
+                    return false;
+                }
                 if node.child_count() == 0 {
                     if let Ok(t) = std::str::from_utf8(&src[node.byte_range()]) {
-                        if keep(t) && !is_comment_or_string(node) {
-                            *counts.entry(t.to_string()).or_insert(0) += 1;
+                        if keep(t) {
+                            match counts.get_mut(t) {
+                                Some(n) => *n += 1,
+                                None => {
+                                    counts.insert(t.to_string(), 1);
+                                }
+                            }
                         }
                     }
-                    return;
+                    return false;
                 }
                 let Some(kind) = symbol_kind(lang, node) else {
-                    return;
+                    return true;
                 };
                 if let Some((nm, ns, ne)) = resolve_decl_name(lang, node, src) {
                     syms.push(CodeSpan {
@@ -811,6 +822,7 @@ mod imp {
                         name_end: ne,
                     });
                 }
+                true
             });
             (syms, counts)
         }
@@ -884,6 +896,24 @@ mod imp {
                 if cursor.goto_first_child() {
                     continue;
                 }
+            }
+            if cursor.goto_next_sibling() {
+                descend = true;
+            } else if cursor.goto_parent() {
+                descend = false;
+            } else {
+                break;
+            }
+        }
+    }
+
+    /// Depth-first like [`visit_dfs`], but `f` returning false skips the node's children.
+    fn visit_dfs_pruned(root: Node<'_>, mut f: impl FnMut(Node<'_>) -> bool) {
+        let mut cursor = root.walk();
+        let mut descend = true;
+        loop {
+            if descend && f(cursor.node()) && cursor.goto_first_child() {
+                continue;
             }
             if cursor.goto_next_sibling() {
                 descend = true;
@@ -1011,15 +1041,17 @@ mod imp {
         parse(path, src).map(|s| s.symbols(src))
     }
 
+    fn is_comment_or_string_kind(k: &str) -> bool {
+        k.ends_with("comment")
+            || k.contains("string")
+            || k.contains("char_literal")
+            || k == "rune_literal"
+    }
+
     fn is_comment_or_string(node: Node<'_>) -> bool {
         let mut cur = Some(node);
         while let Some(n) = cur {
-            let k = n.kind();
-            if k.ends_with("comment")
-                || k.contains("string")
-                || k.contains("char_literal")
-                || k == "rune_literal"
-            {
+            if is_comment_or_string_kind(n.kind()) {
                 return true;
             }
             cur = n.parent();

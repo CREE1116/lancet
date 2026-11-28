@@ -589,12 +589,14 @@ pub fn rank_symbols(opts: &RefsOptions, kinds: &[String]) -> RankResponse {
                 return None;
             }
             let (syms, counts) = code::symbols_and_token_counts(&t.path, &src, &keep)?;
+            // Line starts once per file: counting newlines per symbol is quadratic.
+            let starts: Vec<usize> = memchr::memchr_iter(b'\n', &src).collect();
             let defs = syms
                 .into_iter()
                 .filter_map(|s| {
                     let name = s.name?;
                     glob.is_match(&name).then(|| {
-                        let line = memchr::memchr_iter(b'\n', &src[..s.name_start]).count() + 1;
+                        let line = starts.partition_point(|&nl| nl < s.name_start) + 1;
                         (name, s.kind, line)
                     })
                 })
@@ -602,16 +604,29 @@ pub fn rank_symbols(opts: &RefsOptions, kinds: &[String]) -> RankResponse {
             Some((t.rel.clone(), defs, counts))
         })
         .collect();
-    let mut uses: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    let mut decls: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    for (_, defs, counts) in &per_file {
-        for (k, v) in counts {
-            *uses.entry(k.clone()).or_insert(0) += v;
-        }
+    let mut decls: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for (_, defs, _) in &per_file {
         for (name, _, _) in defs {
-            *decls.entry(name.clone()).or_insert(0) += 1;
+            *decls.entry(name.as_str()).or_insert(0) += 1;
         }
     }
+    // Only declared names are ranked, so only their uses are summed (in parallel).
+    let uses: std::collections::HashMap<&str, usize> = per_file
+        .par_iter()
+        .fold(std::collections::HashMap::new, |mut acc, (_, _, counts)| {
+            for (k, v) in counts {
+                if let Some((name, _)) = decls.get_key_value(k.as_str()) {
+                    *acc.entry(*name).or_insert(0) += v;
+                }
+            }
+            acc
+        })
+        .reduce(std::collections::HashMap::new, |mut a, b| {
+            for (k, v) in b {
+                *a.entry(k).or_insert(0) += v;
+            }
+            a
+        });
     let wanted = |k: &str| kinds.is_empty() || kinds.iter().any(|w| w.eq_ignore_ascii_case(k));
     let mut entries: Vec<RankEntry> = per_file
         .iter()
@@ -619,13 +634,17 @@ pub fn rank_symbols(opts: &RefsOptions, kinds: &[String]) -> RankResponse {
             defs.iter()
                 .filter(|d| wanted(d.1))
                 .map(|(name, kind, line)| {
-                    let n_decl = decls[name];
+                    let n_decl = decls[name.as_str()];
                     RankEntry {
                         name: name.clone(),
                         kind,
                         path: rel.clone(),
                         line: *line,
-                        references: uses.get(name).copied().unwrap_or(0).saturating_sub(n_decl),
+                        references: uses
+                            .get(name.as_str())
+                            .copied()
+                            .unwrap_or(0)
+                            .saturating_sub(n_decl),
                         definitions: n_decl,
                     }
                 })
