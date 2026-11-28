@@ -42,6 +42,7 @@ lancet ast 'console.log($$$ARGS)' web/ --lang tsx
 
 > [!WARNING] 주의할 제약과 ast-grep과의 차이
 > - **`--apply`는 `--limit`과 병행 불가:** 일부 개수만 잘린 리라이트가 실수로 반영되지 않도록 `--limit`을 거절합니다. 대신 `--path` 글롭으로 대상을 좁히세요.
-> - **엄격한 `if` 모양:** `if ($C) $S`는 `else`가 없는 순수 `if`만 매치합니다(`ast-grep`은 `if ... else`도 함께 매치).
+> - **패턴에 없는 부분은 맞추지 않음:** `if ($C) { $$$B }`는 `else`가 없는 `if`만 매치합니다(ast-grep은 `if … else`도 매치하는데, 그러면 rewrite가 `else`를 지웁니다). 둘 다 맞추려면 `if ($C) { $$$B } else { $$$E }`로 쓰세요. 측정한 차이: [ast-grep과의 차이](https://github.com/CREE1116/lancet/blob/main/docs/ast-grep-parity.md).
+> - **주석은 지키기:** 패턴은 주석을 건너뛰므로, 템플릿이 옮기지 않는 주석이 든 매치는 바꾸지 않습니다(경고, `--apply`면 거부).
 > - **`--lang cpp`의 `.h` 포함:** C++ 검색 시 `.cpp`/`.cc`/`.cxx`/`.hpp`뿐 아니라 `.h` 헤더 파일도 스캔합니다.
 > - **리터럴 없는 패턴:** 3바이트 이상 리터럴이 없으면 `.lancet`으로 좁힐 수 없어 해당 언어 파일을 전부 파싱합니다(`ast-grep`의 0.6~1.0배 속도; 최악의 `$$$` 백트래킹은 메모이제이션과 단계 예산으로 제한).

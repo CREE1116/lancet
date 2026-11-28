@@ -898,6 +898,42 @@ fn ast_rewrites_are_written_together_or_not_at_all() {
     );
 }
 
+#[cfg(feature = "ast")]
+#[test]
+fn ast_rewrites_keep_comments_and_rust_match_arms_are_patterns() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    let py =
+        "def f(x):\n    if x:\n        # keep me\n        return 1\n    if x:\n        return 2\n";
+    fs::write(root.join("c.py"), py).unwrap();
+    let mut o = AstOptions::new("if $C: return $X", root);
+    o.lang = Some("py".into());
+    o.rewrite = Some("if $C: return -$X".into());
+    // The commented `if` matches but isn't rewritten: the template would drop `# keep me`.
+    let r = search_ast(&o);
+    assert_eq!(r.matched, 2);
+    assert!(
+        r.diffs[0].diff.contains("+    if x: return -2"),
+        "{}",
+        r.diffs[0].diff
+    );
+    assert!(!r.diffs[0].diff.contains("-        # keep me"));
+    assert!(r.warnings.iter().any(|w| w.contains("drop a comment")));
+    // …and under --apply that refusal stops the whole rewrite.
+    o.apply = true;
+    assert_eq!(search_ast(&o).status, Status::InvalidQuery);
+    assert_eq!(fs::read_to_string(root.join("c.py")).unwrap(), py);
+
+    fs::write(
+        root.join("m.rs"),
+        "fn f() { match x { _ => 1, Some(y) => 2 } }\nfn g() { match x {} }\n",
+    )
+    .unwrap();
+    let mut m = AstOptions::new("match $X { $$$ARMS }", root);
+    m.lang = Some("rs".into());
+    assert_eq!(search_ast(&m).matched, 2);
+}
+
 #[test]
 fn read_outline_and_refs_end_to_end() {
     let dir = build_rich_corpus();

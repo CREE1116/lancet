@@ -7,7 +7,7 @@
 [![CI](https://github.com/CREE1116/lancet/actions/workflows/ci.yml/badge.svg)](https://github.com/CREE1116/lancet/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-[Docs](https://cree1116.github.io/lancet/docs/) · [한국어](./README.ko.md) · [ripgrep parity](./docs/rg-parity.md) · [fd parity](./docs/fd-parity.md) · [Agent instructions](./docs/agent-instructions.md) · [Design](./docs/lancet-design.md) · [Architecture](./docs/ARCHITECTURE.md) · [Benchmarks](#benchmarks)
+[Docs](https://cree1116.github.io/lancet/docs/) · [한국어](./README.ko.md) · [ripgrep parity](./docs/rg-parity.md) · [fd parity](./docs/fd-parity.md) · [ast-grep differences](./docs/ast-grep-parity.md) · [Agent instructions](./docs/agent-instructions.md) · [Design](./docs/lancet-design.md) · [Architecture](./docs/ARCHITECTURE.md) · [Benchmarks](#benchmarks)
 
 </div>
 

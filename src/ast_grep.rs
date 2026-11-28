@@ -328,6 +328,21 @@ mod imp {
         kind.ends_with("comment")
     }
 
+    /// The text of every comment inside `node`.
+    fn comments_in<'s>(node: Node<'_>, src: &'s str) -> Vec<&'s str> {
+        let mut out = Vec::new();
+        let mut stack = vec![node];
+        while let Some(n) = stack.pop() {
+            if is_comment(n.kind()) {
+                out.push(src[n.byte_range()].trim());
+                continue;
+            }
+            let mut c = n.walk();
+            stack.extend(n.children(&mut c));
+        }
+        out
+    }
+
     fn find_exact_span_node<'a>(
         root: Node<'a>,
         span_start: usize,
@@ -510,10 +525,47 @@ mod imp {
         Some(out)
     }
 
+    /// What [`add_match_arm_fillers`] puts after a metavariable to make it an arm.
+    const ARM_FILLER: &str = " => __LANCET_ARM__";
+
+    /// Rust `match $X { $$$A }`: an arm needs `PATTERN => VALUE` to parse, so a
+    /// metavariable standing alone between `{`/`,` and `,`/`}` gets a filler
+    /// value; [`build_pat_node`] turns that arm back into the metavariable.
+    fn add_match_arm_fillers(prep: &str, sentinels: &HashMap<String, MetaSpec>) -> Option<String> {
+        let mut at: Vec<usize> = Vec::new();
+        for k in sentinels.keys() {
+            for (i, _) in prep.match_indices(k.as_str()) {
+                let before = prep[..i].trim_end().chars().last();
+                let after = prep[i + k.len()..].trim_start().chars().next();
+                if matches!(before, Some('{' | ',')) && matches!(after, Some('}' | ',')) {
+                    at.push(i + k.len());
+                }
+            }
+        }
+        if at.is_empty() {
+            return None;
+        }
+        at.sort_unstable();
+        let mut out = prep.to_string();
+        for i in at.into_iter().rev() {
+            out.insert_str(i, ARM_FILLER);
+        }
+        Some(out)
+    }
+
     fn build_pat_node(node: Node<'_>, src: &str, sentinels: &HashMap<String, MetaSpec>) -> PatNode {
         let trimmed = src[node.byte_range()].trim().trim_matches('"');
         if let Some(spec) = sentinels.get(trimmed) {
             return PatNode::Meta(spec.clone());
+        }
+        if node.kind() == "match_arm" {
+            let arm = trimmed.trim_end_matches(',').trim_end();
+            if let Some(spec) = arm
+                .strip_suffix(ARM_FILLER)
+                .and_then(|m| sentinels.get(m.trim()))
+            {
+                return PatNode::Meta(spec.clone());
+            }
         }
         // A statement that is only a metavariable (`$S;`) stands for any statement, so
         // `$S` matches blocks, returns, ifs…, and `$$$B` several statements in a block.
@@ -559,6 +611,10 @@ mod imp {
                 .or_else(|| {
                     let with_semis = add_statement_semicolons(&prep, &sentinels)?;
                     try_extract(lang, &with_semis, ends_with_semi)
+                })
+                .or_else(|| {
+                    let with_arms = add_match_arm_fillers(&prep, &sentinels)?;
+                    try_extract(lang, &with_arms, ends_with_semi)
                 })
                 .ok_or_else(|| {
                     format!(
@@ -1037,6 +1093,7 @@ mod imp {
         MATCH_EXHAUSTED.with(|c| c.set(false));
         MATCH_MEMO.with(|m| m.borrow_mut().clear());
         let mut matches = Vec::new();
+        let mut dropped_comments = 0usize;
         let mut cursor = tree.root_node().walk();
         let mut descend = true;
         // A match contains every pattern literal verbatim (leaves compare by text), so
@@ -1070,7 +1127,16 @@ mod imp {
                     if hit {
                         let start = node.start_position();
                         let end = node.end_position();
-                        let rep = rewrite.map(|tpl| render_rewrite(tpl, &env));
+                        let mut rep = rewrite.map(|tpl| render_rewrite(tpl, &env));
+                        // The pattern skips comments, so a comment inside the match that
+                        // no capture carries into the template would be deleted: don't.
+                        if rep
+                            .as_deref()
+                            .is_some_and(|r| comments_in(node, &src).iter().any(|c| !r.contains(c)))
+                        {
+                            rep = None;
+                            dropped_comments += 1;
+                        }
                         matches.push(AstMatch {
                             path: target.rel.clone(),
                             start_line: start.row + 1,
@@ -1172,12 +1238,18 @@ mod imp {
             }
         }
 
+        let warning = (dropped_comments > 0).then(|| {
+            format!(
+                "{}: {dropped_comments} match(es) not rewritten: the template would drop a comment inside them (capture it, e.g. with $$$, or edit those by hand)",
+                target.rel
+            )
+        });
         Some(FileResult {
             parsed: true,
             matches,
             diff,
             change,
-            warning: None,
+            warning,
             refusal,
         })
     }

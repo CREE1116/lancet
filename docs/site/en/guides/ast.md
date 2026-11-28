@@ -42,6 +42,7 @@ lancet ast 'console.log($$$ARGS)' web/ --lang tsx
 
 > [!WARNING] Important constraints & ast-grep differences
 > - **`--apply` refuses `--limit`:** Lancet refuses capped partial rewrites so you don't mutate the first N matches accidentally; narrow with `--path` globs instead.
-> - **Strict `if` shape:** `if ($C) $S` matches plain `if` without an `else` branch (unlike `ast-grep`, which matches `if ... else` too).
+> - **No silent extra parts:** `if ($C) { $$$B }` matches an `if` without `else` (ast-grep also matches `if … else`, and a rewrite would then delete the `else`). Write `if ($C) { $$$B } else { $$$E }` to match both parts. Measured differences: [ast-grep differences](https://github.com/CREE1116/lancet/blob/main/docs/ast-grep-parity.md).
+> - **Comments are kept:** patterns skip comments, so a match whose comment the template wouldn't carry over is not rewritten (a warning; `--apply` refuses).
 > - **`--lang cpp` includes `.h`:** C++ AST searches inspect `.h` headers in addition to `.cpp`/`.cc`/`.cxx`/`.hpp`.
 > - **Literal-free patterns:** patterns without any 3+ byte literal cannot prune via `.lancet` and must parse all language files (~0.6–1.0× `ast-grep` speed); worst-case `$$$` backtracking is capped by memoization and a step budget.
