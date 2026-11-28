@@ -13,6 +13,7 @@ lancet's goal is now one thing: replace the tools agents and people use to find,
 | `lancet status` | `lancet index --status` |
 | `ast --apply` wrote each file on its own | it writes every rewritten file or none, and refuses rewrites that add syntax errors (`--allow-syntax-errors` overrides) |
 | `rename` accepted files containing NUL bytes | refused like in `edit` |
+| `lancet fd` had its own syntax: substring patterns, a first argument that was a directory became a path, `-p` meant `--pattern`, `-r`, `--limit`, `--min-size` / `--max-size`, exit 1 when nothing matched | fd's syntax: a regex matched against names (`-g` for globs), paths after the pattern (`lancet fd . src`), `-p` is `--full-path`, `--max-results`, `-S +100ki`, and fd's exit codes (0 even when nothing matched) |
 
 The MCP server's `--read-only` refuses `write` too. The docs site page `reference/lql-and-ast` is now `reference/ast-patterns`.
 
@@ -24,6 +25,17 @@ The MCP server's `--read-only` refuses `write` too. The docs site page `referenc
 - `patch` takes Codex `*** Begin Patch` envelopes as well as unified diffs.
 - `read` of an image reports what it is; over MCP the image itself is returned.
 - `outline`, `refs` and `ast` take several paths, like `rg`, `fd` and `read`.
+
+### fd parity
+
+- `lancet fd` takes fd 10.5's command line: smart case, `-g` / `-F` / `--exact` / `--and` / `-p`, every `-t` kind, `-e`, `-S`, `--changed-within` / `--changed-before` (durations, dates, `@timestamp`), `-o`, depth, `-E`, `--prune`, `--ignore-contain`, `.fdignore`, `--format`, `-0`, `-a`, `--path-separator`, `--strip-cwd-prefix`, `-C`, `--search-path`, `--max-results`, `-q`. 133 cases are compared with fd 10.5.2 in CI (`docs/fd-parity.md`). `-l`, `-x` and `-X` are refused (use `xargs -0`); lancet keeps `--tree`, `--dirs`, `--type-class`, `--json` and `--trust-index`.
+- A Glob-tool pattern such as `src/**/*.ts` gets the fd spelling in the error (`lancet fd -g '*.ts' src`).
+
+### ast-grep
+
+- Rust `match $X { $$$A }` patterns work (they couldn't be parsed).
+- A rewrite never deletes a comment: patterns skip comments, so a match holding a comment the template doesn't carry over is left alone (warning; `--apply` refuses).
+- Measured against ast-grep 0.51.3 on 34 patterns in six languages: 89.7% of matches agree; every difference is listed in `docs/ast-grep-parity.md`.
 
 ### ripgrep parity
 

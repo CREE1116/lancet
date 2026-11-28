@@ -216,8 +216,8 @@ def bench_fd(corpus: Path, idx_dir: Path) -> None:
     m_find, p_find = run_timed(["find", str(corpus), "-type", "f"], warmup=1, runs=3)
     m_rg, p_rg = run_timed([rg_bin, "--no-ignore", "--files", str(corpus)], warmup=1, runs=5) if rg_bin else (0.0, None)
     m_fd, p_fd = run_timed([fd_bin, "--no-ignore", "-t", "f", ".", str(corpus)], warmup=1, runs=5) if fd_bin else (0.0, None)
-    m_ws, p_ws = run_timed([str(WEFT), "fd", "--no-ignore", "-t", "f", str(corpus), "--json"], warmup=1, runs=5)
-    m_wt, p_wt = run_timed([str(WEFT), "fd", "--trust-index", "--index-dir", str(idx_dir), "-t", "f", str(corpus), "--json"], warmup=1, runs=5)
+    m_ws, p_ws = run_timed([str(WEFT), "fd", "--no-ignore", "-t", "f", ".", str(corpus), "--json"], warmup=1, runs=5)
+    m_wt, p_wt = run_timed([str(WEFT), "fd", "--no-ignore", "--trust-index", "--index-dir", str(idx_dir), "-t", "f", ".", str(corpus), "--json"], warmup=1, runs=5)
     d_ws, d_wt = json.loads(p_ws.stdout), json.loads(p_wt.stdout)
     fd_hits = len(p_fd.stdout.splitlines()) if p_fd else 0
     print(
@@ -227,8 +227,8 @@ def bench_fd(corpus: Path, idx_dir: Path) -> None:
 
     # 2. Extension + substring (`Cargo` in .toml)
     m_fd2, p_fd2 = run_timed([fd_bin, "--no-ignore", "-t", "f", "-e", "toml", "Cargo", str(corpus)], warmup=1, runs=5) if fd_bin else (0.0, None)
-    m_ws2, p_ws2 = run_timed([str(WEFT), "fd", "--no-ignore", "-t", "f", "-e", "toml", "-p", "Cargo", str(corpus), "--json"], warmup=1, runs=5)
-    m_wt2, p_wt2 = run_timed([str(WEFT), "fd", "--trust-index", "--index-dir", str(idx_dir), "-t", "f", "-e", "toml", "-p", "Cargo", str(corpus), "--json"], warmup=1, runs=5)
+    m_ws2, p_ws2 = run_timed([str(WEFT), "fd", "--no-ignore", "-t", "f", "-e", "toml", "Cargo", str(corpus), "--json"], warmup=1, runs=5)
+    m_wt2, p_wt2 = run_timed([str(WEFT), "fd", "--no-ignore", "--trust-index", "--index-dir", str(idx_dir), "-t", "f", "-e", "toml", "Cargo", str(corpus), "--json"], warmup=1, runs=5)
     d_ws2, d_wt2 = json.loads(p_ws2.stdout), json.loads(p_wt2.stdout)
     fd2_hits = len(p_fd2.stdout.splitlines()) if p_fd2 else 0
     print(
@@ -239,8 +239,8 @@ def bench_fd(corpus: Path, idx_dir: Path) -> None:
     # 3. Large files >= 100 KiB
     m_find3, _ = run_timed(["find", str(corpus), "-type", "f", "-size", "+100k"], warmup=1, runs=3)
     m_fd3, p_fd3 = run_timed([fd_bin, "--no-ignore", "-t", "f", "-S", "+100ki", ".", str(corpus)], warmup=1, runs=5) if fd_bin else (0.0, None)
-    m_ws3, p_ws3 = run_timed([str(WEFT), "fd", "--no-ignore", "-t", "f", "--min-size", "100k", str(corpus), "--json"], warmup=1, runs=5)
-    m_wt3, p_wt3 = run_timed([str(WEFT), "fd", "--trust-index", "--index-dir", str(idx_dir), "-t", "f", "--min-size", "100k", str(corpus), "--json"], warmup=1, runs=5)
+    m_ws3, p_ws3 = run_timed([str(WEFT), "fd", "--no-ignore", "-t", "f", "-S", "+100ki", ".", str(corpus), "--json"], warmup=1, runs=5)
+    m_wt3, p_wt3 = run_timed([str(WEFT), "fd", "--no-ignore", "--trust-index", "--index-dir", str(idx_dir), "-t", "f", "-S", "+100ki", ".", str(corpus), "--json"], warmup=1, runs=5)
     d_ws3, d_wt3 = json.loads(p_ws3.stdout), json.loads(p_wt3.stdout)
     fd3_hits = len(p_fd3.stdout.splitlines()) if p_fd3 else 0
     print(
@@ -373,14 +373,16 @@ def bench_docs() -> None:
             else:
                 rc_s = rw_s = "-"
 
-            m_ws, p_ws = run_timed([str(WEFT), wql, str(root), "--no-index", "--json"], warmup=1, runs=5)
-            m_wa, p_wa = run_timed([str(WEFT), wql, str(root), "--index-dir", str(idx_dir), "--json"], warmup=1, runs=5)
-            m_wt, p_wt = run_timed([str(WEFT), wql, str(root), "--trust-index", "--index-dir", str(idx_dir), "--json"], warmup=1, runs=5)
-            d_ws, d_wa, d_wt = json.loads(p_ws.stdout), json.loads(p_wa.stdout), json.loads(p_wt.stdout)
+            # Same question as rga -l: which files contain the text (documents included).
+            rg = [str(WEFT), "rg", "--docs", "-l", raw_q, str(root)]
+            m_ws, p_ws = run_timed([*rg, "--no-index"], warmup=1, runs=5)
+            m_wa, p_wa = run_timed([*rg, "--index-dir", str(idx_dir)], warmup=1, runs=5)
+            m_wt, p_wt = run_timed([*rg, "--trust-index", "--index-dir", str(idx_dir)], warmup=1, runs=5)
+            hits = [len([x for x in p.stdout.splitlines() if x.strip()]) for p in (p_ws, p_wa, p_wt)]
 
             print(
                 f"{label:<34} | {rc_s:>15} | {rw_s:>14} | "
-                f"{m_ws:>6.1f}ms ({d_ws['matched']}) | {m_wa:>6.1f}ms ({d_wa['matched']}) | {m_wt:>6.2f}ms ({d_wt['matched']})"
+                f"{m_ws:>6.1f}ms ({hits[0]}) | {m_wa:>6.1f}ms ({hits[1]}) | {m_wt:>6.2f}ms ({hits[2]})"
             )
 
 

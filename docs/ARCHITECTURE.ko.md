@@ -296,3 +296,6 @@ src/
 - Linux, macOS, Windows CI가 rg 대조까지 통과한다.
 - 에이전트 A/B(`bench/agents/`)를 여러 모델·여러 번 돌려, lancet의 정확도가 내장 도구 이상이다.
 - 가장 큰 코퍼스(Linux, LLVM)에서 모든 명령을 재고, 5단계의 `refs --rank` 같은 병적인 경우가 없다.
+- 대체하는 도구마다 측정한 비교가 있다: ripgrep(대조 150개), fd(대조 133개), ast-grep(실제 코드에서 매치 단위 비교, `docs/ast-grep-parity.md`), apply_patch·git apply(왕복 테스트).
+
+진행 상황(0.2.0): 위의 대조 항목은 끝났고, `--json` 스키마 테스트, 여러 모델 A/B, Linux·Windows CI는 아직이다.

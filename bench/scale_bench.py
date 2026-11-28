@@ -133,8 +133,8 @@ def main() -> None:
     if fd:
         print("\nFile discovery:")
         a = timed([fd, "--no-ignore", "-t", "f", "-e", "c", ".", str(corpus)], 3)[0]
-        b = timed([str(LANCET), "fd", "--no-ignore", "-t", "f", "-e", "c", str(corpus), "--json"], 3)[0]
-        c = timed([str(LANCET), "fd", "--trust-index", "--index-dir", str(idx), "-t", "f", "-e", "c", str(corpus), "--json"], 3)[0]
+        b = timed([str(LANCET), "fd", "--no-ignore", "-t", "f", "-e", "c", ".", str(corpus), "--json"], 3)[0]
+        c = timed([str(LANCET), "fd", "--trust-index", "--index-dir", str(idx), "-t", "f", "-e", "c", ".", str(corpus), "--json"], 3)[0]
         print(f"  *.c files          fd={a:.1f} ms | lancet fd={b:.1f} ms | lancet fd --trust-index={c:.1f} ms")
 
     if ag:

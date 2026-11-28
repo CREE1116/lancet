@@ -296,3 +296,6 @@ Why this order: step 1 (Scope) had the most duplication and underlies the others
 - CI passes on Linux, macOS and Windows, rg parity included.
 - The agent A/B (`bench/agents/`) is repeated across several models and runs, and lancet is at least as accurate as the built-in tools.
 - Every command is timed on the largest corpora (Linux, LLVM) and none has a pathological case like the `refs --rank` one fixed in step 5.
+- Each replaced tool has a measured comparison: ripgrep (150 parity cases), fd (133 parity cases), ast-grep (match-by-match on real code, `docs/ast-grep-parity.md`), apply_patch / git apply (round-trip tests).
+
+Progress (0.2.0): the parity rows above are done; the `--json` schema test, the multi-model A/B and the Linux/Windows CI runs are not yet.

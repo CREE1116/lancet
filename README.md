@@ -162,13 +162,13 @@ Reproducible via [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_com
 Without the index, `lancet rg` runs within a few percent of ripgrep (-1%..+5% when the two are run interleaved; `bench/results/baseline-step1.md`); every mode prints the same files as ripgrep.
 
 
-**File discovery** (`lancet fd` vs `fd 10.5.2`, `rg --files`, `find`)
+**File discovery** (`lancet fd` vs `fd 10.5.2`, `rg --files`, `find`; 2026-11-28, crates source tree with 29,984 files, the same arguments for `fd` and `lancet fd`, run interleaved, median of 9, on a busy machine — compare within a row)
 
 | Workload | `find` | `rg --files` | `fd` | lancet fd | lancet fd `--trust-index` |
 |---|---:|---:|---:|---:|---:|
-| List all files (28,352) | 176.0 ms | 47.5 ms | 49.8 ms | 60.6 ms | **14.4 ms (3.5×)** |
-| Extension + name (`-e toml -p Cargo`) | — | — | 47.1 ms | 52.1 ms | **6.6 ms (7.1×)** |
-| Size filter (≥ 100 KiB, 637 files) | 169.1 ms | — | 65.4 ms | **53.3 ms** | **5.6 ms (11.7×)** |
+| All files (`--no-ignore -t f .`, 29,984) | 440.8 ms | 84.4 ms | 86.4 ms | 112.4 ms | **51.6 ms (1.7×)** |
+| Extension + name (`-e toml Cargo`, 630) | — | — | 81.5 ms | **79.7 ms** | **22.2 ms (3.7×)** |
+| Size filter (`-S +100ki`, 818) | 379.8 ms | — | 135.0 ms | 162.4 ms | **23.7 ms (5.7×)** |
 
 **Structural search** (`lancet ast` vs `ast-grep 0.51.3`)
 
