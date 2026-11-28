@@ -12,7 +12,7 @@ Unlike search servers that rely on an asynchronous background watcher (lagging b
 
 ## Sound Trigram Lowering {#trigram-lowering}
 
-Queries are compiled into required byte-trigram boolean trees (literals, regex HIR branches, AST literals, `refs --rank` glob literals) or a sound q-gram count threshold `AtLeast(k)` for `fuzzy()`. Any file missing those trigrams cannot possibly satisfy the predicate, so skipping it produces **zero false negatives**. Every remaining candidate goes through the exact full-scan evaluator.
+Queries are compiled into required byte-trigram boolean trees (literals, regex HIR branches, AST pattern literals, `refs` identifiers, `refs --rank` glob literals). When no requirement can be derived (for example `\w+`), every file is a candidate. Any file missing those trigrams cannot possibly satisfy the predicate, so skipping it produces **zero false negatives**. Every remaining candidate goes through the exact full-scan evaluator.
 
 ## On-Disk LANCET04 Format & Zero-Copy mmap {#segment-format}
 

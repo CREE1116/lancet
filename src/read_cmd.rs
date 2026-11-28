@@ -694,7 +694,28 @@ pub fn read_file_range(opts: &ReadOptions) -> ReadResponse {
     let mut used_tokens = 0usize;
     let mut out_lines = Vec::with_capacity(selected.len());
 
+    // Like the built-in Read: a read that names no range stops after 2000 lines.
+    let cap = (effective_lines.is_none()
+        && opts.symbol.is_none()
+        && opts.budget_tokens.is_none()
+        && opts.pages.is_none()
+        && opts.rows.is_none())
+    .then_some(DEFAULT_MAX_LINES);
     for (idx, (num, line_txt)) in selected.into_iter().enumerate() {
+        if cap.is_some_and(|c| idx >= c) {
+            truncated = true;
+            next_line = Some(num);
+            break;
+        }
+        // Like the built-in Read: one very long line (minified code, data) is cut.
+        let line_txt = match line_txt.char_indices().nth(MAX_LINE_CHARS) {
+            Some((cut, _)) if !opts.raw => format!(
+                "{}… [{} more characters]",
+                &line_txt[..cut],
+                line_txt[cut..].chars().count()
+            ),
+            _ => line_txt,
+        };
         let est = estimate_line_tokens(&line_txt);
         if let Some(budget) = opts.budget_tokens {
             if idx > 0 && used_tokens + est > budget {
@@ -736,6 +757,11 @@ pub fn read_file_range(opts: &ReadOptions) -> ReadResponse {
         elapsed_ms: ms(t0),
     }
 }
+
+/// Lines a read without a range returns, as the built-in Read tools do.
+pub const DEFAULT_MAX_LINES: usize = 2000;
+/// Characters of one line `read` shows (all of it with `--raw`).
+pub const MAX_LINE_CHARS: usize = 2000;
 
 pub fn print_read_human(resp: &ReadResponse, raw: bool, w: &mut impl Write) -> io::Result<()> {
     if let Some(err) = &resp.error {

@@ -1,0 +1,8 @@
+q1|Where is a file's "rev" (the content hash used for safe edits) computed, and which commands print it to the user? Answer with file:line references.
+q2|List every place in src/ that calls the function `rev` defined in src/edit.rs (not other things named rev). Give file:line and the enclosing function for each call.
+q3|Read docs/design-notes.pdf. What is the default per-file size limit for indexing, and how long is the racy window?
+e1|In src/edit_cmd.rs the error message "no edit given" is unclear. Change it to "no change given (use --lines, --symbol, --old-string or --edits)". Change nothing else.
+e2|Rename the function `display_path` (defined in src/walk.rs) to `shown_path` everywhere it is defined or called, as one change across all files.
+e3|In src/rg.rs, inside `fn run`, rename the local variable `searched_at` to `search_done` (only that variable).
+e4|Rename the field `budget_tokens` of the struct `ReadOptions` (src/read_cmd.rs) to `token_budget`, and update every use of that field. Other structs that also have a `budget_tokens` field must keep it.
+e5|Create a new file docs/COMMANDS.md that lists every lancet subcommand with a one-line description, based on the top-level help text in src/main.rs.

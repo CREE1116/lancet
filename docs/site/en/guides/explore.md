@@ -10,27 +10,28 @@ Reading full files burns context tokens fast. Use Lancet's discovery commands â€
 
 ## Fast Tree & Metadata Discovery (lancet fd) {#fd-guide}
 
-`lancet fd` can read from disk or directly from the mmap'd `.lancet` index when `--trust-index` is passed (no directory walk at all).
+`lancet fd` takes fd's command line: the pattern is a regex matched against names (smart case), `-g` makes it a glob, and paths come after the pattern. It adds `--tree`, and with `--trust-index` it reads the file list straight from the `.lancet` index. Every flag is in the [fd parity reference](../reference/fd-parity.md).
 
 ```bash title="Terminal"
 # Compact folders-only architecture map, or several roots at once
 lancet fd --tree --dirs --max-depth 2 .
-lancet fd --tree -d 2 src docs
+lancet fd --tree -d 2 . src docs
 lancet fd . crates/core crates/cli
 
-# Glob & regex matching (patterns with *, ?, [ auto-detect as globs in v0.1.3+)
-lancet fd '*_test.rs' crates/
-lancet fd -p config -r 'auth|session' src
+# Regex by default, globs with -g, extensions with -e
+lancet fd '_test\.rs$' crates/
+lancet fd -g '*_test.rs' crates/
+lancet fd -e proto
 
-# Recency + size bounds (durations: s, m, h, d, w; sizes: b, k, m, g)
-lancet fd -t f --changed-within 48h --min-size 4k --max-size 2m .
+# Recency + size bounds (durations as in fd: 48h, 2weeks; sizes: k = 1000, ki = 1024)
+lancet fd -t f --changed-within 48h -S +4k -S -2m
 
 # JSON with file sizes and mtime_ns (costs 1 stat per returned entry)
-lancet fd -e rs --meta --limit 25 --json src
+lancet fd -e rs --meta --max-results 25 --json . src
 ```
 
-> [!NOTE] When -e / --type-class / size filters are set on fd
-> If you filter by extension (`-e`), `--type-class`, `--min-size`, or `--max-size` without specifying `-t`, `lancet fd` narrows results to files automatically unless `--dirs` or `-t d` is also given.
+> [!NOTE] Exit codes are fd's
+> `lancet fd` exits `0` even when nothing matched (as fd does), `1` for its own errors such as a missing search path, and `2` for invalid arguments. Use `-q` for a yes/no answer.
 
 ## Declaration, Heading & Archive Skeletons (lancet outline) {#outline-guide}
 
@@ -38,7 +39,7 @@ Inspect structure before opening lines. `lancet outline` understands AST declara
 
 ```bash title="Terminal"
 # Single file AST skeleton with line spans & signatures
-lancet outline src/search.rs
+lancet outline src/scope.rs
 
 # Directory outline capped to depth & extension
 lancet outline src -d 2 -e rs --limit 20 --json

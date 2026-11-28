@@ -73,6 +73,16 @@ pub struct Manifest {
     pub version: u32,
     pub next_seg: u32,
     pub segments: Vec<SegEntry>,
+    /// The walk the indexed files came from (absent in older indexes: the default).
+    #[serde(default)]
+    pub scope: IndexScope,
+}
+
+/// Which files an index holds: the walk rules it was last synced with.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IndexScope {
+    pub hidden: bool,
+    pub no_ignore: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -310,6 +320,7 @@ pub fn sync_with_ocr(root: &Path, dir: &Path, wopts: &WalkOpts, ocr: bool) -> Re
                 version: FORMAT_VERSION,
                 next_seg: 1,
                 segments: vec![],
+                scope: IndexScope::default(),
             },
             Vec::new(),
             vec![false; entries.len()],
@@ -383,6 +394,10 @@ pub fn sync_with_ocr(root: &Path, dir: &Path, wopts: &WalkOpts, ocr: bool) -> Re
     }
 
     rep.segments = manifest.segments.len();
+    manifest.scope = IndexScope {
+        hidden: wopts.hidden,
+        no_ignore: wopts.no_ignore,
+    };
     write_manifest(dir, &manifest)?;
     rep.elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
     Ok(rep)

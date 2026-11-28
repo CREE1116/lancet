@@ -8,7 +8,6 @@ This directory contains the source Markdown guides and SVG diagrams for **Lancet
 
 | Document | Topic |
 |---|---|
-| [`grammar.md`](./grammar.md) | Lancet Query Language (LQL v0.1) formal grammar, semantics, and full CLI surface |
 | [`rg-parity.md`](./rg-parity.md) | `lancet rg` flag compatibility matrix, intentional differences, and `--docs` / `--passthru` / `--type-add` |
 | [`mcp.md`](./mcp.md) | Built-in `lancet mcp` stdio server setup, 11 tools, client configs, and skill installation |
 | [`agent-instructions.md`](./agent-instructions.md) | Drop-in agent workflow rules (`fd`, `outline`, `read`, `refs`, `ast`, `edit`, `patch`, `rename`, `mcp`) |

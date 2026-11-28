@@ -6,7 +6,7 @@ lede: "src/edit.rs가 심볼릭 링크, nlink > 1 하드 링크, 권한, 소유�
 keywords: "실패사례 write_atomic write_if_rev read_shared lock_shared 하드링크 nlink 심볼릭링크 uid gid sync_all"
 source: "https://github.com/CREE1116/lancet/blob/main/docs/why-one-tool.ko.md"
 ---
-왜 읽기, AST 파싱, diff, 쓰기를 바이너리 하나에 넣었을까요? CLI 도구 체인에서 사고는 항상 *도구와 도구 사이*에서 발생하며, Lancet의 모든 쓰기 명령은 `src/edit.rs`의 단일 안전 경로를 공유하기 때문입니다.
+왜 읽기, AST 파싱, diff, 쓰기를 바이너리 하나에 넣었을까요? CLI 도구 체인에서 사고는 항상 *도구와 도구 사이*에서 발생하며, Lancet의 모든 쓰기 명령(`edit`, `write`, `patch`, `rename`, `ast --rewrite`)이 `src/edit.rs`의 저수준 쓰기 위에 있는 단일 코어 `src/change.rs`로 읽고 쓰기 때문입니다.
 
 ![bench/failure_modes.py로 직접 재현한 7가지 도구 체인 사고.](diagram:failure-modes.ko.svg "모든 항목은 실제 ripgrep, BSD sed/patch, pandoc, rga, zoekt로 측정한 결과입니다.")
 
@@ -21,6 +21,10 @@ source: "https://github.com/CREE1116/lancet/blob/main/docs/why-one-tool.ko.md"
 | `.docx`에 `rga` → `pandoc` | 검색 줄과 읽기 줄 **40개 중 0개** 일치 | **40개 중 40개**: 검색·읽기가 같은 추출기 사용 |
 | 파일 20개 수정 직후 `zoekt` | 새 단어 0건, 지운 단어 20건 계속 출력 | `auto` 모드: 즉시 새 단어 20건, 삭제 0건 |
 | `sed -i` / `perl -pi` | 심볼릭/하드 링크 파손 및 `0640` 권한 소실 | 심볼릭 링크, 다중 하드 링크(`nlink > 1`), 권한·소유자 보존 |
+
+## 하나의 변경: 전부 쓰거나 하나도 안 쓰기 {#all-or-nothing}
+
+쓰기 명령은 먼저 디스크를 건드리지 않고 변경 전체를 계획합니다. 모든 파일을 같은 로더로 읽고(문서, 압축 파일, 바이너리, UTF-8이 아닌 파일은 거부), 새 내용과 diff를 만들고, Tree-sitter 구문 오류를 늘리는 변경은 거부합니다. 그다음에야 `change::commit`이 아래의 CAS로 파일을 하나씩 씁니다. 어느 파일이든 실패하면(예: 다른 에이전트가 그새 고침) 이미 쓴 파일을 되돌리고, 아무것도 반영하지 않은 채 `conflict`를 보고합니다.
 
 ## 공유 읽기 잠금 & 배타적 write_if_rev CAS {#locks-cas}
 

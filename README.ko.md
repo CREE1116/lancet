@@ -7,7 +7,7 @@
 [![CI](https://github.com/CREE1116/lancet/actions/workflows/ci.yml/badge.svg)](https://github.com/CREE1116/lancet/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#라이선스)
 
-[공식 문서](https://cree1116.github.io/lancet/ko/docs/) · [English](./README.md) · [쿼리 문법](./docs/grammar.md) · [ripgrep 대조표](./docs/rg-parity.md) · [에이전트 지침](./docs/agent-instructions.md) · [벤치마크](#벤치마크)
+[공식 문서](https://cree1116.github.io/lancet/ko/docs/) · [English](./README.md) · [ripgrep 대조표](./docs/rg-parity.md) · [fd 대조표](./docs/fd-parity.md) · [ast-grep과의 차이](./docs/ast-grep-parity.md) · [에이전트 지침](./docs/agent-instructions.md) · [설계](./docs/lancet-design.ko.md) · [구조](./docs/ARCHITECTURE.ko.md) · [벤치마크](#벤치마크)
 
 </div>
 
@@ -62,13 +62,12 @@ lancet index .
 
 ```bash
 lancet fd --tree --max-depth 2 .                            # 구조 파악
-lancet 'near("gradient", "clip", 30) in function' src       # 검색: 불리언·근접·퍼지·AST 범위
 lancet rg -w spin_lock src                                  # ripgrep 호환 CLI (인덱스 가속)
-lancet read src/search.rs --symbol execute_one              # 심볼 하나를 문서 주석까지 정확히 읽기
+lancet read src/rg.rs --symbol run                           # 심볼 하나를 문서 주석까지 정확히 읽기
 lancet refs SearchOptions src                               # 정의 + 참조 (주석·문자열 제외)
 lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'      # 구조적 리라이트 미리보기 …
 lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply   # … 원자적으로 반영
-lancet edit src/search.rs --symbol execute_one --with-file new.rs --rev <REV> --apply  # read 좌표 그대로 편집
+lancet edit src/rg.rs --symbol run --with-file new.rs --rev <REV> --apply  # read 좌표 그대로 편집
 git diff | lancet patch --apply                             # unified diff를 여러 파일에 원자적으로 적용
 ```
 
@@ -78,19 +77,17 @@ git diff | lancet patch --apply                             # unified diff를 �
 
 | 명령 | 하는 일 |
 |---|---|
-| `lancet <QUERY> [PATH]` | `AND` / `OR` / `NOT`, `near` / `before`, `fuzzy("단어", k)`, `regex(...)`, `in function`, `symbol(...)`, `\| expand parent \| limit 5 \| budget tokens:1500` 같은 파이프 — [쿼리 문법](./docs/grammar.md) 참고 |
 | `lancet rg [FLAGS] PATTERN [PATH...]` | 항상 최신인 lancet 인덱스와 문서 추출기 위에서 동작하는 ripgrep 호환 플래그(`-L`, `--max-depth`, `--max-filesize`, `--color`, `-U`, `-w`, `-A`/`-B`/`-C`, `--json` 등; 파이프 시에도 `-n` 기본, `-N`으로 해제) — [ripgrep 대조표](./docs/rg-parity.md) 참고 |
-| `lancet fd` | `.gitignore` 인식 파일·폴더 탐색, `--tree`(폴더만 보려면 `--dirs`), 크기·수정 시각 필터, `--trust-index` 조회 |
+| `lancet fd [PATTERN] [PATH...]` | fd 호환 파일 탐색(fd의 플래그·출력·종료 코드, CI에서 대조 케이스 133개) + `--tree`(폴더만 보려면 `--dirs`), `--type-class`, `--trust-index` 조회. [fd 대조표](./docs/fd-parity.md) 참고 |
 | `lancet ast` | **24개 언어** Tree-sitter 구조 검색과 `--rewrite` (`$X`, `$_`, `$$$ARGS`, C 계열 언어의 `if ($C) $S`·`{ $$$B }` 같은 문장 메타변수 포함) |
 | `lancet read` | 정확한 줄 범위, `--symbol`, PDF/PPTX `--page`, 엑셀 `--sheet --rows --cols`, `archive.zip!항목`, 이어읽기 커서가 있는 `--budget-tokens` |
-| `lancet edit` | `read`와 같은 좌표(`--lines`, `--symbol`, 유일해야 하는 정확한 텍스트 `--find`, 여러 구간은 `--edits`)로 줄 교체·삭제·삽입. `--rev` 기준 잠금 compare-and-swap이라 여러 에이전트가 동시에 고쳐도 서로 덮어쓰지 않음. 구문 오류가 늘어나면 거부, `--apply` 전에는 dry-run |
+| `lancet edit` | `read`와 같은 좌표(`--lines`, `--symbol`, 유일해야 하는 정확한 텍스트 `--old-string`, 여러 구간은 `--edits`)로 줄 교체·삭제·삽입. `--rev` 기준 잠금 compare-and-swap이라 여러 에이전트가 동시에 고쳐도 서로 덮어쓰지 않음. 구문 오류가 늘어나면 거부, `--apply` 전에는 dry-run |
 | `lancet write` | 새 파일 만들기, 또는 읽을 때 받은 `--rev`로 파일 전체 교체. `--apply` 전에는 미리보기 |
 | `lancet patch` | unified diff(`git diff`, `diff -u`, rename·모드 변경·빈 파일 포함, 바이너리 변경은 거부) 적용: 정확한 hunk 매칭(줄 번호가 밀렸으면 가장 가까운 고유 위치 탐색, 퍼지 추측 없음), 전체 파일 검증 및 동시 쓰기 충돌 시 롤백, 구문 오류 증가 거부, `--apply` 전에는 dry-run |
 | `lancet mcp` | 내장 Model Context Protocol(`stdio`) 서버. CLI 인자를 그대로 받는 `lancet` 도구 하나를 제공하며, 셸이 없는 클라이언트용입니다(`--root`, `--read-only`, `--trust-index`) |
 | `lancet outline` | 코드 선언 골격, Markdown 목차, 워크북 스키마, 압축 파일 목록 |
 | `lancet refs` | 주석·문자열 리터럴을 건너뛰는 인덱스 가속 `[def]` / `[ref]` 추적. `--rank '*Service' --kind class`로 많이 쓰이는 선언부터 나열 |
-| `lancet batch` | 여러 쿼리를 인덱스 한 번 열고 디렉터리 한 번 훑어 처리 |
-| `lancet index` · `status` · `explain` | 인덱스 빌드·갱신, 상태 확인, 쿼리에 필요한 트라이그램 보기 |
+| `lancet index` | 인덱스 생성·갱신 (`--status`로 상태 확인) |
 
 **AST 언어:** Rust, Python, JavaScript, TypeScript, TSX, Go, C, C++, Zig, Java, C#, Kotlin, Scala, Swift, Ruby, PHP, Bash, Lua, HCL, HTML, CSS, JSON, YAML, TOML.
 **문서·압축 파일** (기본 `adapters` 기능): `.pdf`, `.docx`, `.pptx`, `.odt`, `.hwp` (5.0), `.hwpx`, `.epub`, `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.ods`, `.zip`, `.tar`, `.gz`, `.tgz` — 16 MiB 폭탄 방어 상한 안에서 프로세스 내부 추출, `--ocr`은 선택.
@@ -154,27 +151,23 @@ lancet이 **이기지 못하는** 곳: 리터럴 없는 정규식(인덱스가 �
 
 [`bench/run_bench.py`](./bench/run_bench.py), [`bench/bench_competitors.py`](./bench/bench_competitors.py), [`bench/official_suite.sh`](./bench/official_suite.sh)로 재현합니다. 콜드 인덱스 빌드 **1.17초** (36.3 MiB, 원본의 8.0%), 변경 없는 동기화 **64.6 ms**.
 
-**텍스트 검색** (`lancet` vs `ripgrep 15.2.0`)
+**텍스트 검색** (`lancet rg` vs `ripgrep 16.0.0`; 2026-11-28 현재 크레이트 소스 트리에서 다시 잼, 파일 29,792개 / 703.5 MiB, 인덱스 2.87초 / 41.2 MiB; 대소문자 무시 파일 목록 `-i -l -F`)
 
-| 쿼리 | `rg` | lancet scan | lancet auto | lancet `--trust-index` |
+| 쿼리 | `rg` | lancet `--no-index` | lancet auto | lancet `--trust-index` |
 |---|---:|---:|---:|---:|
-| 희귀 리터럴 (`ThreadPoolBuilder`, 32건) | 307.7 ms | 310.6 ms | **60.5 ms (5.1×)** | **5.1 ms (60.3×)** |
-| 일반 리터럴 (`unwrap_or_else`, 582건) | 311.3 ms | 314.6 ms | **65.4 ms (4.8×)** | **13.0 ms (23.9×)** |
-| 불리언 (`"unsafe" AND "transmute" NOT "miri"`) | 469.8 ms¹ | **304.8 ms** | **62.6 ms (7.5×)** | **10.1 ms (46.5×)** |
-| 정규식 (`pub unsafe fn \w+\(`) | 307.4 ms | 317.9 ms | **80.5 ms (3.8×)** | **26.9 ms (11.4×)** |
-| 근접 (`near("unsafe", "transmute", 15)`) | *미지원* | 307.1 ms | **65.9 ms** | **13.6 ms** |
-| 오타 퍼지 (`fuzzy("transmte", 1)`) | *미지원* | 334.7 ms | **156.7 ms** | **107.4 ms** |
-| 6개 쿼리 일괄 (`lancet batch`) | ~1,850 ms | 1,570.6 ms | **93.1 ms** | **30.7 ms (쿼리당 5.1 ms)** |
+| 희귀 리터럴 (`ThreadPoolBuilder`, 파일 32개) | 432.0 ms | 487.3 ms | **77.6 ms (5.6×)** | **6.8 ms (63.5×)** |
+| 일반 리터럴 (`unwrap_or_else`, 파일 590개) | 439.9 ms | 492.8 ms | **89.2 ms (4.9×)** | **19.4 ms (22.7×)** |
+| 정규식 (`pub unsafe fn \w+\(`, 파일 1,452개) | 438.9 ms | 491.3 ms | **105.2 ms (4.2×)** | **38.2 ms (11.5×)** |
 
-*¹ `rg`는 파일 단위 `AND`에 두 번의 패스가 필요합니다.*
+인덱스 없이는 ripgrep과 몇 퍼센트 차이로 비슷합니다(번갈아 재면 -1%~+5%, `bench/results/baseline-step1.md`). 모든 모드가 ripgrep과 같은 파일을 출력합니다.
 
-**파일 탐색** (`lancet fd` vs `fd 10.5.2`, `rg --files`, `find`)
+**파일 탐색** (`lancet fd` vs `fd 10.5.2`, `rg --files`, `find`. 2026-11-28, 크레이트 소스 트리 파일 29,984개, `fd`와 `lancet fd`에 같은 인자, 번갈아 9번 잰 중앙값. 바쁜 기계에서 쟀으므로 같은 줄 안에서 비교하세요)
 
 | 작업 | `find` | `rg --files` | `fd` | lancet fd | lancet fd `--trust-index` |
 |---|---:|---:|---:|---:|---:|
-| 전체 파일 목록 (28,352) | 176.0 ms | 47.5 ms | 49.8 ms | 60.6 ms | **14.4 ms (3.5×)** |
-| 확장자 + 이름 (`-e toml -p Cargo`) | — | — | 47.1 ms | 52.1 ms | **6.6 ms (7.1×)** |
-| 크기 필터 (≥ 100 KiB, 637개) | 169.1 ms | — | 65.4 ms | **53.3 ms** | **5.6 ms (11.7×)** |
+| 전체 파일 목록 (`--no-ignore -t f .`, 29,984) | 440.8 ms | 84.4 ms | 86.4 ms | 112.4 ms | **51.6 ms (1.7×)** |
+| 확장자 + 이름 (`-e toml Cargo`, 630) | — | — | 81.5 ms | **79.7 ms** | **22.2 ms (3.7×)** |
+| 크기 필터 (`-S +100ki`, 818) | 379.8 ms | — | 135.0 ms | 162.4 ms | **23.7 ms (5.7×)** |
 
 **구조 검색** (`lancet ast` vs `ast-grep 0.51.3`)
 
@@ -210,9 +203,8 @@ lancet이 **이기지 못하는** 곳: 리터럴 없는 정규식(인덱스가 �
 
 ### 2 · 보수적 후보 선별과 정확한 재검증
 
-- **보수적인 트라이그램 하한.** 쿼리와 정규식 HIR을 모든 매치가 반드시 만족해야 하는 트라이그램 불리언 식(`Req`)으로 컴파일합니다. 포스팅 리스트는 가장 드문 것부터 교집합하고(파일 85% 이상에 나오는 초고빈도 트라이그램은 건너뜀), 식이 보수적이어서 후보만 줄일 뿐 매치를 절대 빠뜨리지 않습니다.
+- **보수적인 트라이그램 하한.** 검색 패턴(리터럴, 정규식 HIR, AST 패턴의 리터럴)을 모든 매치가 반드시 만족해야 하는 트라이그램 불리언 식(`Req`)으로 컴파일합니다. 포스팅 리스트는 가장 드문 것부터 교집합하고(파일 85% 이상에 나오는 초고빈도 트라이그램은 건너뜀), 식이 보수적이어서 후보만 줄일 뿐 매치를 절대 빠뜨리지 않습니다.
 - **남은 후보에 풀스캔 평가기 직접 실행.** 선별된 후보 파일과 인덱싱 이후 `(mtime, size, ctime, inode)` 또는 타임스탬프 경계가 바뀐 파일은 풀스캔과 완전히 동일한 평가기로 검증합니다. 그 결과 8개 코퍼스 전체에서 **ripgrep과 바이트 단위로 동일한 출력**을 냅니다.
-- **인덱스 위 퍼지 검색과 유니코드 궤도.** q-gram 보조정리에 따라 트라이그램이 `|G|`개인 단어는 편집 거리 `k` 이내에서 최소 `|G| − 3k`개(한글 음절은 `|G| − k`개)를 유지하므로, `fuzzy(...)`도 풀스캔 없이 `k`-of-`n` 포스팅 집계로 처리합니다. 대소문자 동치 문자는 인덱스와 평가기 모두에서 대표 문자로 접고, ASCII 리터럴은 정규식 오토마타 대신 `memchr2` 양방향 스캔을 씁니다.
 
 ### 3 · 다중 에이전트 동시 수정과 패치 안전성
 

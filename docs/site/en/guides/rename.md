@@ -14,10 +14,10 @@ Supported languages: **Rust** (`.rs`), **Python** (`.py`), **JavaScript** (`.js`
 
 ```bash title="Terminal"
 # Dry-run diff (COL is optional when OLD only resolves to one binding on LINE)
-lancet rename src/search.rs:42 old_name new_name
+lancet rename src/scope.rs:42 old_name new_name
 
 # Disambiguate column (1-based byte offset, matching `lancet rg --column`) + CAS rev
-lancet rename src/search.rs:42:9 old_name new_name --rev <REV> --apply
+lancet rename src/scope.rs:42:9 old_name new_name --rev <REV> --apply
 ```
 
 You can point `FILE:LINE[:COL]` at either the **declaration** or **any resolved use** inside the binding's scope. Comments inside the scope mentioning `old` are left intact and reported in `comment_mentions`.

@@ -2,11 +2,11 @@
 
 `lancet rg` takes ripgrep's flags and prints ripgrep's output, with ripgrep's Rust `regex` engine, traversal rules (`.gitignore`, `.ignore`, `.rgignore`, `--ignore-file`), decoding (BOM sniffing, `-E`), binary-file handling and exit codes (`0` match, `1` no match, `2` error), on top of Lancet's always-fresh trigram index.
 
-Every flag of ripgrep 15.2's `--help` is listed below: **supported**, **accepted with no effect** (it changes nothing observable in lancet), or **not supported** with the reason.
+Every flag of ripgrep 16.0's `--help` is listed below: **supported**, **accepted with no effect** (it changes nothing observable in lancet), or **not supported** with the reason.
 
 ## Verification
 
-- **Fixture parity (`bench/rg_parity.py`):** 138 cases — every supported flag below plus Unicode case folding, CRLF, missing final newline, UTF-8/UTF-16 BOMs, latin1, NUL-separated data, binary files named and in directories, `.gz`, hidden / ignored / `.ignore` / `.rgignore` / `.git/info/exclude` / `--ignore-file` rules, missing paths — compare stdout and exit code with `ripgrep 15.2` byte for byte (`--stats` timing lines excluded).
+- **Fixture parity (`bench/rg_parity.py`, run in CI):** 150 cases — every supported flag below plus Unicode case folding, CRLF, missing final newline, UTF-8/UTF-16 BOMs, latin1, NUL-separated data, binary files named and in directories, `.gz`, hidden / ignored / `.ignore` / `.rgignore` / `.git/info/exclude` / `--ignore-file` rules, missing paths — compare stdout and exit code with `ripgrep 16.0` byte for byte (`--stats` timing lines excluded).
 - **Real trees:** Linux v6.12, LLVM, rust, kubernetes, VS Code, Django, CPython and Spring queries match `ripgrep 15.2` byte for byte with and without `.lancet` (see [`bench/results/SUITE.md`](../bench/results/SUITE.md)).
 
 ---
@@ -68,6 +68,7 @@ Every flag of ripgrep 15.2's `--help` is listed below: **supported**, **accepted
 | `--no-ignore-messages` | Accepted, no effect | |
 | `-L`, `--follow`, `--max-depth`, `--max-filesize`, `--one-file-system` | Supported | |
 | `--files` | Supported | |
+| `--in FILE`, `--in0 FILE` | Supported | Paths read from FILE (one per line / NUL-separated) take their place among the other path arguments |
 | `-j`, `--threads` | Supported | |
 | `--no-messages` | Supported | Missing paths are reported (unless this flag) and the other paths are still searched; exit `2` |
 | `--mmap` / `--no-mmap`, `--no-config` | Accepted, no effect | lancet reads no config file |
@@ -81,7 +82,8 @@ Every flag of ripgrep 15.2's `--help` is listed below: **supported**, **accepted
 | `-a`, `--text` | Supported | |
 | `--binary` | Supported | Binary files met in directories are searched like named ones: NULs become line breaks, and text output is one `binary file matches (found "\0" byte around offset N)` line |
 | `-z`, `--search-zip` | Partly | `.gz` is decompressed in-process. ripgrep's other formats (`.bz2`, `.xz`, `.lz4`, `.zst`, `.Z`, `.br`) need external programs and are not supported. `--docs` reads `.zip`, `.tar`, `.tgz` and documents |
-| `--pre COMMAND`, `--pre-glob GLOB` | **Not supported** | lancet doesn't run a process per file; documents and archives are read in-process with `--docs` |
+| `--pre COMMAND`, `--pre-glob GLOB` | **Not supported** | lancet doesn't run a process per file; documents and archives are read in-process with `--docs`. `--pre ''`, `--no-pre` and `--pre-glob` alone (which run nothing) are accepted |
+| `--max-bytes NUM` | Supported | Each file is searched up to NUM bytes, as ripgrep reads it |
 | `--debug`, `--trace` | Accepted, no effect | |
 | `-V`, `--version` | Supported | Prints lancet's version |
 | `--generate KIND` | **Not supported** | No man page or shell-completion generator yet |

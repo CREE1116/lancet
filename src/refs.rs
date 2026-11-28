@@ -4,12 +4,11 @@
 //! automatically excluding comments and string/char literals on AST-supported languages.
 
 use crate::code;
-use crate::index::{self, Req};
-use crate::matcher::for_each_token;
+use crate::index::Req;
 use crate::output::{ErrorInfo, Stats, Status};
 use crate::query::{Expr, FileType, Filters, Matcher};
-use crate::search::{plan_targets_with_req, IndexMode, Target};
-use crate::walk::{walk, FileFilter, WalkOpts};
+use crate::scope::{IndexMode, Target};
+use crate::walk::{FileFilter, WalkOpts};
 use memchr::memmem;
 use rayon::prelude::*;
 use serde::Serialize;
@@ -22,7 +21,8 @@ use std::time::Instant;
 #[derive(Clone, Debug)]
 pub struct RefsOptions {
     pub symbol: String,
-    pub root: PathBuf,
+    /// Directories or files to search; results show paths joined onto each.
+    pub roots: Vec<PathBuf>,
     pub lang: Option<String>,
     pub exts: Vec<String>,
     pub paths: Vec<String>,
@@ -37,7 +37,7 @@ impl RefsOptions {
     pub fn new(symbol: impl Into<String>, root: impl Into<PathBuf>) -> Self {
         RefsOptions {
             symbol: symbol.into(),
-            root: root.into(),
+            roots: vec![root.into()],
             lang: None,
             exts: Vec::new(),
             paths: Vec::new(),
@@ -124,6 +124,12 @@ struct FileRefs {
     scanned: bool,
     defs: Vec<RefHit>,
     refs: Vec<RefHit>,
+    /// Rust `.name` / `name:` uses, dropped when every definition is a free `fn`.
+    member: Vec<RefHit>,
+    /// Uses of a same-named local binding, dropped when the name has a definition.
+    local: Vec<RefHit>,
+    /// How many of `defs` are Rust `fn`s outside any `impl` / `trait`.
+    free_fns: usize,
 }
 
 fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> Option<FileRefs> {
@@ -136,6 +142,9 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
             scanned: false,
             defs: Vec::new(),
             refs: Vec::new(),
+            member: Vec::new(),
+            local: Vec::new(),
+            free_fns: 0,
         });
     }
     let src = String::from_utf8(bytes).ok()?;
@@ -155,10 +164,14 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
 
     let mut defs = Vec::new();
     let mut refs = Vec::new();
+    let mut member = Vec::new();
+    let mut local = Vec::new();
+    let mut free_fns = 0;
 
-    if code::ENABLED && code::supports_path(&target.path) {
-        let syms = code::extract_symbols(&target.path, raw_bytes).unwrap_or_default();
-        let funcs = code::extract_functions(&target.path, raw_bytes).unwrap_or_default();
+    // One parse per file; every view below reads it.
+    if let Some(syn) = code::parse(&target.path, raw_bytes) {
+        let syms = syn.symbols(raw_bytes);
+        let funcs = syn.functions(raw_bytes);
         let mut def_spans: HashSet<(usize, usize)> = HashSet::new();
 
         for sp in &syms {
@@ -177,9 +190,11 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
             }
         }
 
-        if let Some(id_spans) = code::find_identifier_spans(&target.path, raw_bytes, symbol) {
-            for (s, e) in id_spans {
+        let locals = crate::rename::local_name_starts_in(&syn, &src).unwrap_or_default();
+        {
+            for (s, e, role) in syn.identifiers(raw_bytes, symbol) {
                 if def_spans.contains(&(s, e)) {
+                    free_fns += (role == code::IdRole::FreeFn) as usize;
                     continue;
                 }
                 let (ln, col) = byte_to_line_col(&line_starts, s);
@@ -190,7 +205,7 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
                     })
                     .min_by_key(|f| f.end - f.start)
                     .and_then(|f| f.name.clone());
-                refs.push(RefHit {
+                let hit = RefHit {
                     path: target.rel.clone(),
                     line: ln,
                     col,
@@ -198,7 +213,14 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
                     enclosing,
                     text: line_snippet(ln),
                     ast_verified: true,
-                });
+                };
+                if role == code::IdRole::Member {
+                    member.push(hit);
+                } else if locals.binary_search(&s).is_ok() {
+                    local.push(hit);
+                } else {
+                    refs.push(hit);
+                }
             }
         }
     } else {
@@ -223,18 +245,26 @@ fn scan_one_file(target: &Target, symbol: &str, finder: &memmem::Finder<'_>) -> 
         scanned: true,
         defs,
         refs,
+        member,
+        local,
+        free_fns,
     })
 }
 
 pub fn find_refs(opts: &RefsOptions) -> RefsResponse {
-    if let Some(msg) = crate::walk::missing_root(&opts.root) {
+    if let Some(msg) = missing_roots(opts) {
         return RefsResponse::failure(Status::InvalidQuery, opts.symbol.clone(), msg, 0.0);
     }
-    let mut r = find_refs_raw(opts);
-    for h in r.definitions.iter_mut().chain(r.references.iter_mut()) {
-        h.path = crate::walk::display_path(&opts.root, &h.path);
-    }
-    r
+    find_refs_raw(opts)
+}
+
+fn missing_roots(opts: &RefsOptions) -> Option<String> {
+    let msgs: Vec<String> = opts
+        .roots
+        .iter()
+        .filter_map(|r| crate::walk::missing_root(r))
+        .collect();
+    (!msgs.is_empty()).then(|| msgs.join("; "))
 }
 
 /// Files to scan for `opts` (code files under the root, narrowed by `--lang` /
@@ -246,18 +276,16 @@ struct Planned {
     stats: Stats,
 }
 
+/// Every root's files, as one list: `refs` decides what a name means across all
+/// of them at once. Paths are already joined onto the root they came from.
 fn plan_files(opts: &RefsOptions, req: &Req) -> Result<Planned, (Status, String)> {
-    let mut filters = Filters::default();
+    let mut base = Filters::default();
     if let Some(lang_s) = &opts.lang {
         #[cfg(feature = "ast")]
         {
             match crate::code::Lang::parse(lang_s) {
-                Some(l) => {
-                    filters.exts = l.extensions().iter().map(|s| (*s).to_string()).collect();
-                }
-                None => {
-                    return Err((Status::InvalidQuery, format!("unknown --lang `{lang_s}`")));
-                }
+                Some(l) => base.exts = l.extensions().iter().map(|s| (*s).to_string()).collect(),
+                None => return Err((Status::InvalidQuery, format!("unknown --lang `{lang_s}`"))),
             }
         }
         #[cfg(not(feature = "ast"))]
@@ -269,78 +297,40 @@ fn plan_files(opts: &RefsOptions, req: &Req) -> Result<Planned, (Status, String)
             ));
         }
     } else if !opts.exts.is_empty() {
-        filters.exts = opts
+        base.exts = opts
             .exts
             .iter()
             .map(|e| e.trim_start_matches('.').to_ascii_lowercase())
             .filter(|e| !e.is_empty())
             .collect();
-    } else if !opts.all_files && opts.root.is_dir() {
-        filters.types = vec![FileType::Code];
+    } else if !opts.all_files {
+        base.types = vec![FileType::Code];
     }
-    filters.paths = opts.paths.clone();
-
-    let filter = match FileFilter::new(&filters) {
-        Ok(f) => f,
-        Err(e) => return Err((Status::InvalidQuery, e)),
-    };
-
-    let mut warnings = Vec::new();
-    let mut mode = "scan".to_string();
-    let mut core_stats = Stats::default();
-    let mut targets: Option<Vec<Target>> = None;
-
-    if opts.index != IndexMode::Off {
-        match index::discover(&opts.root, opts.index_dir.as_deref()) {
-            Ok(Some((ix, rel_prefix))) => {
-                mode = if opts.index == IndexMode::Trust {
-                    "index_trusted".into()
-                } else {
-                    "index".into()
-                };
-                targets = Some(plan_targets_with_req(
-                    &ix,
-                    req,
-                    &filter,
-                    &opts.root,
-                    &rel_prefix,
-                    &opts.walk,
-                    opts.index,
-                    None,
-                    &mut core_stats,
-                    None,
-                ));
-            }
-            Ok(None) => {
-                if opts.index == IndexMode::Trust {
-                    warnings.push(
-                        "no index found; fell back to a full scan (run `lancet index`)".into(),
-                    );
-                }
-            }
-            Err(e) => {
-                warnings.push(format!("index unusable ({e:#}); fell back to a full scan"));
-            }
-        }
-    }
-
-    let targets = targets.unwrap_or_else(|| {
-        walk(&opts.root, &opts.walk, &filter, false)
-            .into_iter()
-            .map(|e| Target {
-                path: e.path,
-                rel: e.rel,
-            })
-            .collect()
-    });
-    if core_stats.files_considered == 0 {
-        core_stats.files_considered = targets.len();
-    }
+    base.paths = opts.paths.clone();
+    let p = crate::scope::plan(
+        &crate::scope::Request {
+            roots: &opts.roots,
+            walk: &opts.walk,
+            index: opts.index,
+            index_dir: opts.index_dir.as_deref(),
+            shown: crate::scope::Shown::Clean,
+        },
+        req,
+        &|_| FileFilter::new(&base),
+    )
+    .map_err(|e| (Status::InvalidQuery, e))?;
     Ok(Planned {
-        targets,
-        mode,
-        warnings,
-        stats: core_stats,
+        targets: p
+            .files
+            .into_iter()
+            .map(|c| Target {
+                path: c.path,
+                rel: c.shown,
+            })
+            .collect(),
+        mode: p.summary.mode,
+        warnings: p.summary.warnings,
+        stats: p.summary.stats,
     })
 }
 
@@ -377,13 +367,42 @@ fn find_refs_raw(opts: &RefsOptions) -> RefsResponse {
         .map(|t| scan_one_file(t, sym, &finder))
         .collect();
 
+    let per_file: Vec<FileRefs> = per_file.into_iter().flatten().collect();
+    let n_defs: usize = per_file.iter().map(|f| f.defs.len()).sum();
+    // A free `fn` is never called as `x.name()` and is no field: those uses are
+    // other types' methods and fields that share the name (`.rev()`, `rev:`).
+    let only_free_fns = n_defs > 0 && per_file.iter().map(|f| f.free_fns).sum::<usize>() == n_defs;
+    let mut warnings = warnings;
     let mut files_scanned = 0usize;
     let mut definitions = Vec::new();
     let mut references = Vec::new();
-    for item in per_file.into_iter().flatten() {
+    let (mut hidden, mut hidden_locals) = (0usize, 0usize);
+    for mut item in per_file {
         files_scanned += item.scanned as usize;
         definitions.extend(item.defs);
+        if only_free_fns {
+            hidden += item.member.len();
+        } else {
+            item.refs.append(&mut item.member);
+        }
+        // A local binding shadows the definition: its uses mean the local.
+        if n_defs > 0 {
+            hidden_locals += item.local.len();
+        } else {
+            item.refs.append(&mut item.local);
+        }
+        item.refs.sort_by_key(|r| (r.line, r.col));
         references.extend(item.refs);
+    }
+    if hidden > 0 {
+        warnings.push(format!(
+            "left out {hidden} `.{sym}` / `{sym}:` use(s): `{sym}` is a free function, so those are methods or fields of other types"
+        ));
+    }
+    if hidden_locals > 0 {
+        warnings.push(format!(
+            "left out {hidden_locals} use(s) of local variables also named `{sym}`"
+        ));
     }
 
     let total_references = references.len();
@@ -529,7 +548,7 @@ pub fn rank_symbols(opts: &RefsOptions, kinds: &[String]) -> RankResponse {
             "`--rank` requires building with `--features ast`".into(),
         );
     }
-    if let Some(msg) = crate::walk::missing_root(&opts.root) {
+    if let Some(msg) = missing_roots(opts) {
         return fail(Status::InvalidQuery, msg);
     }
     let glob = match globset::Glob::new(if pattern.is_empty() { "*" } else { &pattern }) {
@@ -570,12 +589,14 @@ pub fn rank_symbols(opts: &RefsOptions, kinds: &[String]) -> RankResponse {
                 return None;
             }
             let (syms, counts) = code::symbols_and_token_counts(&t.path, &src, &keep)?;
+            // Line starts once per file: counting newlines per symbol is quadratic.
+            let starts: Vec<usize> = memchr::memchr_iter(b'\n', &src).collect();
             let defs = syms
                 .into_iter()
                 .filter_map(|s| {
                     let name = s.name?;
                     glob.is_match(&name).then(|| {
-                        let line = memchr::memchr_iter(b'\n', &src[..s.name_start]).count() + 1;
+                        let line = starts.partition_point(|&nl| nl < s.name_start) + 1;
                         (name, s.kind, line)
                     })
                 })
@@ -583,16 +604,29 @@ pub fn rank_symbols(opts: &RefsOptions, kinds: &[String]) -> RankResponse {
             Some((t.rel.clone(), defs, counts))
         })
         .collect();
-    let mut uses: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    let mut decls: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    for (_, defs, counts) in &per_file {
-        for (k, v) in counts {
-            *uses.entry(k.clone()).or_insert(0) += v;
-        }
+    let mut decls: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for (_, defs, _) in &per_file {
         for (name, _, _) in defs {
-            *decls.entry(name.clone()).or_insert(0) += 1;
+            *decls.entry(name.as_str()).or_insert(0) += 1;
         }
     }
+    // Only declared names are ranked, so only their uses are summed (in parallel).
+    let uses: std::collections::HashMap<&str, usize> = per_file
+        .par_iter()
+        .fold(std::collections::HashMap::new, |mut acc, (_, _, counts)| {
+            for (k, v) in counts {
+                if let Some((name, _)) = decls.get_key_value(k.as_str()) {
+                    *acc.entry(*name).or_insert(0) += v;
+                }
+            }
+            acc
+        })
+        .reduce(std::collections::HashMap::new, |mut a, b| {
+            for (k, v) in b {
+                *a.entry(k).or_insert(0) += v;
+            }
+            a
+        });
     let wanted = |k: &str| kinds.is_empty() || kinds.iter().any(|w| w.eq_ignore_ascii_case(k));
     let mut entries: Vec<RankEntry> = per_file
         .iter()
@@ -600,13 +634,17 @@ pub fn rank_symbols(opts: &RefsOptions, kinds: &[String]) -> RankResponse {
             defs.iter()
                 .filter(|d| wanted(d.1))
                 .map(|(name, kind, line)| {
-                    let n_decl = decls[name];
+                    let n_decl = decls[name.as_str()];
                     RankEntry {
                         name: name.clone(),
                         kind,
-                        path: crate::walk::display_path(&opts.root, rel),
+                        path: rel.clone(),
                         line: *line,
-                        references: uses.get(name).copied().unwrap_or(0).saturating_sub(n_decl),
+                        references: uses
+                            .get(name.as_str())
+                            .copied()
+                            .unwrap_or(0)
+                            .saturating_sub(n_decl),
                         definitions: n_decl,
                     }
                 })
@@ -638,5 +676,48 @@ pub fn rank_symbols(opts: &RefsOptions, kinds: &[String]) -> RankResponse {
         error: None,
         files_parsed: per_file.len(),
         elapsed_ms: ms(t0),
+    }
+}
+
+#[inline]
+fn is_word_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
+/// Visit byte ranges of word tokens (`[\p{Alphanumeric}_]+`). Stops when `f`
+/// returns false.
+pub fn for_each_token(hay: &[u8], f: &mut dyn FnMut(usize, usize) -> bool) {
+    let base = hay.as_ptr() as usize;
+    let mut start: Option<usize> = None;
+    for chunk in hay.utf8_chunks() {
+        let v = chunk.valid();
+        let off = v.as_ptr() as usize - base;
+        for (i, c) in v.char_indices() {
+            let w = if c.is_ascii() {
+                c.is_ascii_alphanumeric() || c == '_'
+            } else {
+                is_word_char(c)
+            };
+            match (w, start) {
+                (true, None) => start = Some(off + i),
+                (false, Some(s)) => {
+                    start = None;
+                    if !f(s, off + i) {
+                        return;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !chunk.invalid().is_empty() {
+            if let Some(s) = start.take() {
+                if !f(s, off + v.len()) {
+                    return;
+                }
+            }
+        }
+    }
+    if let Some(s) = start {
+        f(s, hay.len());
     }
 }

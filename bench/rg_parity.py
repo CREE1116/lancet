@@ -53,6 +53,9 @@ FILES = {
     "custom.ignore": "cust.txt\n",
     "cust.txt": "foo cust\n",
     "excl.txt": "foo excl\n",
+    # Path lists for --in / --in0 (ripgrep 16).
+    "paths.lst": "a.txt\nsub/y.txt\n",
+    "paths0.lst": b"crlf.txt\0nonl.txt",
 }
 
 CASES: list[list[str]] = [
@@ -169,6 +172,19 @@ CASES: list[list[str]] = [
     ["--binary", "foo"],
     ["-z", "foo"],
     ["--no-unicode", "-i", "kelvin"],
+    # ripgrep 16: path lists, a byte limit per file, --no-pre.
+    ["foo", "--in", "paths.lst"],
+    ["--in", "paths.lst", "foo"],
+    ["foo", "a/b.txt", "--in", "paths.lst"],
+    ["foo", "--in0", "paths0.lst", "a.txt"],
+    ["-e", "foo", "--in", "paths.lst"],
+    ["foo", "--max-bytes", "5", "a.txt"],
+    ["foo", "--max-bytes", "9", "a.txt", "crlf.txt"],
+    ["foo", "--max-bytes", "3", "enc/bom.txt"],
+    ["foo", "--max-bytes", "4", "bin.dat"],
+    ["-c", "foo", "--max-bytes", "10"],
+    ["foo", "--no-pre"],
+    ["--max-bytes", "1K", "foo"],
 ]
 
 FILE_ARG_CASES: list[list[str]] = [

@@ -12,13 +12,13 @@ source: "https://github.com/CREE1116/lancet/blob/main/docs/agent-instructions.md
 
 ```bash title="Terminal"
 # Inline line range (supports file:10-50, file:42, --lines 100:)
-lancet read src/search.rs:100-160
+lancet read src/scope.rs:100-160
 
 # Read several slices in one call (v0.1.4+; each prints its own `# PATH rev REV` header)
-lancet read src/search.rs:100-140 src/main.rs:1-40
+lancet read src/scope.rs:100-140 src/main.rs:1-40
 
 # Exact Tree-sitter declaration (INCLUDES leading doc comments & attributes)
-lancet read src/search.rs --symbol execute_one --json
+lancet read src/scope.rs --symbol plan --json
 
 # Cap response by estimated tokens and paginate cleanly via `next_line`
 lancet read src/mcp.rs --lines 1:800 --budget-tokens 800 --json
@@ -43,12 +43,11 @@ Every plain-text response includes a 16-hex **`rev`** (XXH3-64 hash of disk byte
 
 ## Searching vs Reading Non-Text Files {#rg-docs}
 
-- **`lancet '<LQL>'`:** indexes and searches document/archive adapters automatically (filter with `type:document`, `type:spreadsheet`, or `type:archive`).
 - **`lancet rg --docs`:** adapters are OFF by default in `lancet rg` so plain runs stay byte-identical to `ripgrep`; pass `--docs` to include extracted document and archive text in `lancet rg`.
 
 ```bash title="Terminal"
 # Find hitting sheet/row first, then slice exact columns
-lancet '"EBITDA" in type:spreadsheet' ./finance
+lancet rg --docs -n EBITDA finance/
 lancet read finance/q4.xlsx --sheet 1 --rows 12:35 --cols A:F
 
 # List archive entries via outline, then stream just one log

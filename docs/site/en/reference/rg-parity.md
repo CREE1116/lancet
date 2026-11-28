@@ -2,11 +2,11 @@
 nav_title: "lancet rg Parity Matrix"
 title: "lancet rg — Full ripgrep Parity Matrix"
 description: "Exhaustive compatibility table covering matching, formatting, traversal, --passthru, --type-add, and Lancet extensions."
-lede: "Complete flag-by-flag comparison verified byte-for-byte against ripgrep 15.2."
+lede: "Complete flag-by-flag comparison verified byte-for-byte against ripgrep 16.0."
 keywords: "rg ripgrep parity passthru type-add pcre2 pre docs max-depth max-filesize color"
 source: "https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md"
 ---
-Verified byte-for-byte against `ripgrep 15.2` across 68 edge-case fixtures in `bench/rg_parity.py` (Unicode case folding, CRLF, missing trailing newline, binary skips, `-m` with `-C`, `--vimgrep`, `-L`, `--max-depth`, `--max-filesize`) and Linux v6.12 full-tree queries.
+Verified byte-for-byte against `ripgrep 16.0` across 150 edge-case fixtures in `bench/rg_parity.py` (run in CI) (Unicode case folding, CRLF, missing trailing newline, binary skips, `-m` with `-C`, `--vimgrep`, `-L`, `--max-depth`, `--max-filesize`) and Linux v6.12 full-tree queries.
 
 ## Patterns & Matching {#matching}
 

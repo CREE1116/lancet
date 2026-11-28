@@ -24,11 +24,6 @@ pub struct EvalTrace {
 pub enum Req {
     All,
     Grams(Vec<u32>),
-    /// Sound k-of-n threshold (used for fuzzy terms via the q-gram lemma).
-    AtLeast {
-        min: usize,
-        grams: Vec<u32>,
-    },
     And(Vec<Req>),
     Or(Vec<Req>),
 }
@@ -38,7 +33,6 @@ impl fmt::Display for Req {
         match self {
             Req::All => f.write_str("All"),
             Req::Grams(g) => write!(f, "Grams({})", g.len()),
-            Req::AtLeast { min, grams } => write!(f, "AtLeast({min}/{})", grams.len()),
             Req::And(v) => {
                 f.write_str("AND(")?;
                 for (i, r) in v.iter().enumerate() {
@@ -68,9 +62,6 @@ impl Req {
         let r = match e {
             Expr::Match { m } => from_matcher(m),
             Expr::And { args } => Req::And(args.iter().map(Req::from_expr).collect()),
-            Expr::Or { args } => Req::Or(args.iter().map(Req::from_expr).collect()),
-            Expr::Not { .. } => Req::All,
-            Expr::Near { a, b, .. } => Req::And(vec![from_matcher(a), from_matcher(b)]),
         };
         r.simplify()
     }
@@ -82,9 +73,6 @@ impl Req {
     fn simplify(self) -> Req {
         match self {
             Req::Grams(g) if g.is_empty() => Req::All,
-            Req::AtLeast { min: 0, .. } => Req::All,
-            Req::AtLeast { grams, .. } if grams.is_empty() => Req::All,
-            Req::AtLeast { min, grams } if min >= grams.len() => Req::Grams(grams),
             Req::And(v) => {
                 let mut out = Vec::new();
                 for r in v.into_iter().map(Req::simplify) {
@@ -94,13 +82,12 @@ impl Req {
                         r => out.push(r),
                     }
                 }
-                // Narrowest constraints first so `Grams` can short-circuit `AtLeast`/`Or`.
+                // Narrowest constraints first so `Grams` can short-circuit `Or`.
                 out.sort_by_key(|r| match r {
                     Req::Grams(_) => 0,
                     Req::And(_) => 1,
-                    Req::AtLeast { .. } => 2,
-                    Req::Or(_) => 3,
-                    Req::All => 4,
+                    Req::Or(_) => 2,
+                    Req::All => 3,
                 });
                 match out.len() {
                     0 => Req::All,
@@ -168,40 +155,6 @@ impl Req {
                     trace.grams_decoded += 1;
                 }
                 Some(acc)
-            }
-            Req::AtLeast { min, grams } => {
-                trace.grams_available += grams.len();
-                let mut ranges = Vec::with_capacity(grams.len());
-                for &k in grams {
-                    if let Some(r) = seg.posting_range(k) {
-                        ranges.push(r);
-                    }
-                }
-                if ranges.len() < *min {
-                    return Some(vec![]);
-                }
-                if *min == 1 {
-                    let mut acc = Vec::new();
-                    for r in ranges {
-                        acc = union(&acc, &seg.decode(r));
-                        trace.grams_decoded += 1;
-                    }
-                    return Some(acc);
-                }
-                let mut counts = vec![0u16; seg.ndocs()];
-                for r in ranges {
-                    for id in seg.decode(r) {
-                        if let Some(c) = counts.get_mut(id as usize) {
-                            *c = c.saturating_add(1);
-                        }
-                    }
-                    trace.grams_decoded += 1;
-                }
-                let target = *min as u16;
-                let out = (0..seg.ndocs() as u32)
-                    .filter(|&id| counts[id as usize] >= target)
-                    .collect();
-                Some(out)
             }
             Req::And(v) => {
                 let mut acc: Option<Vec<u32>> = None;
@@ -271,7 +224,7 @@ fn grams_of_folded(s: &str) -> Req {
 
 fn from_matcher(m: &Matcher) -> Req {
     match m {
-        Matcher::Lit { text } | Matcher::Symbol { name: text } => grams_of_folded(&fold_str(text)),
+        Matcher::Lit { text } => grams_of_folded(&fold_str(text)),
         Matcher::Regex { pattern } => match regex_syntax::ParserBuilder::new()
             .multi_line(true)
             .build()
@@ -280,41 +233,6 @@ fn from_matcher(m: &Matcher) -> Req {
             Ok(h) => hir_req(&h),
             Err(_) => Req::All,
         },
-        Matcher::Fuzzy { text, k } => {
-            let folded = fold_str(text);
-            let k = *k as usize;
-            if k == 0 {
-                return grams_of_folded(&folded);
-            }
-            if folded.is_ascii() {
-                let g = trigrams(folded.as_bytes());
-                let min = g.len().saturating_sub(3 * k);
-                if min == 0 {
-                    Req::All
-                } else {
-                    Req::AtLeast { min, grams: g }
-                }
-            } else if !folded.is_empty() && folded.chars().all(|c| c.len_utf8() == 3) {
-                let mut g: Vec<u32> = folded
-                    .chars()
-                    .map(|c| {
-                        let mut buf = [0u8; 4];
-                        let b = c.encode_utf8(&mut buf).as_bytes();
-                        ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | b[2] as u32
-                    })
-                    .collect();
-                g.sort_unstable();
-                g.dedup();
-                let min = g.len().saturating_sub(k);
-                if min == 0 {
-                    Req::All
-                } else {
-                    Req::AtLeast { min, grams: g }
-                }
-            } else {
-                Req::All
-            }
-        }
     }
 }
 
@@ -397,39 +315,5 @@ mod tests {
     #[test]
     fn case_insensitive_regex_still_uses_grams() {
         assert_eq!(rx("(?i)hello"), Req::Grams(trigrams(b"hello")));
-    }
-
-    #[test]
-    fn fuzzy_trigram_threshold_lemma() {
-        match from_matcher(&Matcher::Fuzzy {
-            text: "transmte".into(),
-            k: 1,
-        })
-        .simplify()
-        {
-            Req::AtLeast { min, grams } => {
-                assert_eq!(grams.len(), 6);
-                assert_eq!(min, 3);
-            }
-            other => panic!("unexpected req: {other:?}"),
-        }
-        assert!(from_matcher(&Matcher::Fuzzy {
-            text: "banana".into(),
-            k: 1
-        })
-        .simplify()
-        .is_all());
-        match from_matcher(&Matcher::Fuzzy {
-            text: "학습율".into(),
-            k: 1,
-        })
-        .simplify()
-        {
-            Req::AtLeast { min, grams } => {
-                assert_eq!(grams.len(), 3);
-                assert_eq!(min, 2);
-            }
-            other => panic!("unexpected req: {other:?}"),
-        }
     }
 }

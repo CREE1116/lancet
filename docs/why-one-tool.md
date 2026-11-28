@@ -122,9 +122,9 @@ inside them only with `--docs`, so a drop-in `rg` replacement never changes its 
 | **Immutable mmap segments + tiered compaction (LSM)** | Rewrite one big index | Incremental sync touches only changed files; build buffers are reused across segments — Linux cold build peak memory went from 1.3 GiB to ~350 MB. |
 | **Daemonless freshness (mtime, size, ctime, inode, racy window)** | File watcher daemon; macOS FSEvents history | No process to keep alive or to get out of sync. FSEvents was implemented and rejected: it coalesces a path's events into an earlier record, so a change right after the sync cursor could be missing — a correctness hole. |
 | **`--trust-index` as an explicit choice** | Silently skipping the freshness check | Speed for freshness is a trade the caller makes knowingly (zoekt makes it always — scenario G). |
-| **ripgrep-compatible front end** | Only a custom query language | Same regex engine, ignore rules and type table as ripgrep; 67 edge-case fixtures and full-tree Linux/LLVM queries byte-identical. The DSL stays for what `rg` can't express (`near`, `fuzzy`, `in function`, pipes). |
+| **ripgrep-compatible front end** | Only a custom query language | Same regex engine, ignore rules and type table as ripgrep; 150 parity cases (CI, ripgrep 16.0) and full-tree Linux/LLVM queries byte-identical. The custom query language went unused in agent logs and was removed. |
 | **Tree-sitter AST with literal prefilters** | Parse every file (ast-grep) | Pattern identifiers prune files via the index and subtrees via `memmem` before matching. `$$$` matching is memoised with a per-node step budget, so `f($$$A, $$$B, $$$C, $$$D, x)` on a 200-argument call takes ~0.03 s instead of minutes, and a truly pathological pattern stops with a warning instead of hanging. |
-| **One write path (`src/edit.rs`)** | Each command writes its own way | `edit`, `patch` and `ast --rewrite` share revision checks, locking, file-identity rules and syntax checks (a net increase in Tree-sitter errors is refused). |
+| **One write path (`src/change.rs`)** | Each command writes its own way | `edit`, `write`, `patch`, `rename` and `ast --rewrite` share revision checks, locking, file-identity rules, syntax checks (a net increase in Tree-sitter errors is refused) and all-or-nothing writes across files. |
 
 ## 7. Where lancet does not win
 
@@ -173,7 +173,7 @@ query times are in the same range.
 
 | Critique | What we did |
 |---|---|
-| "A custom DSL costs agents retries." | `lancet rg` (ripgrep's CLI and output) and `lancet patch` (unified diffs) so the common path uses formats models already know. |
+| "A custom DSL costs agents retries." | Added `lancet rg` (ripgrep's CLI and output) and `lancet patch` (unified diffs), then removed the custom query language: every command now takes formats models already know. |
 | "Line coordinates drift across multiple edits; no atomicity." | `--edits` (all hunks in original coordinates, all-or-nothing), `rev`/`rev_after`, compare-and-swap writes, `patch` pre-verification and rollback. |
 | "`(mtime, size)` misses same-size edits, restored mtimes, coarse timestamps." | ctime + inode + racy window; regression tests and differential fuzzing that fail under the old rule. |
 | "Daemonless means a full stat walk per query." | Measured (~100 ms / 87k files); a history-based shortcut was built and rejected for correctness; `--trust-index` is the explicit fast path. |

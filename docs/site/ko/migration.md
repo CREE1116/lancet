@@ -6,7 +6,7 @@ lede: "ripgrep·fd·ast-grep의 익숙한 사용감을 유지하면서 줄 밀�
 keywords: "전환 마이그레이션 ripgrep rg fd ast-grep sg sed patch rga pcre2 lsp 차이"
 source: "https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md"
 ---
-기존 작업 습관을 한 번에 바꿀 필요는 없습니다. `lancet rg`와 `lancet patch`로 익숙한 플래그와 diff 파이프를 그대로 쓰면서, 도구 사이의 이음새에서 오류가 생기는 지점부터 LQL·AST·`--rev` CAS를 도입할 수 있습니다.
+기존 작업 습관을 한 번에 바꿀 필요는 없습니다. `lancet rg`와 `lancet patch`로 익숙한 플래그와 diff 파이프를 그대로 쓰면서, 도구 사이의 이음새에서 오류가 생기는 지점부터 AST 리라이트, 심볼 읽기, 여러 파일 한 번에 고치기를 도입할 수 있습니다.
 
 ## ripgrep(rg)에서 오셨다면 {#from-rg}
 
@@ -18,7 +18,7 @@ source: "https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md"
 | `rg -i -w -t py tok` | `lancet rg -i -w -t py tok` | `-i`/`-s`/`-S` 마지막 플래그 우선; AST 기반 `-S`(`\W` 무시 유지) |
 | `rg -g '*.toml' --passthru` | `lancet rg -g '*.toml' --passthru` | `--passthru`/`-A`/`-B`/`-C` 마지막 우선; 미일치 파일도 출력 |
 | `rg --type-add 'web:*.tsx'` | `lancet rg --type-add 'web:*.tsx' -t web` | `name:glob`, `name:include:a,b` 모두 지원 |
-| `rg -P '(?<=a)b'` | `lancet 'before("a", "b", 1)'` 또는 Rust regex | `-P`/PCRE2는 선형 시간·건전한 트라이그램 컴파일을 위해 미지원 |
+| `rg -P '(?<=a)b'` | 룩어라운드 없는 Rust regex 또는 `lancet ast` | `-P`/PCRE2는 선형 시간·건전한 트라이그램 컴파일을 위해 미지원 |
 | `rg --pre pdftotext pat` | `lancet rg --docs pat` | 외부 프로세스 없이 인프로세스로 PDF·오피스·HWP·압축 검색 |
 
 > [!NOTE] lancet rg의 의도적 차이 3가지
@@ -30,12 +30,12 @@ source: "https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md"
 
 | fd / find 명령 | lancet fd 대안 | 비고 및 추가 기능 |
 | --- | --- | --- |
-| `fd -e rs -d 2 src` | `lancet fd -e rs -d 2 src docs` | `.lancet` 인덱스 활용; `[PATTERN] [PATH...]` 다중 경로 지원 |
+| `fd -e rs -d 2 . src` | `lancet fd -e rs -d 2 . src` | 같은 플래그와 출력([fd 호환표](reference/fd-parity.md)), 경로순 정렬 |
 | `fd -t d -d 2` | `lancet fd --tree --dirs -d 2 .` | 파일 없이 폴더 트리만 간결하게 출력 |
-| `fd '*_test.go'` | `lancet fd '*_test.go'` | `*`, `?`, `[` 포함 시 자동으로 글롭(`-g`) 매치 |
-| `find . -mtime -7 -type f` | `lancet fd -t f --changed-within 7d` | 단위: `s`, `m`, `h`, `d`, `w` |
+| `fd -g '*_test.go'` | `lancet fd -g '*_test.go'` | fd처럼 기본은 정규식, `-g`면 글롭 |
+| `find . -mtime -7 -type f` | `lancet fd -t f --changed-within 7d` | fd의 기간·날짜 형식 |
 | `find . -name '*.pdf'` | `lancet fd --type-class document` | 확장자 나열 없이 9개 의미 클래스로 필터링 |
-| `fd config src` (패턴이 폴더명과 같을 때) | `lancet fd -p config src` | `-p`/`--pattern`으로 패턴과 경로를 명확히 구분 |
+| `fd -x CMD` / `fd -X CMD` | `lancet fd -0 … \| xargs -0 CMD` | lancet은 결과마다 프로세스를 띄우지 않음 |
 
 ## ast-grep(sg)에서 오셨다면 {#from-ast}
 
@@ -53,7 +53,7 @@ source: "https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md"
 | `sed -n '10,50p' f.rs` | `lancet read f.rs --lines 10:50` | XXH3-64 `rev` 반환 + `--budget-tokens` 상한 |
 | `rg -n` 1회 후 `sed -i` 2회 | `lancet edit f.rs --edits - --rev REV --apply` | 모든 구간이 원본 줄 번호 기준; 심볼릭/하드 링크·권한 보존 |
 | `patch -p1 < diff` | `lancet patch diff --apply` | 모든 파일 사전 검증, 정확 위치 재배치, CAS 경합 롤백 |
-| `rga` + `pdftotext`/`pandoc` | `lancet 'pat'` + `lancet read f.pdf -p 2` | 같은 추출 파이프라인으로 검색 줄 == 읽기 줄 |
+| `rga` + `pdftotext`/`pandoc` | `lancet rg --docs pat` + `lancet read f.pdf -p 2` | 같은 추출 파이프라인으로 검색 줄 == 읽기 줄 |
 
 ## 전문 도구를 그대로 써야 하는 경우 {#when-not}
 

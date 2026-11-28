@@ -1,7 +1,7 @@
 ---
 nav_title: "무시 규칙 · 글롭 · 타입"
 title: "무시 규칙, 글롭, 파일 타입 & 순회 경계"
-description: ".gitignore/.ignore/.rgignore 우선순위, -u/-uu/-uuu, --glob, --type-add, type:, -L, --max-depth."
+description: ".gitignore/.ignore/.rgignore 우선순위, -u/-uu/-uuu, --glob, --type-add, --type-class, -L, --max-depth."
 lede: "검색, fd, outline, refs, ast, index가 모두 공유하는 일관된 파일 필터링 및 순회 규칙."
 keywords: "gitignore rgignore hidden binary -u -uu -uuu glob type-add max-depth max-filesize 심볼릭링크"
 source: "https://github.com/CREE1116/lancet/blob/main/docs/rg-parity.md"
@@ -40,19 +40,19 @@ lancet rg --type-add 'jvm:include:java,kotlin,scala' -t jvm 'Executor' .
 lancet rg --type-add 'proto:*.proto' --type-list
 ```
 
-## LQL & fd 필터 (type:, ext:, path:, --type-class) {#lql-filters}
+## 파일 클래스 (fd --type-class, --path) {#lql-filters}
 
-LQL에서 같은 카테고리 내 여러 값은 **OR**로, 서로 다른 카테고리는 **AND**로 결합됩니다. `src/walk.rs` 규칙상 `path:` 값에 글롭 메타문자(`*`, `?`, `[`, `{`)가 없으면 `dir` 자체와 `dir/**`를 모두 매치합니다.
+`lancet fd --type-class`는 파일을 종류로 고르고, `refs`·`ast`의 `--path GLOB`은 검색을 맞는 경로로 좁힙니다. `--path` 값에 글롭 문자(`*`, `?`, `[`, `{`)가 없으면 `dir` 자체와 `dir/**`를 모두 매치합니다.
 
 ```bash title="터미널"
-# ext:(...) 내부는 OR, ext:와 path: 사이는 AND
-lancet '"deadline" in ext:(rs,toml) path:crates/core'
+# 구조 검색을 크레이트 하나로 좁히기
+lancet ast 'deadline($$$A)' . --lang rs --path crates/core
 
 # 의미 클래스로 최근 수정 문서 찾기
 lancet fd --type-class document,spreadsheet --changed-within 14d
 ```
 
-| 클래스 (`type:` / `--type-class`) | 포함 확장자 / 예시 |
+| 클래스 (`--type-class`) | 포함 확장자 / 예시 |
 | --- | --- |
 | `code` | 24개 이상 프로그래밍 언어 소스 (`.rs`, `.py`, `.ts`, `.go`, `.c`, `.cpp` 등) |
 | `document` | `.md`, `.txt`, `.rst`, `.pdf`, `.docx`, `.pptx`, `.odt`, `.hwp`, `.hwpx`, `.epub` |
@@ -64,5 +64,5 @@ lancet fd --type-class document,spreadsheet --changed-within 14d
 ## 심볼릭 링크, 깊이 및 파일 크기 제한 {#bounds}
 
 - **심볼릭 링크 (`-L` / `--follow`):** 기본 비활성. `lancet rg -L --trust-index`에서는 `.lancet`에 빠진 링크 대상까지 놓치지 않도록 의도적으로 라이브 순회로 폴백합니다.
-- **깊이·크기 상한:** `--max-depth N`(`1`은 직계 자식만)과 `--max-filesize NUM[K|M|G]`(`rg`), `--min-size`/`--max-size`(`fd`)가 라이브 순회와 `--trust-index` 양쪽에서 모두 적용됩니다.
-- **`fd` 다중 경로 & 없는 경로 오류 처리 (v0.1.4):** `lancet fd [PATTERN] [PATH...]`는 여러 경로를 받습니다(`lancet fd . a b`는 `a`와 `b` 전체 나열). `fd`, `search`, `batch`, `refs`, `ast`에 존재하지 않는 `PATH`를 주면 조용히 `empty`(종료 1)를 내는 대신 stderr에 `PATH: No such file or directory`를 출력하고 종료 2를 반환합니다. `fd`에서 글롭 문자 없이 `/`가 들어간 단독 인자(`lancet fd docs/imgaes`)도 경로로 취급해 오타를 바로 오류로 보고합니다.
+- **깊이·크기 상한:** `--max-depth N`(`1`은 직계 자식만)과 `--max-filesize NUM[K|M|G]`(`rg`), `-S`(`fd`)가 라이브 순회와 `--trust-index` 양쪽에서 모두 적용됩니다.
+- **여러 경로 & 없는 경로:** `lancet fd [PATTERN] [PATH...]`는 패턴 뒤에 경로를 여러 개 받습니다(`lancet fd . a b`는 `a`와 `b` 아래 전체 나열). `rg`·`refs`·`ast`에 없는 `PATH`를 주면 조용한 `empty`(종료 1) 대신 `PATH: No such file or directory`와 종료 2를 냅니다. `fd`는 fd처럼 알리고(종료 1), `/`가 든 패턴은 거부합니다(`lancet fd . docs/images`를 쓰세요).

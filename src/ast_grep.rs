@@ -2,7 +2,7 @@
 //! automatically accelerated by the `.lancet` trigram index when available.
 
 use crate::output::{ErrorInfo, Status};
-use crate::search::IndexMode;
+use crate::scope::IndexMode;
 use crate::walk::WalkOpts;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -13,9 +13,12 @@ use std::time::Instant;
 pub struct AstOptions {
     pub pattern: String,
     pub lang: Option<String>,
-    pub root: PathBuf,
+    /// Directories or files to search; results show paths joined onto each.
+    pub roots: Vec<PathBuf>,
     pub rewrite: Option<String>,
+    /// Write every rewritten file, or none (see [`crate::change::commit`]).
     pub apply: bool,
+    pub allow_syntax_errors: bool,
     pub paths: Vec<String>,
     pub limit: Option<usize>,
     pub walk: WalkOpts,
@@ -28,9 +31,10 @@ impl AstOptions {
         AstOptions {
             pattern: pattern.into(),
             lang: None,
-            root: root.into(),
+            roots: vec![root.into()],
             rewrite: None,
             apply: false,
+            allow_syntax_errors: false,
             paths: Vec::new(),
             limit: None,
             walk: WalkOpts::default(),
@@ -131,13 +135,14 @@ impl AstResponse {
 #[cfg(feature = "ast")]
 mod imp {
     use super::{AstMatch, AstOptions, AstResponse, AstStats, FileDiff};
+    use crate::change::FileChange;
     use crate::code::Lang;
     use crate::edit;
-    use crate::index::{self, Req};
-    use crate::output::{Stats, Status};
+    use crate::index::Req;
+    use crate::output::{ErrorInfo, Status};
     use crate::query::{Expr, Filters, Matcher};
-    use crate::search::{plan_targets_with_req, IndexMode, Target};
-    use crate::walk::{walk, FileFilter};
+    use crate::scope::Target;
+    use crate::walk::FileFilter;
     use memchr::memmem;
     use rayon::prelude::*;
     use std::cell::RefCell;
@@ -146,11 +151,7 @@ mod imp {
     use std::fs;
     use std::io::{self, Write};
     use std::time::Instant;
-    use tree_sitter::{Node, Parser, Tree};
-
-    thread_local! {
-        static AST_PARSER: RefCell<(Option<Lang>, Parser)> = RefCell::new((None, Parser::new()));
-    }
+    use tree_sitter::{Node, Tree};
 
     #[derive(Clone, Debug, PartialEq, Eq)]
     struct MetaSpec {
@@ -296,14 +297,7 @@ mod imp {
     }
 
     fn parse_src(lang: Lang, src: &str) -> Option<Tree> {
-        AST_PARSER.with(|cell| {
-            let mut st = cell.borrow_mut();
-            if st.0 != Some(lang) {
-                st.1.set_language(&lang.language()).ok()?;
-                st.0 = Some(lang);
-            }
-            st.1.parse(src.as_bytes(), None)
-        })
+        crate::code::parse_tree(lang, src.as_bytes())
     }
 
     fn path_to_descendant(root: Node<'_>, target: Node<'_>) -> Option<Vec<usize>> {
@@ -332,6 +326,21 @@ mod imp {
 
     fn is_comment(kind: &str) -> bool {
         kind.ends_with("comment")
+    }
+
+    /// The text of every comment inside `node`.
+    fn comments_in<'s>(node: Node<'_>, src: &'s str) -> Vec<&'s str> {
+        let mut out = Vec::new();
+        let mut stack = vec![node];
+        while let Some(n) = stack.pop() {
+            if is_comment(n.kind()) {
+                out.push(src[n.byte_range()].trim());
+                continue;
+            }
+            let mut c = n.walk();
+            stack.extend(n.children(&mut c));
+        }
+        out
     }
 
     fn find_exact_span_node<'a>(
@@ -384,96 +393,10 @@ mod imp {
         lang: Lang,
         ends_with_semi: bool,
     ) -> &'static [(&'static str, &'static str)] {
-        match lang {
-            Lang::Rust => {
-                if ends_with_semi {
-                    &[
-                        ("fn __lancet_wrap__() { ", " }"),
-                        ("fn __lancet_wrap__() { let _ = ", "; }"),
-                        ("", ""),
-                        ("impl __LancetWrap__ { ", " }"),
-                        ("type __LancetWrap__ = ", ";"),
-                    ]
-                } else {
-                    &[
-                        ("fn __lancet_wrap__() { let _ = ", "; }"),
-                        ("fn __lancet_wrap__() { ", " }"),
-                        ("", ""),
-                        ("impl __LancetWrap__ { ", " }"),
-                        ("type __LancetWrap__ = ", ";"),
-                    ]
-                }
-            }
-            Lang::Python => &[("", "")],
-            Lang::Js | Lang::Ts | Lang::Tsx => &[
-                ("", ""),
-                ("const __lancet_wrap__ = (", ");"),
-                ("class __LancetWrap__ { ", " }"),
-            ],
-            Lang::Go => &[
-                ("package p\nfunc __lancet_wrap__() { _ = ", " }"),
-                ("package p\nfunc __lancet_wrap__() {\n", "\n}"),
-                ("package p\n", ""),
-                ("package p\ntype __LancetWrap__ ", ""),
-            ],
-            Lang::C => &[
-                ("void __lancet_wrap__(void) { int __lv = (", "); }"),
-                ("void __lancet_wrap__(void) {\n", "\n}"),
-                ("", ""),
-            ],
-            Lang::Cpp => &[
-                ("void __lancet_wrap__() { auto __lv = (", "); }"),
-                ("void __lancet_wrap__() {\n", "\n}"),
-                ("class __LancetWrap__ {\n", "\n};"),
-                ("", ""),
-            ],
-            Lang::Zig => &[
-                ("fn __lancet_wrap__() void { _ = ", "; }"),
-                ("fn __lancet_wrap__() void {\n", "\n}"),
-                ("", ""),
-            ],
-            Lang::Java => &[
-                ("class __LW { Object __lf() { return (", "); } }"),
-                ("class __LW { void __lf() {\n", "\n} }"),
-                ("class __LW {\n", "\n}"),
-                ("", ""),
-            ],
-            Lang::CSharp => &[
-                ("class __LW { object __lf() { return (", "); } }"),
-                ("class __LW { void __lf() {\n", "\n} }"),
-                ("class __LW {\n", "\n}"),
-                ("", ""),
-            ],
-            Lang::Kotlin => &[
-                ("fun __lw(): Any? = (", ")"),
-                ("fun __lw() {\n", "\n}"),
-                ("", ""),
-            ],
-            Lang::Scala => &[
-                ("object __LW { def __lf() = (", ") }"),
-                ("object __LW {\n", "\n}"),
-                ("", ""),
-            ],
-            Lang::Swift => &[
-                ("", ""),
-                ("func __lw() -> Any { return (", ") }"),
-                ("struct __LW {\n", "\n}"),
-            ],
-            Lang::Ruby => &[("", "")],
-            Lang::Php => &[
-                ("<?php\n$__lv = (", ");"),
-                ("<?php\n", ";"),
-                ("<?php\n", ""),
-                ("<?php\nclass __LW {\n", "\n}"),
-            ],
-            Lang::Bash => &[("", "")],
-            Lang::Lua => &[("local __lv = (", ")"), ("", "")],
-            Lang::Hcl => &[("", ""), ("__lancet_attr = ", "")],
-            Lang::Html => &[("", "")],
-            Lang::Css => &[("", ""), (".__lw { ", " }")],
-            Lang::Json => &[("", ""), ("{ ", " }")],
-            Lang::Yaml => &[("", "")],
-            Lang::Toml => &[("", "")],
+        let spec = lang.spec();
+        match spec.pattern_wrappers_semi {
+            Some(semi) if ends_with_semi => semi,
+            _ => spec.pattern_wrappers,
         }
     }
 
@@ -602,10 +525,47 @@ mod imp {
         Some(out)
     }
 
+    /// What [`add_match_arm_fillers`] puts after a metavariable to make it an arm.
+    const ARM_FILLER: &str = " => __LANCET_ARM__";
+
+    /// Rust `match $X { $$$A }`: an arm needs `PATTERN => VALUE` to parse, so a
+    /// metavariable standing alone between `{`/`,` and `,`/`}` gets a filler
+    /// value; [`build_pat_node`] turns that arm back into the metavariable.
+    fn add_match_arm_fillers(prep: &str, sentinels: &HashMap<String, MetaSpec>) -> Option<String> {
+        let mut at: Vec<usize> = Vec::new();
+        for k in sentinels.keys() {
+            for (i, _) in prep.match_indices(k.as_str()) {
+                let before = prep[..i].trim_end().chars().last();
+                let after = prep[i + k.len()..].trim_start().chars().next();
+                if matches!(before, Some('{' | ',')) && matches!(after, Some('}' | ',')) {
+                    at.push(i + k.len());
+                }
+            }
+        }
+        if at.is_empty() {
+            return None;
+        }
+        at.sort_unstable();
+        let mut out = prep.to_string();
+        for i in at.into_iter().rev() {
+            out.insert_str(i, ARM_FILLER);
+        }
+        Some(out)
+    }
+
     fn build_pat_node(node: Node<'_>, src: &str, sentinels: &HashMap<String, MetaSpec>) -> PatNode {
         let trimmed = src[node.byte_range()].trim().trim_matches('"');
         if let Some(spec) = sentinels.get(trimmed) {
             return PatNode::Meta(spec.clone());
+        }
+        if node.kind() == "match_arm" {
+            let arm = trimmed.trim_end_matches(',').trim_end();
+            if let Some(spec) = arm
+                .strip_suffix(ARM_FILLER)
+                .and_then(|m| sentinels.get(m.trim()))
+            {
+                return PatNode::Meta(spec.clone());
+            }
         }
         // A statement that is only a metavariable (`$S;`) stands for any statement, so
         // `$S` matches blocks, returns, ifs…, and `$$$B` several statements in a block.
@@ -651,6 +611,10 @@ mod imp {
                 .or_else(|| {
                     let with_semis = add_statement_semicolons(&prep, &sentinels)?;
                     try_extract(lang, &with_semis, ends_with_semi)
+                })
+                .or_else(|| {
+                    let with_arms = add_match_arm_fillers(&prep, &sentinels)?;
+                    try_extract(lang, &with_arms, ends_with_semi)
                 })
                 .ok_or_else(|| {
                     format!(
@@ -1018,7 +982,23 @@ mod imp {
                 format!("unsupported language `{raw}` (supported: {SUPPORTED_LANGS})")
             });
         }
-        if let Some(l) = Lang::from_path(&opts.root) {
+        // Files given by name pick the language (and must agree on it).
+        let files: Vec<&std::path::PathBuf> = opts.roots.iter().filter(|r| r.is_file()).collect();
+        if let Some(f) = files.iter().find(|f| Lang::from_path(f).is_none()) {
+            return Err(format!(
+                "can't tell the language of {}: pass `--lang <LANG>` ({SUPPORTED_LANGS})",
+                f.display()
+            ));
+        }
+        let mut langs = files.iter().filter_map(|r| Lang::from_path(r));
+        if let Some(l) = langs.next() {
+            if let Some(other) = langs.find(|o| o.name() != l.name()) {
+                return Err(format!(
+                    "files in different languages ({} and {}): run one `lancet ast` per language",
+                    l.name(),
+                    other.name()
+                ));
+            }
             return Ok(l);
         }
         Err(format!(
@@ -1053,14 +1033,18 @@ mod imp {
         parsed: bool,
         matches: Vec<AstMatch>,
         diff: Option<FileDiff>,
+        /// The rewrite to commit with the others.
+        change: Option<FileChange>,
         warning: Option<String>,
+        /// Why this file's rewrite cannot be written at all (it would add syntax errors).
+        refusal: Option<String>,
     }
 
     fn process_file(
         target: &Target,
         pat: &CompiledPattern,
         rewrite: Option<&str>,
-        apply: bool,
+        allow_syntax_errors: bool,
     ) -> Option<FileResult> {
         // Rewrites read under a shared lock so a concurrent lancet writer can't make
         // the read fail (Windows byte-range locks), and a failed read is reported.
@@ -1076,7 +1060,9 @@ mod imp {
                     parsed: false,
                     matches: Vec::new(),
                     diff: None,
+                    change: None,
                     warning: Some(format!("{}: not rewritten, read failed: {e}", target.rel)),
+                    refusal: None,
                 })
             }
             Err(_) => return None,
@@ -1091,7 +1077,9 @@ mod imp {
                 parsed: false,
                 matches: Vec::new(),
                 diff: None,
+                change: None,
                 warning: None,
+                refusal: None,
             });
         }
 
@@ -1105,6 +1093,7 @@ mod imp {
         MATCH_EXHAUSTED.with(|c| c.set(false));
         MATCH_MEMO.with(|m| m.borrow_mut().clear());
         let mut matches = Vec::new();
+        let mut dropped_comments = 0usize;
         let mut cursor = tree.root_node().walk();
         let mut descend = true;
         // A match contains every pattern literal verbatim (leaves compare by text), so
@@ -1138,7 +1127,16 @@ mod imp {
                     if hit {
                         let start = node.start_position();
                         let end = node.end_position();
-                        let rep = rewrite.map(|tpl| render_rewrite(tpl, &env));
+                        let mut rep = rewrite.map(|tpl| render_rewrite(tpl, &env));
+                        // The pattern skips comments, so a comment inside the match that
+                        // no capture carries into the template would be deleted: don't.
+                        if rep
+                            .as_deref()
+                            .is_some_and(|r| comments_in(node, &src).iter().any(|c| !r.contains(c)))
+                        {
+                            rep = None;
+                            dropped_comments += 1;
+                        }
                         matches.push(AstMatch {
                             path: target.rel.clone(),
                             start_line: start.row + 1,
@@ -1172,6 +1170,8 @@ mod imp {
                 parsed: true,
                 matches,
                 diff: None,
+                change: None,
+                refusal: None,
                 warning: Some(format!(
                     "{}: pattern too ambiguous (over {MATCH_BUDGET} matching steps at one node); matches in this file are incomplete and it was not rewritten — make the pattern more specific (fewer `$$$`)",
                     target.rel
@@ -1184,12 +1184,15 @@ mod imp {
                 parsed: true,
                 matches,
                 diff: None,
+                change: None,
                 warning: None,
+                refusal: None,
             });
         }
 
         let mut diff = None;
-        let mut warning = None;
+        let mut change = None;
+        let mut refusal = None;
         if rewrite.is_some() {
             let edits: Vec<edit::Edit> = matches
                 .iter()
@@ -1205,25 +1208,17 @@ mod imp {
             let new_src = planned.new_src;
 
             if new_src != src {
-                let udiff = edit::unified_diff(&target.rel, &src, &new_src);
-                let mut applied = false;
-                if apply {
-                    match edit::write_if_rev(
-                        &target.path,
-                        &edit::rev(src.as_bytes()),
-                        new_src.as_bytes(),
-                    ) {
-                        Ok(()) => applied = true,
-                        Err(edit::WriteError::Conflict { .. }) => {
-                            warning = Some(format!(
-                                "{} changed while rewriting; skipped (re-run to rewrite it)",
-                                target.rel
-                            ));
-                        }
-                        Err(edit::WriteError::Io(e)) => {
-                            warning =
-                                Some(format!("failed writing rewrite to {}: {e}", target.rel));
-                        }
+                if !allow_syntax_errors {
+                    // Same rule as change::added_syntax_errors, reusing the tree
+                    // the matches came from instead of parsing the original again.
+                    let b0 = crate::code::error_count(&tree);
+                    let b1 = parse_src(pat.lang, &new_src).map(|t| crate::code::error_count(&t));
+                    if let Some(b1) = b1.filter(|&b1| b1 > b0) {
+                        refusal = Some(format!(
+                            "{}: rewrite would add {} syntax error(s) ({b0} -> {b1})",
+                            target.rel,
+                            b1 - b0
+                        ));
                     }
                 }
                 diff = Some(FileDiff {
@@ -1231,22 +1226,41 @@ mod imp {
                     rev: edit::rev(src.as_bytes()),
                     replacements: planned.applied,
                     skipped_overlaps: planned.skipped_overlaps,
-                    diff: udiff,
-                    applied,
+                    diff: edit::unified_diff(&target.rel, &src, &new_src),
+                    applied: false,
                 });
+                change = Some(FileChange::update(
+                    &target.path,
+                    target.rel.clone(),
+                    src,
+                    new_src,
+                ));
             }
         }
 
+        let warning = (dropped_comments > 0).then(|| {
+            format!(
+                "{}: {dropped_comments} match(es) not rewritten: the template would drop a comment inside them (capture it, e.g. with $$$, or edit those by hand)",
+                target.rel
+            )
+        });
         Some(FileResult {
             parsed: true,
             matches,
             diff,
+            change,
             warning,
+            refusal,
         })
     }
 
     pub fn search_ast(opts: &AstOptions) -> AstResponse {
-        if let Some(msg) = crate::walk::missing_root(&opts.root) {
+        let missing: Vec<String> = opts
+            .roots
+            .iter()
+            .filter_map(|r| crate::walk::missing_root(r))
+            .collect();
+        if let Some(msg) = (!missing.is_empty()).then(|| missing.join("; ")) {
             return AstResponse::failure(
                 Status::InvalidQuery,
                 opts.lang.clone(),
@@ -1255,15 +1269,7 @@ mod imp {
                 0.0,
             );
         }
-        let mut r = search_ast_raw(opts);
-        for m in &mut r.matches {
-            m.path = crate::walk::display_path(&opts.root, &m.path);
-        }
-        for d in &mut r.diffs {
-            d.diff = crate::walk::display_diff(&opts.root, &d.path, &d.diff);
-            d.path = crate::walk::display_path(&opts.root, &d.path);
-        }
-        r
+        search_ast_raw(opts)
     }
 
     fn search_ast_raw(opts: &AstOptions) -> AstResponse {
@@ -1327,13 +1333,25 @@ mod imp {
             }
         }
 
-        let mut filters = Filters::default();
-        if opts.root.is_dir() {
-            filters.exts = lang.extensions().iter().map(|s| (*s).to_string()).collect();
-        }
-        filters.paths = opts.paths.clone();
-        let filter = match FileFilter::new(&filters) {
-            Ok(f) => f,
+        let req = build_ast_req(&compiled.trigram_literals);
+        let filters = Filters {
+            exts: lang.extensions().iter().map(|s| (*s).to_string()).collect(),
+            paths: opts.paths.clone(),
+            ..Default::default()
+        };
+        let planned = crate::scope::plan(
+            &crate::scope::Request {
+                roots: &opts.roots,
+                walk: &opts.walk,
+                index: opts.index,
+                index_dir: opts.index_dir.as_deref(),
+                shown: crate::scope::Shown::Clean,
+            },
+            &req,
+            &|_| FileFilter::new(&filters),
+        );
+        let planned = match planned {
+            Ok(p) => p,
             Err(e) => {
                 return AstResponse::failure(
                     Status::InvalidQuery,
@@ -1344,76 +1362,65 @@ mod imp {
                 )
             }
         };
-
-        let req = build_ast_req(&compiled.trigram_literals);
-        let mut warnings = Vec::new();
-        let mut mode = "scan".to_string();
-        let mut core_stats = Stats::default();
-        let mut targets: Option<Vec<Target>> = None;
-
-        if opts.index != IndexMode::Off {
-            match index::discover(&opts.root, opts.index_dir.as_deref()) {
-                Ok(Some((ix, rel_prefix))) => {
-                    mode = if opts.index == IndexMode::Trust {
-                        "index_trusted".into()
-                    } else {
-                        "index".into()
-                    };
-                    targets = Some(plan_targets_with_req(
-                        &ix,
-                        &req,
-                        &filter,
-                        &opts.root,
-                        &rel_prefix,
-                        &opts.walk,
-                        opts.index,
-                        None,
-                        &mut core_stats,
-                        None,
-                    ));
-                }
-                Ok(None) => {
-                    if opts.index == IndexMode::Trust {
-                        warnings.push(
-                            "no index found; fell back to a full scan (run `lancet index`)".into(),
-                        );
-                    }
-                }
-                Err(e) => {
-                    warnings.push(format!("index unusable ({e:#}); fell back to a full scan"));
-                }
-            }
-        }
-
-        let targets = targets.unwrap_or_else(|| {
-            walk(&opts.root, &opts.walk, &filter, false)
-                .into_iter()
-                .map(|e| Target {
-                    path: e.path,
-                    rel: e.rel,
-                })
-                .collect()
-        });
-        if core_stats.files_considered == 0 {
-            core_stats.files_considered = targets.len();
-        }
+        let (mut warnings, mode, core_stats) = (
+            planned.summary.warnings,
+            planned.summary.mode,
+            planned.summary.stats,
+        );
+        // Matches and diff headers show each path the way it was given.
+        let targets: Vec<Target> = planned
+            .files
+            .into_iter()
+            .map(|c| Target {
+                path: c.path,
+                rel: c.shown,
+            })
+            .collect();
 
         let file_results: Vec<Option<FileResult>> = targets
             .par_iter()
-            .map(|t| process_file(t, &compiled, opts.rewrite.as_deref(), opts.apply))
+            .map(|t| {
+                process_file(
+                    t,
+                    &compiled,
+                    opts.rewrite.as_deref(),
+                    opts.allow_syntax_errors,
+                )
+            })
             .collect();
 
         let mut files_parsed = 0usize;
         let mut matches = Vec::new();
         let mut diffs = Vec::new();
+        let mut changes = Vec::new();
+        let mut refusals = Vec::new();
         for res in file_results.into_iter().flatten() {
             files_parsed += res.parsed as usize;
             matches.extend(res.matches);
-            if let Some(d) = res.diff {
-                diffs.push(d);
-            }
-            if let Some(w) = res.warning {
-                warnings.push(w);
+            diffs.extend(res.diff);
+            changes.extend(res.change);
+            refusals.extend(res.refusal);
+            warnings.extend(res.warning);
+        }
+        // Rewrites are one change: refused, or written, all together.
+        let mut error = None;
+        if !refusals.is_empty() {
+            error = Some((
+                Status::InvalidQuery,
+                format!(
+                    "{}; nothing written (pass --allow-syntax-errors to write anyway)",
+                    refusals.join("; ")
+                ),
+            ));
+        } else if opts.apply && !warnings.is_empty() {
+            error = Some((
+                Status::InvalidQuery,
+                format!("{}; nothing written", warnings.join("; ")),
+            ));
+        } else if opts.apply {
+            match crate::change::commit(&changes) {
+                Ok(()) => diffs.iter_mut().for_each(|d| d.applied = true),
+                Err(e) => error = Some((e.status, e.message)),
             }
         }
 
@@ -1427,12 +1434,13 @@ mod imp {
         }
         let returned = matches.len();
 
+        let status = match &error {
+            Some((status, _)) => *status,
+            None if matched == 0 => Status::Empty,
+            None => Status::Complete,
+        };
         AstResponse {
-            status: if matched == 0 {
-                Status::Empty
-            } else {
-                Status::Complete
-            },
+            status,
             mode,
             lang: Some(lang_name),
             pattern: opts.pattern.clone(),
@@ -1442,7 +1450,7 @@ mod imp {
             matches,
             diffs,
             warnings,
-            error: None,
+            error: error.map(|(_, message)| ErrorInfo { message, pos: None }),
             stats: AstStats {
                 files_considered: core_stats.files_considered,
                 index_candidates: core_stats.index_candidates,

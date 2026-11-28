@@ -170,7 +170,9 @@ mod imp {
             if trimmed.is_empty() {
                 continue;
             }
-            out.push_str(&format!("[Page {}]\n{}\n\n", i + 1, trimmed));
+            // Layout padding at line ends is not text and costs readers tokens.
+            let lines: Vec<&str> = trimmed.lines().map(str::trim_end).collect();
+            out.push_str(&format!("[Page {}]\n{}\n\n", i + 1, lines.join("\n")));
             if out.len() >= MAX_EXTRACTED_BYTES {
                 break;
             }

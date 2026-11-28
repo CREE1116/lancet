@@ -10,27 +10,28 @@ source: "https://github.com/CREE1116/lancet/blob/main/docs/agent-instructions.md
 
 ## 빠른 트리 & 메타데이터 탐색 (lancet fd) {#fd-guide}
 
-`lancet fd`는 디스크를 순회하거나 `--trust-index`로 mmap 된 `.lancet`에서 워크 없이 즉시 목록을 읽어 옵니다.
+`lancet fd`는 fd의 명령줄을 그대로 받습니다. 패턴은 이름에 맞춰 보는 정규식이고(smart case), `-g`를 주면 글롭이며, 경로는 패턴 뒤에 옵니다. 여기에 `--tree`를 더했고, `--trust-index`면 `.lancet` 인덱스에서 파일 목록을 바로 읽습니다. 전체 플래그는 [fd 호환 레퍼런스](../reference/fd-parity.md)에 있습니다.
 
 ```bash title="터미널"
 # 파일 소음 없이 폴더 계층만 출력 또는 여러 루트 동시 탐색
 lancet fd --tree --dirs --max-depth 2 .
-lancet fd --tree -d 2 src docs
+lancet fd --tree -d 2 . src docs
 lancet fd . crates/core crates/cli
 
-# 글롭/정규식 매칭 (`*`, `?`, `[` 포함 시 v0.1.3+에서 자동 글롭 처리)
-lancet fd '*_test.rs' crates/
-lancet fd -p config -r 'auth|session' src
+# 기본은 정규식, -g는 글롭, -e는 확장자
+lancet fd '_test\.rs$' crates/
+lancet fd -g '*_test.rs' crates/
+lancet fd -e proto
 
-# 수정 시각 + 크기 조건 (기간: s, m, h, d, w / 크기: b, k, m, g)
-lancet fd -t f --changed-within 48h --min-size 4k --max-size 2m .
+# 수정 시각 + 크기 조건 (기간은 fd처럼 48h, 2weeks / 크기는 k = 1000, ki = 1024)
+lancet fd -t f --changed-within 48h -S +4k -S -2m
 
 # size, mtime_ns 포함 JSON (반환 항목당 stat 1회 비용)
-lancet fd -e rs --meta --limit 25 --json src
+lancet fd -e rs --meta --max-results 25 --json . src
 ```
 
-> [!NOTE] fd에서 -e / --type-class / 크기 필터를 쓸 때
-> `-t`를 주지 않은 채 `-e`, `--type-class`, `--min-size`, `--max-size`를 지정하면 `--dirs`나 `-t d`를 함께 주지 않는 한 자동으로 파일만 추립니다.
+> [!NOTE] 종료 코드는 fd를 따릅니다
+> `lancet fd`는 찾은 것이 없어도 `0`(fd와 같음), 없는 경로 같은 자체 오류는 `1`, 잘못된 인자는 `2`로 끝납니다. 있는지 없는지만 알고 싶으면 `-q`를 쓰세요.
 
 ## 코드·문서·시트·압축 뼈대 추출 (lancet outline) {#outline-guide}
 
@@ -38,7 +39,7 @@ lancet fd -e rs --meta --limit 25 --json src
 
 ```bash title="터미널"
 # 단일 파일 AST 시그니처와 시작/끝 줄 범위
-lancet outline src/search.rs
+lancet outline src/scope.rs
 
 # 디렉터리 깊이·확장자 제한 요약
 lancet outline src -d 2 -e rs --limit 20 --json

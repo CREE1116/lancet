@@ -23,7 +23,7 @@ Over MCP, the `lancet` tool takes these same arguments as an `args` array (and `
 
 Pick **exactly one** target:
 - `--lines 10:50` / `42` / `100:`
-- `--symbol execute_one` — **spans the doc comments and attributes above it too**
+- `--symbol run` — **spans the doc comments and attributes above it too**
 - `--find 'exact text'` / `--old-string` (+ `--all` / `--replace-all`, or `--expected-replacements N` to require exactly N): refused unless it occurs exactly once, and the error lists the lines where it does. `\n` in the text also matches CRLF files.
 
 Pick **exactly one** operation:
@@ -101,3 +101,11 @@ Hunks may carry `"path"` (and, optionally, that file's `"rev"`); then PATH is op
   - Comments inside the scope mentioning `old` are left untouched and counted in `comment_mentions`.
   - Uses locked `--rev` CAS writes; preview unless `--apply`.
   - **Fallback when refused:** use `lancet refs <SYMBOL>` + `lancet edit --edits` (multi-hunk) or `lancet ast --rewrite` across the verified sites.
+
+## Claude Code: skip permission prompts for reads
+
+Allow the read-only commands in `.claude/settings.json` (writes keep asking):
+
+```json
+{"permissions": {"allow": ["Bash(lancet rg:*)", "Bash(lancet fd:*)", "Bash(lancet read:*)", "Bash(lancet refs:*)", "Bash(lancet outline:*)"]}}
+```

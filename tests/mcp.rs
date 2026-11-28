@@ -172,9 +172,10 @@ fn mcp_runs_cli_commands_with_cli_output_and_exit_codes() {
     let (text, err) = m.run(&["rg", "zzz", "src"], None);
     assert!(!err && text.contains("exit 1"), "{text}"); // nothing found is not an error
     let (text, err) = m.run(&["fd", ".", "nope"], None);
-    assert!(err && text.contains("nope: No such file"), "{text}");
-    let (text, _) = m.run(&["\"old\" in line", "src"], None);
-    assert!(text.contains("src/b.rs"), "{text}");
+    assert!(
+        err && text.contains("\"nope\" is not a directory"),
+        "{text}"
+    );
     let (text, _) = m.run(&["read", "src/a.rs:2"], None);
     assert!(text.starts_with("# src/a.rs rev "), "{text}");
 

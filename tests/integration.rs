@@ -1,12 +1,15 @@
 use lancet::ast_grep::{search_ast, AstOptions};
-use lancet::fd::{find_files, parse_duration, parse_size, render_tree, FdOptions, PatternMode};
+use lancet::fd::{
+    find_files, now_ns, parse_time, render_tree, FdOptions, PatternMode, SizeFilter, Types,
+};
 use lancet::index::{self, Index};
 use lancet::outline::{build_outline, OutlineOptions};
-use lancet::output::{Response, Status};
-use lancet::query::{parse, FileType};
+use lancet::output::Status;
+use lancet::query::FileType;
 use lancet::read_cmd::{read_file_range, ReadOptions};
 use lancet::refs::{find_refs, RefsOptions};
-use lancet::search::{explain, search, search_batch, IndexMode, SearchOptions};
+use lancet::rg::{run as rg_run, Case, RgOptions};
+use lancet::scope::IndexMode;
 use lancet::walk::WalkOpts;
 use std::fs;
 use std::path::Path;
@@ -25,10 +28,70 @@ fn rel(p: &str) -> String {
     }
 }
 
-fn opts(root: &Path, mode: IndexMode) -> SearchOptions {
-    let mut o = SearchOptions::new(root);
+type RgMod = fn(&mut RgOptions);
+
+/// What `rg` prints for `pat` under `root` with `mode`: the probe the index and
+/// freshness tests compare across modes.
+fn rg_probe(root: &Path, pat: &str, mode: IndexMode, f: RgMod) -> String {
+    let mut o = RgOptions::new(vec![pat.into()]);
+    o.paths = vec![root.to_path_buf()];
     o.index = mode;
-    o
+    f(&mut o);
+    let mut out = Vec::new();
+    let _ = rg_run(&o, &mut out);
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn plain(_: &mut RgOptions) {}
+
+fn docs(o: &mut RgOptions) {
+    o.docs = true;
+}
+
+/// Searches whose output must not depend on the index: literals, case folding,
+/// Unicode, patterns too short for trigrams, regex, multi-line, context, file
+/// lists, documents.
+fn probes() -> Vec<(&'static str, RgMod)> {
+    vec![
+        ("optimizer", plain),
+        ("optimizer", |o| o.case = Case::Insensitive),
+        ("AdamW", |o| o.word = true),
+        ("kelvin", |o| o.case = Case::Insensitive),
+        ("학습률", plain),
+        ("ab", plain),
+        ("z", plain),
+        ("OOM", |o| o.count = true),
+        ("alpha|AdamW", plain),
+        ("max_grad_norm.*1\\.0", plain),
+        ("alpha\nbeta", |o| o.multiline = true),
+        ("optimizer_hit_1", |o| {
+            o.before = 1;
+            o.after = 1;
+        }),
+        ("optimizer", |o| o.files_with_matches = true),
+        ("absent_term_xyz", |o| o.files_without_match = true),
+        ("clip_grad_norm_(", |o| o.fixed_strings = true),
+        ("gradient", docs),
+    ]
+}
+
+/// Every probe prints the same with the index (in each of `modes`) as without.
+fn assert_index_independent(
+    root: &Path,
+    probes: &[(&str, RgMod)],
+    modes: &[IndexMode],
+    label: &str,
+) {
+    for (pat, f) in probes {
+        let scan = rg_probe(root, pat, IndexMode::Off, *f);
+        for m in modes {
+            assert_eq!(
+                scan,
+                rg_probe(root, pat, *m, *f),
+                "{label}: `{pat}` scan vs {m:?}"
+            );
+        }
+    }
 }
 
 fn build_rich_corpus() -> TempDir {
@@ -109,411 +172,28 @@ fn build_rich_corpus() -> TempDir {
     dir
 }
 
-fn assert_eq_responses(a: &Response, b: &Response, label: &str) {
-    assert_eq!(a.status, b.status, "{label}: status mismatch");
-    assert_eq!(a.matched, b.matched, "{label}: matched mismatch");
-    assert_eq!(
-        a.matched_is_lower_bound, b.matched_is_lower_bound,
-        "{label}: lower_bound mismatch"
-    );
-    assert_eq!(a.returned, b.returned, "{label}: returned mismatch");
-    assert_eq!(a.truncated, b.truncated, "{label}: truncated mismatch");
-    assert_eq!(a.results, b.results, "{label}: results mismatch");
-    assert_eq!(a.terms, b.terms, "{label}: terms mismatch");
-    assert_eq!(a.budget, b.budget, "{label}: budget mismatch");
-}
-
-#[test]
-fn parser_roundtrip_and_canonicalization() {
-    let cases = [
-        "optimizer",
-        "find \"optimizer\"",
-        "\"a\" \"b\"",
-        "(\"OOM\" OR \"out of memory\") AND NOT \"CPU\" in line",
-        "near(\"gradient\", \"clip\", 30) in block | expand parent | limit 5",
-        "before(regex(\"clip_\\w+\"), fuzzy(\"optimzer\", 2), 10) in file",
-        "\"AdamW\" in type:(code, config) ext:json path:\"data/**\" | expand context:2 | group file | count | limit 10",
-        "symbol(\"train_step\") AND \"opt\" in function | expand parent",
-        "symbol:EngineConfig | files | sort count asc | budget tokens:500 | limit 5",
-        "\"transmute\" | terms top:10",
-    ];
-    for qstr in cases {
-        let q = parse(qstr).unwrap_or_else(|e| panic!("failed to parse `{qstr}`: {e}"));
-        let canon = q.to_string();
-        let q2 = parse(&canon).unwrap_or_else(|e| panic!("failed to re-parse `{canon}`: {e}"));
-        assert_eq!(q, q2, "round-trip mismatch for `{qstr}` -> `{canon}`");
-    }
-
-    assert_eq!(
-        parse("symbol:train_step").unwrap().to_string(),
-        "find symbol(\"train_step\")"
-    );
-    assert_eq!(
-        parse("\"x\" | terms | budget 250").unwrap().to_string(),
-        "find \"x\" | terms top:15 | budget tokens:250"
-    );
-    assert_eq!(
-        parse("\"b\" AND \"a\" AND \"b\"").unwrap().to_string(),
-        "find \"a\" AND \"b\""
-    );
-    assert_eq!(
-        parse("(\"b\" OR \"a\") OR \"b\"").unwrap().to_string(),
-        "find \"a\" OR \"b\""
-    );
-    assert_eq!(parse("NOT NOT \"x\"").unwrap().to_string(), "find \"x\"");
-}
-
-#[test]
-fn fixture_jsonl_queries_parse_and_roundtrip() {
-    let Some(dir_os) = std::env::var_os("LANCET_QUERY_FIXTURES_DIR") else {
-        return;
-    };
-    let base = Path::new(&dir_os);
-    if !base.exists() {
-        return;
-    }
-    for fname in ["train.jsonl", "valid.jsonl"] {
-        let p = base.join(fname);
-        if !p.exists() {
-            continue;
-        }
-        let body = fs::read_to_string(&p).unwrap();
-        for (idx, line) in body.lines().enumerate() {
-            let v: serde_json::Value = serde_json::from_str(line).unwrap();
-            let qstr = v["messages"].as_array().unwrap().last().unwrap()["content"]
-                .as_str()
-                .unwrap();
-            let q = parse(qstr).unwrap_or_else(|e| panic!("{fname}:{}: `{qstr}` -> {e}", idx + 1));
-            let q2 = parse(&q.to_string()).unwrap();
-            assert_eq!(q, q2, "{fname}:{} round-trip mismatch", idx + 1);
-        }
-    }
-}
-
-#[test]
-fn strict_parse_errors() {
-    let dir = TempDir::new().unwrap();
-    let bad = [
-        "",
-        "   ",
-        "\"unterminated",
-        "regex(\"[unclosed\")",
-        "fuzzy(\"two words\", 1)",
-        "fuzzy(\"abc\", 4)",
-        "symbol(\"two words\")",
-        "\"x\" | limit 0",
-        "\"x\" | budget 0",
-        "\"x\" | terms top:0",
-        "\"x\" | sort bogus",
-        "\"x\" | bogus",
-        "\"x\" in bogus:1",
-        "\"x\" in type:bogus",
-        "\"x\" in line in block",
-        "\"x\" )",
-    ];
-    for q in bad {
-        let r = search(q, &opts(dir.path(), IndexMode::Off));
-        assert_eq!(
-            r.status,
-            Status::InvalidQuery,
-            "expected InvalidQuery for `{q}`"
-        );
-        assert!(r.error.is_some(), "expected error payload for `{q}`");
-    }
-}
-
-#[test]
-fn ast_functions_and_symbols_across_languages() {
-    let dir = build_rich_corpus();
-    let root = dir.path();
-
-    // Python function scope + expand parent + symbol metadata
-    let r_py = search(
-        "\"opt\" in function | expand parent",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_py.status, Status::Complete);
-    assert_eq!(r_py.matched, 1);
-    assert_eq!(rel(&r_py.results[0].path), "src/train.py");
-    assert_eq!(r_py.results[0].symbol.as_deref(), Some("train_step"));
-    assert!(r_py.results[0]
-        .text
-        .as_deref()
-        .unwrap()
-        .contains("clip_grad_norm_"));
-
-    // TypeScript arrow function + Go function
-    let r_ts = search("\"x + 1\" in function", &opts(root, IndexMode::Off));
-    assert_eq!(r_ts.matched, 1);
-    assert_eq!(r_ts.results[0].symbol.as_deref(), Some("runStep"));
-
-    let r_go = search("\"return 1\" in function", &opts(root, IndexMode::Off));
-    assert_eq!(r_go.matched, 1);
-    assert_eq!(r_go.results[0].symbol.as_deref(), Some("processJob"));
-
-    // Symbol definitions: exact identifier match, NOT substring or call-site!
-    let r_sym = search(
-        "symbol(\"train_step\") AND \"opt\" in function",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_sym.matched, 1);
-    assert_eq!(r_sym.results[0].symbol.as_deref(), Some("train_step"));
-
-    let r_partial = search("symbol(\"train\")", &opts(root, IndexMode::Off));
-    assert_eq!(r_partial.status, Status::Empty);
-
-    for sym in [
-        "EngineConfig",
-        "RunnerOpts",
-        "runStep",
-        "JobSpec",
-        "processJob",
-    ] {
-        let r = search(&format!("symbol:{sym}"), &opts(root, IndexMode::Off));
-        assert_eq!(r.matched, 1, "expected symbol:{sym} to match");
-    }
-}
-
-#[test]
-fn semantics_matchers_units_filters_and_pipes() {
-    let dir = build_rich_corpus();
-    let root = dir.path();
-
-    let r = search("\"kelvin\" in line", &opts(root, IndexMode::Off));
-    assert_eq!(r.status, Status::Complete);
-    assert_eq!(r.matched, 1);
-    assert_eq!(rel(&r.results[0].path), "src/sub/engine.rs");
-
-    let r_kr = search("\"학습률\"", &opts(root, IndexMode::Off));
-    assert_eq!(r_kr.matched, 1);
-    assert_eq!(rel(&r_kr.results[0].path), "docs/notes.md");
-
-    let r_short = search("\"ab\" in ext:rs", &opts(root, IndexMode::Off));
-    assert_eq!(r_short.matched, 1);
-    let r_one = search("\"z\" in ext:rs", &opts(root, IndexMode::Off));
-    assert_eq!(r_one.matched, 1);
-
-    let r_file = search(
-        "regex(\"alpha\\nbeta\") in file",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_file.matched, 1);
-    let r_block = search(
-        "regex(\"alpha\\nbeta\") in block",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_block.matched, 1);
-    let r_line = search(
-        "regex(\"alpha\\nbeta\") in line",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_line.status, Status::Empty);
-    let r_gap = search(
-        "regex(\"alpha\\n\\nbeta\") in block",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_gap.status, Status::Empty);
-
-    let r_near = search(
-        "near(\"gradient\", \"clip\", 3) in ext:md",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_near.matched, 1);
-    let r_before_ok = search(
-        "before(\"gradient\", \"clip\", 3) in ext:md",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_before_ok.matched, 1);
-    let r_before_rev = search(
-        "before(\"clip\", \"gradient\", 3) in ext:md",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_before_rev.status, Status::Empty);
-
-    let r_fz = search(
-        "fuzzy(\"accumlation\", 0) in ext:md",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_fz.matched, 1);
-    let r_fz_typo = search(
-        "fuzzy(\"accumulation\", 2) in ext:md",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_fz_typo.matched, 1);
-    let r_fz_kr = search(
-        "fuzzy(\"학습율\", 1) in ext:md",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_fz_kr.matched, 1);
-
-    let r_bin = search(
-        "\"gradient\" in path:\"data/**\"",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_bin.status, Status::Empty);
-    let r_ig = search(
-        "\"gradient\" in path:\"ignored_dir/**\"",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_ig.status, Status::Empty);
-
-    let r_latin = search("\"optimizer_nonutf8\"", &opts(root, IndexMode::Off));
-    assert_eq!(r_latin.matched, 1);
-    assert_eq!(rel(&r_latin.results[0].path), "docs/latin.txt");
-
-    let r_not_file = search(
-        "NOT \"absent_xyz_999\" in path:\"docs/empty.txt\"",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_not_file.matched, 1);
-    let r_not_line = search(
-        "NOT \"absent_xyz_999\" in line in path:\"docs/empty.txt\"",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_not_line.status, Status::Empty);
-
-    // | files, | sort count [asc], | terms, | budget
-    let r_files = search("\"optimizer\" | files", &opts(root, IndexMode::Off));
-    assert!(r_files.matched >= 4);
-    assert!(r_files
-        .results
-        .iter()
-        .all(|it| it.lines.is_empty() && it.count.is_none() && it.text.is_none()));
-
-    let r_sort_desc = search(
-        "\"optimizer\" in line | count | sort count",
-        &opts(root, IndexMode::Off),
-    );
-    let counts_desc: Vec<usize> = r_sort_desc
-        .results
-        .iter()
-        .map(|it| it.count.unwrap())
-        .collect();
-    assert!(counts_desc.windows(2).all(|w| w[0] >= w[1]));
-
-    let r_sort_asc = search(
-        "\"optimizer\" in line | count | sort count asc",
-        &opts(root, IndexMode::Off),
-    );
-    let counts_asc: Vec<usize> = r_sort_asc
-        .results
-        .iter()
-        .map(|it| it.count.unwrap())
-        .collect();
-    assert!(counts_asc.windows(2).all(|w| w[0] <= w[1]));
-
-    let r_terms = search(
-        "\"clip_grad_norm_\" in function | terms top:5",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_terms.status, Status::Complete);
-    assert!(!r_terms.terms.is_empty() && r_terms.terms.len() <= 5);
-    assert!(r_terms.terms.iter().all(|t| t.term != "clip_grad_norm_"));
-
-    let r_budget = search(
-        "\"optimizer_hit_\" in line | budget tokens:60",
-        &opts(root, IndexMode::Off),
-    );
-    assert!(r_budget.truncated);
-    assert!(r_budget.returned < r_budget.matched);
-    let b = r_budget.budget.as_ref().unwrap();
-    assert_eq!(b.limit_tokens, 60);
-    assert!(b.used_tokens <= 60);
-    assert!(b.estimated);
-
-    let r_lim = search(
-        "\"optimizer_hit_\" in line | limit 5",
-        &opts(root, IndexMode::Off),
-    );
-    assert_eq!(r_lim.returned, 5);
-    assert_eq!(r_lim.matched, 400);
-    assert!(r_lim.truncated);
-    assert!(!r_lim.matched_is_lower_bound);
-
-    let many = TempDir::new().unwrap();
-    for i in 0..300 {
-        fs::write(many.path().join(format!("f_{i:03}.txt")), "needle\n").unwrap();
-    }
-    let r_early = search("\"needle\" | limit 5", &opts(many.path(), IndexMode::Off));
-    assert_eq!(r_early.returned, 5);
-    assert!(r_early.truncated);
-    assert!(r_early.matched_is_lower_bound);
-}
-
 #[test]
 fn index_equals_scan_oracle_equivalence() {
     let dir = build_rich_corpus();
     let root = dir.path();
-    let idx_dir = index::default_dir(root);
-
-    let queries = [
-        "\"optimizer\"",
-        "\"optimizer\" in line",
-        "\"optimizer\" in block",
-        "\"AdamW\"",
-        "\"kelvin\"",
-        "\"학습률\"",
-        "\"ab\"",
-        "\"z\"",
-        "\"OOM\"",
-        "\"alpha\" AND \"beta\" in block",
-        "\"alpha\" AND \"beta\" in line",
-        "(\"OOM\" OR \"AdamW\") NOT \"CPU\"",
-        "(\"OOM\" OR \"AdamW\") NOT \"CPU\" in line",
-        "NOT \"absent_term_xyz\"",
-        "NOT \"absent_term_xyz\" in line",
-        "near(\"gradient\", \"clip\", 10)",
-        "before(\"gradient\", \"clip\", 10)",
-        "near(\"gradient\", \"clip\", 10) in line",
-        "fuzzy(\"accumulation\", 2)",
-        "fuzzy(\"transmute_ok\", 1)",
-        "fuzzy(\"banana\", 1)",
-        "fuzzy(\"aaaaa\", 1)",
-        "fuzzy(\"\u{212A}elvin\", 1)",
-        "fuzzy(\"학습율\", 1)",
-        "regex(\"max_grad_norm.*1\\\\.0\")",
-        "regex(\"alpha|AdamW\") in line",
-        "regex(\"alpha\\nbeta\") in block",
-        "\"opt\" in function | expand parent",
-        "\"return\" in function | sort count",
-        "symbol(\"train_step\")",
-        "symbol:EngineConfig",
-        "symbol(\"runStep\") AND \"x + 1\" in function",
-        "\"optimizer\" in type:(code, config) | files",
-        "\"optimizer\" in path:\"src/**\" | count",
-        "\"optimizer\" | terms top:5",
-        "\"optimizer_hit_\" in line | group file",
-        "\"optimizer_hit_\" in line | budget tokens:80",
-        "\"optimizer_hit_\" in line | limit 3",
-    ];
-
-    let rep = index::rebuild(root, &idx_dir, &WalkOpts::default()).unwrap();
+    let rep = index::rebuild(root, &index::default_dir(root), &WalkOpts::default()).unwrap();
     assert!(rep.added >= 9);
-
-    for q in queries {
-        let scan = search(q, &opts(root, IndexMode::Off));
-        let auto = search(q, &opts(root, IndexMode::Auto));
-        let trust = search(q, &opts(root, IndexMode::Trust));
-        assert_eq!(auto.mode, "index", "expected index mode for `{q}`");
-        assert_eq!(
-            trust.mode, "index_trusted",
-            "expected index_trusted mode for `{q}`"
-        );
-        assert_eq_responses(&scan, &auto, &format!("scan vs auto ({q})"));
-        assert_eq_responses(&scan, &trust, &format!("scan vs trust ({q})"));
-    }
-
-    // Long non-matching ASCII literal & overlapping literal match
-    let r_miss = search(
-        "\"definitely_not_in_any_crate_xyz\"",
-        &opts(root, IndexMode::Trust),
+    assert_index_independent(
+        root,
+        &probes(),
+        &[IndexMode::Auto, IndexMode::Trust],
+        "fresh index",
     );
-    assert_eq!(r_miss.status, Status::Empty);
-    assert_eq!(r_miss.stats.index_candidates, Some(0));
-
-    let ex = explain("\"clip_grad_norm_\"", &opts(root, IndexMode::Trust));
-    assert!(ex.grams_available.unwrap_or(0) > 0);
-    assert!(ex.grams_decoded.unwrap_or(0) > 0);
+    // The index really chooses the files: --trust-index skips the freshness check, so
+    // a literal written after indexing is invisible to it, while the default sees it.
+    let notes = root.join("docs/notes.md");
+    let mut body = fs::read_to_string(&notes).unwrap();
+    body.push_str("late_literal_qq\n");
+    fs::write(&notes, body).unwrap();
+    let late = |m| rg_probe(root, "late_literal_qq", m, plain);
+    assert_eq!(late(IndexMode::Trust), "");
+    assert!(late(IndexMode::Auto).contains("notes.md"));
+    assert_eq!(late(IndexMode::Auto), late(IndexMode::Off));
 }
 
 #[cfg(feature = "adapters")]
@@ -739,144 +419,38 @@ fn adapters_extract_and_index_oracle_equivalence() {
     let rep = index::sync(r, &index::default_dir(r), &WalkOpts::default()).unwrap();
     assert!(rep.added >= 12);
 
-    let checks = [
-        ("\"docx_probe\" in type:document", "spec.docx"),
-        ("\"pptx_probe\" in type:document", "deck.pptx"),
-        ("\"odt_probe\" in type:document", "memo.odt"),
-        (
-            "\"학습률\" AND \"hwpx_probe\" in type:document",
-            "report.hwpx",
-        ),
-        (
-            "\"hwp_legacy_probe\" AND \"구형\" in type:document",
-            "legacy.hwp",
-        ),
-        ("\"epub_probe\" in type:document", "book.epub"),
-        ("\"pdf_probe\" in type:document", "paper.pdf"),
-        (
-            "\"weft_xlsx_probe\" AND \"AdamW\" in type:spreadsheet",
-            "metrics.xlsx",
-        ),
-        ("\"gz_probe\" in type:archive", "app.log.gz"),
-        ("\"zip_probe\" in type:archive", "archive.zip"),
-        ("\"tar_probe\" in ext:tar", "bundle.tar"),
-        ("\"tar_probe\" in path:\"bundle.tar.gz\"", "bundle.tar.gz"),
+    let found = [
+        ("docx_probe", "spec.docx"),
+        ("pptx_probe", "deck.pptx"),
+        ("odt_probe", "memo.odt"),
+        ("hwpx_probe 학습률", "report.hwpx"),
+        ("hwp_legacy_probe 한글 구형", "legacy.hwp"),
+        ("epub_probe", "book.epub"),
+        ("pdf_probe", "paper.pdf"),
+        ("weft_xlsx_probe", "metrics.xlsx"),
+        ("gz_probe", "app.log.gz"),
+        ("zip_probe", "archive.zip"),
+        ("tar_probe", "bundle.tar"),
+        ("tar_probe", "bundle.tar.gz"),
     ];
-    for (q, expected_path) in checks {
-        let scan = search(q, &opts(r, IndexMode::Off));
-        let auto = search(q, &opts(r, IndexMode::Auto));
-        let trust = search(q, &opts(r, IndexMode::Trust));
-        assert_eq!(scan.status, Status::Complete, "expected match for `{q}`");
-        assert_eq!(
-            rel(&scan.results[0].path),
-            expected_path,
-            "wrong path for `{q}`"
+    for (pat, path) in found {
+        let out = rg_probe(r, pat, IndexMode::Off, docs);
+        assert!(
+            out.lines().any(|l| rel(l).starts_with(&format!("{path}:"))),
+            "`{pat}` should be found in {path}:\n{out}"
         );
-        assert_eq_responses(&scan, &auto, &format!("adapter scan vs auto ({q})"));
-        assert_eq_responses(&scan, &trust, &format!("adapter scan vs trust ({q})"));
+        assert_index_independent(
+            r,
+            &[(pat, docs)],
+            &[IndexMode::Auto, IndexMode::Trust],
+            "documents",
+        );
     }
-
-    // Script tag in EPUB and binary entry inside ZIP must be ignored.
-    assert_eq!(
-        search("\"ignored_script\"", &opts(r, IndexMode::Off)).status,
-        Status::Empty
-    );
-    assert_eq!(
-        search("\"skip_binary_entry\"", &opts(r, IndexMode::Off)).status,
-        Status::Empty
-    );
-    // PNG skipped when ocr=false and does not panic when ocr=true.
-    assert_eq!(
-        search("\"IHDR\" in type:image", &opts(r, IndexMode::Off)).status,
-        Status::Empty
-    );
-    let mut o_ocr = opts(r, IndexMode::Off);
-    o_ocr.ocr = true;
-    let _ = search("\"anything\" in type:image", &o_ocr);
-}
-
-#[test]
-fn line_fast_path_matches_full_path_and_context() {
-    let dir = TempDir::new().unwrap();
-    let r = dir.path();
-    fs::write(
-        r.join("a.txt"),
-        "hit first\nline 2\nline 3\nhit mid\nline 5\nhit last_no_nl",
-    )
-    .unwrap();
-    fs::write(r.join("b.txt"), "one\nhit middle\nthree\n").unwrap();
-
-    for q in [
-        "\"hit\" in line | expand context:1",
-        "\"hit\" in line | expand context:2",
-        "\"hit\" in line | count",
-        "\"hit\" in line | expand parent",
-    ] {
-        let fast = search(q, &opts(r, IndexMode::Off));
-        assert_eq!(fast.status, Status::Complete);
-        // Compare against group file (which uses LineMode::Full) for snippet/context parity.
-        if q.contains("expand context:") {
-            let grouped = search(&format!("{q} | group file"), &opts(r, IndexMode::Off));
-            let fast_lines_a: Vec<_> = fast
-                .results
-                .iter()
-                .filter(|it| rel(&it.path) == "a.txt")
-                .flat_map(|it| it.lines.clone())
-                .collect();
-            let mut dedup_fast = fast_lines_a.clone();
-            dedup_fast.sort_by_key(|l| (l.line, l.context));
-            dedup_fast.dedup_by_key(|l| l.line);
-            assert_eq!(
-                dedup_fast.len(),
-                grouped.results[0].lines.len(),
-                "context parity on a.txt for `{q}`"
-            );
-            for (a, b) in dedup_fast.iter().zip(&grouped.results[0].lines) {
-                assert_eq!(a.line, b.line);
-                assert_eq!(a.text, b.text);
-            }
-        }
+    // An EPUB's script, a binary ZIP entry and an image (without --ocr) are not text.
+    for pat in ["ignored_script", "skip_binary_entry", "IHDR"] {
+        assert_eq!(rg_probe(r, pat, IndexMode::Off, docs), "", "{pat}");
     }
-    let cnt = search("\"hit\" in line | count", &opts(r, IndexMode::Off));
-    assert_eq!(cnt.results[0].count, Some(3));
-    assert_eq!(cnt.results[1].count, Some(1));
 }
-
-#[test]
-fn batch_and_explain_match_individual_searches() {
-    let dir = build_rich_corpus();
-    let root = dir.path();
-    let idx_dir = index::default_dir(root);
-    index::sync(root, &idx_dir, &WalkOpts::default()).unwrap();
-
-    let pairs = vec![
-        ("q_lit".into(), "\"optimizer\" in line | limit 3".into()),
-        ("q_fn".into(), "\"opt\" in function".into()),
-        ("q_sym".into(), "symbol(\"EngineConfig\")".into()),
-        ("q_terms".into(), "\"AdamW\" | terms top:5".into()),
-    ];
-    for mode in [IndexMode::Off, IndexMode::Auto, IndexMode::Trust] {
-        let o = opts(root, mode);
-        let batch = search_batch(&pairs, &o);
-        assert_eq!(batch.results.len(), pairs.len());
-        for (item, (name, q)) in batch.results.iter().zip(&pairs) {
-            assert_eq!(&item.name, name);
-            let single = search(q, &o);
-            assert_eq_responses(
-                &item.response,
-                &single,
-                &format!("batch vs single ({name}, {mode:?})"),
-            );
-        }
-    }
-
-    let ex = explain("fuzzy(\"accumulation\", 1)", &opts(root, IndexMode::Trust));
-    assert_eq!(ex.status, Status::Complete);
-    assert!(ex.index_exists);
-    assert!(ex.trigram_req.as_deref().unwrap().starts_with("AtLeast("));
-    assert!(ex.index_candidates.unwrap() < ex.files_considered);
-}
-
 #[test]
 fn incremental_sync_freshness_and_segment_gc() {
     let dir = build_rich_corpus();
@@ -896,17 +470,14 @@ fn incremental_sync_freshness_and_segment_gc() {
     fs::write(root.join("src/added.rs"), "fn brand_new_token() {}\n").unwrap();
     fs::remove_file(root.join("docs/latin.txt")).unwrap();
 
-    for q in [
-        "\"Lion\"",
-        "\"brand_new_token\"",
-        "\"AdamW\"",
-        "\"optimizer_nonutf8\"",
-    ] {
-        let scan = search(q, &opts(root, IndexMode::Off));
-        let auto = search(q, &opts(root, IndexMode::Auto));
-        assert_eq_responses(&scan, &auto, &format!("stale auto vs scan ({q})"));
-        assert!(auto.stats.stale_files.unwrap_or(0) >= 2);
-    }
+    let changed: &[(&str, RgMod)] = &[
+        ("Lion", plain),
+        ("brand_new_token", plain),
+        ("AdamW", plain),
+        ("optimizer_nonutf8", plain),
+    ];
+    assert_index_independent(root, changed, &[IndexMode::Auto], "stale index");
+    assert!(rg_probe(root, "Lion", IndexMode::Auto, plain).contains("config.json"));
 
     let rep2 = index::sync(root, &idx_dir, &WalkOpts::default()).unwrap();
     assert_eq!(rep2.added, 2);
@@ -914,16 +485,7 @@ fn incremental_sync_freshness_and_segment_gc() {
     assert!(rep2.unchanged >= 4);
     assert_eq!(rep2.segments, 2);
 
-    for q in [
-        "\"Lion\"",
-        "\"brand_new_token\"",
-        "\"AdamW\"",
-        "\"optimizer_nonutf8\"",
-    ] {
-        let scan = search(q, &opts(root, IndexMode::Off));
-        let trust = search(q, &opts(root, IndexMode::Trust));
-        assert_eq_responses(&scan, &trust, &format!("synced trust vs scan ({q})"));
-    }
+    assert_index_independent(root, changed, &[IndexMode::Trust], "synced index");
 
     fs::remove_file(root.join("data/config.json")).unwrap();
     fs::remove_file(root.join("src/added.rs")).unwrap();
@@ -977,7 +539,7 @@ fn fd_filters_tree_and_trust_index() {
 
     // 2. Glob & Regex & extension & FileType filters
     let mut glob_rs = FdOptions::new(root);
-    glob_rs.pattern = Some("*.rs".into());
+    glob_rs.patterns = vec!["*.rs".into()];
     glob_rs.pattern_mode = PatternMode::Glob;
     let r_glob = find_files(&glob_rs);
     assert_eq!(
@@ -990,8 +552,11 @@ fn fd_filters_tree_and_trust_index() {
     );
 
     let mut rx_py_go = FdOptions::new(root);
-    rx_py_go.pattern = Some(r"^src/.*\.(py|go)$".into());
+    // As fd: the pattern meets the name, or the absolute path with `full_path`.
+    // The absolute path uses the OS separator (`\` on Windows), as in fd.
+    rx_py_go.patterns = vec![r"[/\\]src[/\\][^/\\]+\.(py|go)$".into()];
     rx_py_go.pattern_mode = PatternMode::Regex;
+    rx_py_go.full_path = true;
     let r_rx = find_files(&rx_py_go);
     assert_eq!(
         r_rx.entries
@@ -1016,7 +581,7 @@ fn fd_filters_tree_and_trust_index() {
     assert!(r_d1.entries.iter().all(|e| !rel(&e.path).contains('/')));
 
     let mut big_only = FdOptions::new(root);
-    big_only.min_size = Some(parse_size("5k").unwrap());
+    big_only.sizes = vec![SizeFilter::parse("+5ki").unwrap()];
     let r_big = find_files(&big_only);
     assert_eq!(
         r_big
@@ -1028,8 +593,8 @@ fn fd_filters_tree_and_trust_index() {
     );
 
     let mut recent = FdOptions::new(root);
-    recent.include_files = true;
-    recent.changed_within_ns = Some(parse_duration("7d").unwrap());
+    recent.types = Types::parse(&["f".into()]).unwrap();
+    recent.changed_after_ns = Some(parse_time("7d", now_ns()).unwrap());
     let r_rec = find_files(&recent);
     assert!(r_rec.entries.iter().any(|e| rel(&e.path) == "src/train.py"));
     assert!(!r_rec
@@ -1046,21 +611,21 @@ fn fd_filters_tree_and_trust_index() {
 
     let mut trust_opts = FdOptions::new(root);
     trust_opts.index = IndexMode::Trust;
-    trust_opts.include_files = true;
+    trust_opts.types = Types::parse(&["f".into()]).unwrap();
     let r_trust = find_files(&trust_opts);
     assert_eq!(r_trust.mode, "index_trusted");
     let mut scan_files_opts = FdOptions::new(root);
-    scan_files_opts.include_files = true;
+    scan_files_opts.types = Types::parse(&["f".into()]).unwrap();
     let r_scan_files = find_files(&scan_files_opts);
     assert_eq!(r_trust.entries, r_scan_files.entries);
 
     let mut sub_trust = FdOptions::new(root.join("src"));
     sub_trust.index = IndexMode::Trust;
-    sub_trust.include_files = true;
+    sub_trust.types = Types::parse(&["f".into()]).unwrap();
     let r_sub_trust = find_files(&sub_trust);
     assert_eq!(r_sub_trust.mode, "index_trusted");
     let mut sub_scan = FdOptions::new(root.join("src"));
-    sub_scan.include_files = true;
+    sub_scan.types = Types::parse(&["f".into()]).unwrap();
     assert_eq!(r_sub_trust.entries, find_files(&sub_scan).entries);
 }
 
@@ -1291,6 +856,86 @@ fn ast_rewrite_dry_run_and_apply() {
 }
 
 #[test]
+fn ast_rewrites_are_written_together_or_not_at_all() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    fs::write(root.join("a.rs"), "fn a() { foo(1); }\n").unwrap();
+    fs::write(root.join("b.rs"), "fn b() { foo(2); }\n").unwrap();
+    let mut o = AstOptions::new("foo($X)", root);
+    o.lang = Some("rs".into());
+    o.rewrite = Some("foo($X".into());
+    o.apply = true;
+
+    // One rewrite would break the syntax: nothing is written, not even the other file.
+    let r = search_ast(&o);
+    assert_eq!(r.status, Status::InvalidQuery);
+    let msg = r.error.unwrap().message;
+    assert!(
+        msg.contains("syntax error") && msg.contains("nothing written"),
+        "{msg}"
+    );
+    assert!(r.diffs.iter().all(|d| !d.applied));
+    assert_eq!(
+        fs::read_to_string(root.join("a.rs")).unwrap(),
+        "fn a() { foo(1); }\n"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("b.rs")).unwrap(),
+        "fn b() { foo(2); }\n"
+    );
+
+    // A clean rewrite lands in both.
+    o.rewrite = Some("bar($X)".into());
+    let r = search_ast(&o);
+    assert_eq!(r.status, Status::Complete);
+    assert_eq!(r.diffs.iter().filter(|d| d.applied).count(), 2);
+    assert_eq!(
+        fs::read_to_string(root.join("a.rs")).unwrap(),
+        "fn a() { bar(1); }\n"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("b.rs")).unwrap(),
+        "fn b() { bar(2); }\n"
+    );
+}
+
+#[cfg(feature = "ast")]
+#[test]
+fn ast_rewrites_keep_comments_and_rust_match_arms_are_patterns() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    let py =
+        "def f(x):\n    if x:\n        # keep me\n        return 1\n    if x:\n        return 2\n";
+    fs::write(root.join("c.py"), py).unwrap();
+    let mut o = AstOptions::new("if $C: return $X", root);
+    o.lang = Some("py".into());
+    o.rewrite = Some("if $C: return -$X".into());
+    // The commented `if` matches but isn't rewritten: the template would drop `# keep me`.
+    let r = search_ast(&o);
+    assert_eq!(r.matched, 2);
+    assert!(
+        r.diffs[0].diff.contains("+    if x: return -2"),
+        "{}",
+        r.diffs[0].diff
+    );
+    assert!(!r.diffs[0].diff.contains("-        # keep me"));
+    assert!(r.warnings.iter().any(|w| w.contains("drop a comment")));
+    // …and under --apply that refusal stops the whole rewrite.
+    o.apply = true;
+    assert_eq!(search_ast(&o).status, Status::InvalidQuery);
+    assert_eq!(fs::read_to_string(root.join("c.py")).unwrap(), py);
+
+    fs::write(
+        root.join("m.rs"),
+        "fn f() { match x { _ => 1, Some(y) => 2 } }\nfn g() { match x {} }\n",
+    )
+    .unwrap();
+    let mut m = AstOptions::new("match $X { $$$ARMS }", root);
+    m.lang = Some("rs".into());
+    assert_eq!(search_ast(&m).matched, 2);
+}
+
+#[test]
 fn read_outline_and_refs_end_to_end() {
     let dir = build_rich_corpus();
     let root = dir.path();
@@ -1478,19 +1123,22 @@ fn lsm_segment_compaction_and_zero_alloc_cursor_equivalence() {
     assert_eq!(ix_clean.dead_count(), 0);
 
     // Verify exact Scan == Auto == Trust parity across original, mutated, and added tokens
-    for q in [
-        "\"token_common\"",
-        "\"mutated_round_1\"",
-        "\"mutated_round_8\"",
-        "\"extra_fn_5\"",
-        "\"worker_49\"",
-    ] {
-        let s_scan = search(q, &opts(root, IndexMode::Off));
-        let s_auto = search(q, &opts(root, IndexMode::Auto));
-        let s_trust = search(q, &opts(root, IndexMode::Trust));
-        assert_eq_responses(&s_scan, &s_auto, &format!("compacted auto vs scan ({q})"));
-        assert_eq_responses(&s_scan, &s_trust, &format!("compacted trust vs scan ({q})"));
-    }
+    let pats: Vec<(&str, RgMod)> = [
+        "token_common",
+        "mutated_round_1",
+        "mutated_round_8",
+        "extra_fn_5",
+        "worker_49",
+    ]
+    .into_iter()
+    .map(|p| (p, plain as RgMod))
+    .collect();
+    assert_index_independent(
+        root,
+        &pats,
+        &[IndexMode::Auto, IndexMode::Trust],
+        "compacted",
+    );
 }
 
 #[cfg(feature = "ast")]
@@ -1777,14 +1425,10 @@ fn freshness_catches_preserved_mtime_and_racy_files() {
             .set_modified(old_mtime)
             .unwrap();
         assert_eq!(fs::metadata(&a).unwrap().modified().unwrap(), old_mtime);
-        for q in ["\"omega_token\"", "\"alpha_token\""] {
-            let scan = search(q, &opts(root, IndexMode::Off));
-            let auto = search(q, &opts(root, IndexMode::Auto));
-            assert_eq_responses(&scan, &auto, &format!("preserved mtime ({q})"));
-        }
-        assert_eq!(
-            search("\"omega_token\"", &opts(root, IndexMode::Auto)).matched,
-            1
+        let pats: &[(&str, RgMod)] = &[("omega_token", plain), ("alpha_token", plain)];
+        assert_index_independent(root, pats, &[IndexMode::Auto], "preserved mtime");
+        assert!(
+            rg_probe(root, "omega_token", IndexMode::Auto, plain).contains("a.txt:1:omega_token")
         );
     }
     #[cfg(not(unix))]
@@ -1796,9 +1440,7 @@ fn freshness_catches_preserved_mtime_and_racy_files() {
     let ix = Index::open(&idx_dir).unwrap().unwrap();
     let (si, id) = ix.lookup_live(b"b.txt").unwrap();
     assert_ne!(ix.segs[si].doc_meta(id).flags & index::FLAG_RACY, 0);
-    let auto = search("\"beta_token\"", &opts(root, IndexMode::Auto));
-    assert_eq!(auto.matched, 1);
-    assert!(auto.stats.stale_files.unwrap_or(0) >= 1);
+    assert!(rg_probe(root, "beta_token", IndexMode::Auto, plain).contains("b.txt:1:beta_token"));
 }
 
 #[test]
@@ -2003,7 +1645,7 @@ fn fuzz_scan_equals_auto_equals_trust() {
         }
         s
     }
-    fn atom(r: &mut Rng) -> String {
+    fn probe(r: &mut Rng) -> (String, RgMod) {
         // "zqxjk" never appears in generated content; only same-size swaps introduce it,
         // so a stale index can only miss it if freshness detection is broken.
         let w = if r.below(5) == 0 {
@@ -2011,40 +1653,32 @@ fn fuzz_scan_equals_auto_equals_trust() {
         } else {
             r.pick(WORDS)
         };
-        match r.below(6) {
-            0 => format!(
-                "regex(\"{}\")",
-                r.pick(&["x\\\\d+", "(?i)gam+a", "^alpha", "err[0o]r", "beta$"])
-            ),
-            1 => format!(
-                "fuzzy(\"{}\", {})",
-                r.pick(&["alpah", "gamm", "eror", "spinlock", "key"]),
-                r.below(3)
-            ),
+        let pat = match r.below(5) {
+            0 => r
+                .pick(&["x\\d+", "(?i)gam+a", "^alpha", "err[0o]r", "beta$"])
+                .to_string(),
+            1 => format!("{w}|{}", r.pick(WORDS)),
             2 => {
                 let cut: String = w.chars().skip(1).take(3).collect();
-                format!("\"{}\"", if cut.is_empty() { w.to_string() } else { cut })
+                if cut.is_empty() {
+                    w.to_string()
+                } else {
+                    cut
+                }
             }
-            _ => format!("\"{w}\""),
-        }
-    }
-    fn query(r: &mut Rng) -> String {
-        let mut q = match r.below(7) {
-            0 => format!("{} AND {}", atom(r), atom(r)),
-            1 => format!("{} OR {}", atom(r), atom(r)),
-            2 => format!("{} NOT {}", atom(r), atom(r)),
-            3 => format!("near({}, {}, {})", atom(r), atom(r), r.below(6)),
-            4 => format!("before({}, {}, {})", atom(r), atom(r), r.below(6)),
-            _ => atom(r),
+            _ => w.to_string(),
         };
-        match r.below(6) {
-            0 => q.push_str(" in line"),
-            1 => q.push_str(" in block"),
-            2 => q.push_str(&format!(" in ext:{}", r.pick(EXTS))),
-            3 => q.push_str(&format!(" in path:\"d{}\"", r.below(3))),
-            _ => {}
-        }
-        q
+        let mods: [RgMod; 8] = [
+            plain,
+            plain,
+            |o| o.case = Case::Insensitive,
+            |o| o.word = true,
+            |o| o.files_with_matches = true,
+            |o| o.count = true,
+            |o| o.invert = true,
+            |o| o.globs = vec!["d1/**".into(), "*.rs".into()],
+        ];
+        (pat, mods[r.below(mods.len())])
     }
 
     for seed in [0x9E37_79B9_7F4A_7C15u64, 42, 0xDEAD_BEEF] {
@@ -2069,15 +1703,14 @@ fn fuzz_scan_equals_auto_equals_trust() {
         let idx_dir = index::default_dir(root);
         let check = |r: &mut Rng, phase: &str, with_trust: bool| {
             for n in 0..60 {
-                let q = query(r);
-                let scan = search(&q, &opts(root, IndexMode::Off));
-                let auto = search(&q, &opts(root, IndexMode::Auto));
-                let label = format!("seed {seed:#x} {phase} #{n}: {q}");
-                assert_eq_responses(&scan, &auto, &format!("{label} (auto)"));
-                if with_trust {
-                    let trust = search(&q, &opts(root, IndexMode::Trust));
-                    assert_eq_responses(&scan, &trust, &format!("{label} (trust)"));
-                }
+                let (pat, f) = probe(r);
+                let modes: &[IndexMode] = if with_trust {
+                    &[IndexMode::Auto, IndexMode::Trust]
+                } else {
+                    &[IndexMode::Auto]
+                };
+                let label = format!("seed {seed:#x} {phase} #{n}");
+                assert_index_independent(root, &[(&pat, f)], modes, &label);
             }
         };
 
@@ -2151,7 +1784,8 @@ fn rg_mode_matches_ripgrep_semantics_and_is_index_independent() {
         f(&mut o);
         let mut out = Vec::new();
         let any = run(&o, &mut out).unwrap();
-        let base = format!("{}/", root.display());
+        // lancet prints `/`-separated paths on every platform.
+        let base = format!("{}/", root.display()).replace('\\', "/");
         (any, String::from_utf8(out).unwrap().replace(&base, ""))
     };
 
@@ -2572,13 +2206,11 @@ fn corrupt_documents_are_skipped_safely() {
 
     let t = std::time::Instant::now();
     for (ext, _, token) in &seeds {
-        let r = search(&format!("\"{token}\""), &opts(root, IndexMode::Off));
-        assert_eq!(r.status, Status::Complete, "{ext}");
+        let out = rg_probe(root, token, IndexMode::Off, docs);
         assert!(
-            r.results
-                .iter()
-                .any(|h| rel(&h.path) == format!("ok.{ext}")),
-            "intact ok.{ext} must still be found"
+            out.lines()
+                .any(|l| rel(l).starts_with(&format!("ok.{ext}:"))),
+            "intact ok.{ext} must still be found:\n{out}"
         );
     }
     for f in fs::read_dir(root).unwrap() {
@@ -2753,7 +2385,8 @@ fn rg_passthru_and_type_add_match_ripgrep() {
         f(&mut o);
         let mut out = Vec::new();
         let any = run(&o, &mut out).unwrap();
-        let base = format!("{}/", root.display());
+        // lancet prints `/`-separated paths on every platform.
+        let base = format!("{}/", root.display()).replace('\\', "/");
         (any, String::from_utf8(out).unwrap().replace(&base, ""))
     };
     let passthru = |o: &mut RgOptions| {
@@ -2935,6 +2568,59 @@ fn rename_local_bindings_exactly_or_refuses() {
 }
 
 #[test]
+fn refs_skip_other_types_members_and_shadowing_locals() {
+    use lancet::refs::{find_refs, RefsOptions};
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    let lines = |o: &RefsOptions| -> Vec<(String, usize)> {
+        find_refs(o)
+            .references
+            .iter()
+            .map(|r| (rel(&r.path), r.line))
+            .collect()
+    };
+    // Rust free fn: `.rev()`, `rev:` (also inside a macro) and a local `rev` are not it.
+    fs::write(
+        root.join("a.rs"),
+        "pub fn rev(b: &[u8]) -> u8 { b[0] }\n\
+         fn g(xs: Vec<u8>) -> u8 {\n\
+             let n: Vec<u8> = xs.into_iter().rev().collect();\n\
+             let s = S { rev: rev(&n) };\n\
+             let v = vec![S { rev: 1 }];\n\
+             let rev = 3;\n\
+             crate::rev(&n) + rev + s.rev\n\
+         }\n",
+    )
+    .unwrap();
+    // Python: a local of the same name is skipped, `mod.rev()` may be this function.
+    fs::write(
+        root.join("b.py"),
+        "def rev(x):\n    return x\n\ndef h(m):\n    rev = 1\n    return rev + m.rev(2)\n\ndef k():\n    return rev(3)\n",
+    )
+    .unwrap();
+    let mut o = RefsOptions::new("rev", root);
+    o.index = IndexMode::Off;
+    let r = find_refs(&o);
+    assert_eq!(r.definitions.len(), 2, "{:?}", r.definitions);
+    // Two definitions in two languages: only shadowing locals go (not members,
+    // since the Python one isn't a Rust free fn).
+    assert!(lines(&o).contains(&("b.py".into(), 6)), "{:?}", lines(&o));
+    assert!(!lines(&o).contains(&("b.py".into(), 5)), "{:?}", lines(&o));
+    fs::remove_file(root.join("b.py")).unwrap();
+    assert_eq!(
+        lines(&o),
+        vec![("a.rs".into(), 4), ("a.rs".into(), 7)],
+        "{:?}",
+        find_refs(&o).warnings
+    );
+    assert!(find_refs(&o).warnings.iter().any(|w| w.contains("local")));
+    // A name with no definition (only locals) still lists every use.
+    let mut l = RefsOptions::new("xs", root);
+    l.index = IndexMode::Off;
+    assert_eq!(find_refs(&l).total_references, 2);
+}
+
+#[test]
 fn refs_rank_orders_declarations_by_use() {
     use lancet::refs::{find_refs, rank_symbols, RefsOptions};
     let dir = TempDir::new().unwrap();
@@ -2987,12 +2673,14 @@ fn cli_missing_paths_are_errors_and_fd_read_take_several_targets() {
             String::from_utf8_lossy(&o.stderr).into_owned(),
         )
     };
-    // A mistyped path is an error (exit 2), not "nothing found" (exit 1).
+    // A mistyped path is an error, not "nothing found": exit 2, or fd's 1 for fd.
+    for args in [&["fd", ".", "nope"][..], &["fd", "a/nope"]] {
+        let (code, _, err) = run(args);
+        assert_eq!(code, 1, "{args:?}: {err}");
+        assert!(err.contains("nope"), "{args:?}: {err}");
+    }
     for args in [
-        &["fd", ".", "nope"][..],
-        &["fd", "a/nope"],
-        &["rg", "x", "nope"],
-        &["\"x\"", "nope"],
+        &["rg", "x", "nope"][..],
         &["refs", "x", "nope"],
         &["ast", "$X", "nope", "--lang", "rs"],
         &["outline", "nope"],
@@ -3005,7 +2693,7 @@ fn cli_missing_paths_are_errors_and_fd_read_take_several_targets() {
     let (code, out, _) = run(&["fd", ".", "a", "b"]);
     assert_eq!(code, 0);
     assert_eq!(out, "a/x.rs\nb/y.rs\n");
-    let (_, out, _) = run(&["fd", "-e", "rs", "a", "b"]);
+    let (_, out, _) = run(&["fd", "-e", "rs", ".", "a", "b"]);
     assert_eq!(out, "a/x.rs\nb/y.rs\n");
     // read: several targets, each with its own header and rev.
     let (code, out, _) = run(&["read", "a/x.rs:2", "b/y.rs:1"]);
@@ -3077,7 +2765,7 @@ fn multi_file_edits_are_all_or_nothing() {
         if !r.applied {
             // (Running as root ignores the read-only directory; then both land.)
             assert_eq!(fs::read_to_string(&a).unwrap(), "fn a() { new(1); }\n");
-            assert!(r.error.unwrap().message.contains("nothing applied"));
+            assert!(r.error.unwrap().message.contains("nothing written"));
         }
     }
 }
@@ -3172,6 +2860,33 @@ fn builtin_tool_syntax_write_and_codex_patches() {
         out.contains("   4 | def b():\n") && out.ends_with("   1 | def a():\n"),
         "{out}"
     );
+    // As the built-in Read: a read with no range stops at 2000 lines and very long
+    // lines are cut (whole with --raw).
+    let mut big: String = (1..=2500).map(|i| format!("x{i}\n")).collect();
+    big.insert_str(0, &format!("{}\n", "y".repeat(2500)));
+    fs::write(root.join("big.txt"), &big).unwrap();
+    let (_, out, err) = run(&["read", "big.txt"], None);
+    assert!(
+        out.ends_with("2000 | x1999\n"),
+        "{}",
+        &out[out.len() - 40..]
+    );
+    assert!(out.contains("… [500 more characters]"));
+    assert!(
+        err.contains("showing lines 1-2000 of 2501: continue with --offset 2001"),
+        "{err}"
+    );
+    let (_, out, _) = run(&["read", "big.txt", "--offset", "2001"], None);
+    assert!(out.ends_with("2501 | x2500\n"));
+    let (_, out, _) = run(&["read", "big.txt", "--raw", "--limit", "1"], None);
+    assert!(out.contains(&"y".repeat(2500)));
+    // Several paths, like rg and fd.
+    let (code, out, _) = run(&["outline", "src/a.py", "big.txt"], None);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("src/a.py") && out.contains("big.txt"), "{out}");
+    let (code, out, _) = run(&["refs", "b", "src/a.py", "src"], None);
+    assert_eq!(code, 0, "{out}");
+    assert_eq!(out.matches("[def:function] src/a.py:4").count(), 1, "{out}");
 
     // write: creates; an existing file needs the rev it was read at.
     let (code, _, _) = run(
@@ -3244,5 +2959,103 @@ fn builtin_tool_syntax_write_and_codex_patches() {
     assert_eq!(
         fs::read_to_string(root.join(".lancet/.gitignore")).unwrap(),
         "*\n"
+    );
+}
+
+#[test]
+fn printed_diffs_apply_back_with_patch() {
+    use lancet::patch::{apply_patch, PatchOptions};
+    use std::process::Command;
+    let mut x: u64 = 0x2545_F491_4F6C_DD1D;
+    let mut rnd = |n: usize| {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        (x % n.max(1) as u64) as usize
+    };
+    let dir = TempDir::new().unwrap();
+    let f = dir.path().join("f.txt");
+    // patch(1) as a second opinion on Unix; Windows' Git patch rewrites CRLF on its own.
+    let has_patch = cfg!(unix) && Command::new("patch").arg("--version").output().is_ok();
+    // Both sizes: the small one goes through the LCS, the big one (more than
+    // 1414 lines on each side) through the trimmed / paired path.
+    for (case, size) in (0..60).map(|c| (c, if c % 2 == 0 { 40 } else { 2000 })) {
+        // Every third case is a CRLF file: the `\r`s must survive the diff.
+        let eol = if case % 3 == 0 { "\r\n" } else { "\n" };
+        let mut lines: Vec<String> = (0..size).map(|i| format!("line {i} {}", i % 7)).collect();
+        let old = lines.join(eol) + if case % 5 == 0 { "" } else { eol };
+        for _ in 0..1 + rnd(5) {
+            let at = rnd(lines.len());
+            match rnd(3) {
+                0 => lines[at] = format!("changed {}", rnd(1000)),
+                1 => {
+                    for k in 0..1 + rnd(3) {
+                        lines.insert(at, format!("new {k} {}", rnd(1000)));
+                    }
+                }
+                _ => {
+                    let n = (1 + rnd(3)).min(lines.len() - at);
+                    lines.drain(at..at + n);
+                }
+            }
+        }
+        let new = lines.join(eol) + if case % 7 == 0 { "" } else { eol };
+        let diff = lancet::edit::unified_diff("f.txt", &old, &new);
+        if old == new {
+            continue;
+        }
+        fs::write(&f, &old).unwrap();
+        let mut o = PatchOptions::new(diff.clone(), dir.path());
+        o.apply = true;
+        o.allow_syntax_errors = true;
+        let r = apply_patch(&o);
+        assert!(r.applied, "case {case}: {:?}\n{diff}", r.error);
+        assert_eq!(fs::read_to_string(&f).unwrap(), new, "case {case}:\n{diff}");
+        if has_patch {
+            fs::write(&f, &old).unwrap();
+            let pf = dir.path().join("d.patch");
+            fs::write(&pf, &diff).unwrap();
+            let st = Command::new("patch")
+                .args(["-s", "-p1", "-i"])
+                .arg(&pf)
+                .current_dir(dir.path())
+                .status()
+                .unwrap();
+            assert!(st.success(), "case {case}: patch(1) refused\n{diff}");
+            assert_eq!(
+                fs::read_to_string(&f).unwrap(),
+                new,
+                "case {case}: patch(1)\n{diff}"
+            );
+        }
+    }
+}
+
+#[test]
+fn trust_index_answers_only_for_the_files_it_holds() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    fs::write(root.join("a.toml"), "edition = 1\n").unwrap();
+    fs::write(root.join(".hidden.toml"), "edition = 2\n").unwrap();
+    let idx = index::default_dir(root);
+    let glob: RgMod = |o| o.globs = vec!["*.toml".into()];
+    let hidden: RgMod = |o| o.walk.hidden = true;
+    // Built without hidden files: a whitelisting glob still finds the hidden one.
+    index::rebuild(root, &idx, &WalkOpts::default()).unwrap();
+    let want = rg_probe(root, "edition", IndexMode::Off, glob);
+    assert!(want.contains(".hidden.toml"), "{want}");
+    assert_eq!(rg_probe(root, "edition", IndexMode::Trust, glob), want);
+    // Built with hidden files: a search without --hidden doesn't see them.
+    let wopts = WalkOpts {
+        hidden: true,
+        ..WalkOpts::default()
+    };
+    index::rebuild(root, &idx, &wopts).unwrap();
+    let want = rg_probe(root, "edition", IndexMode::Off, plain);
+    assert!(!want.contains(".hidden.toml"), "{want}");
+    assert_eq!(rg_probe(root, "edition", IndexMode::Trust, plain), want);
+    assert_eq!(
+        rg_probe(root, "edition", IndexMode::Trust, hidden),
+        rg_probe(root, "edition", IndexMode::Off, hidden)
     );
 }

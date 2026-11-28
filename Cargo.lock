@@ -648,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "lancet"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "calamine",
@@ -658,6 +658,7 @@ dependencies = [
  "flate2",
  "globset",
  "ignore",
+ "libc",
  "memchr",
  "memmap2",
  "mimalloc",

@@ -1,50 +1,59 @@
 ---
 nav_title: "CLI Commands & Exit Codes"
-title: "CLI Subcommands, Flags & Exit Codes Reference"
-description: "Every Lancet subcommand, flag default, argument rule, and exit code verified against src/main.rs."
-lede: "Authoritative per-subcommand syntax and exit codes across all 15 entrypoints."
-keywords: "cli subcommands flags exit codes 0 1 2 conflict invalid_query unsupported"
-source: "https://github.com/CREE1116/lancet/blob/main/src/main.rs"
+title: "CLI Commands, Flags & Exit Codes Reference"
+description: "Every Lancet command, its flags and defaults, and the exit codes they share."
+lede: "Twelve commands, one set of exit codes, one coordinate system."
+keywords: "cli commands flags exit codes 0 1 2 conflict invalid_query unsupported"
+source: "https://github.com/CREE1116/lancet/blob/main/src/commands.rs"
 ---
-All subcommands share deterministic exit codes, `.gitignore` traversal, and structured JSON output when `--json` is passed. For `lancet rg`'s 40+ ripgrep flags, see [`lancet rg` Parity Reference](rg-parity.md).
+`lancet --help` lists the commands and `lancet COMMAND --help` lists each one's flags; both come from the same command table as this page (`src/commands.rs`). For `lancet rg`'s ripgrep flags, see the [`lancet rg` parity reference](rg-parity.md).
 
-## Exit Codes {#exit-codes}
+## Exit codes {#exit-codes}
 
-| Code | Meaning | Returned JSON `status` |
+| Code | Meaning | JSON `status` |
 | ---: | --- | --- |
-| `0` | Success / at least one match / edit applied or previewed cleanly | `complete` |
-| `1` | 0 matches (or missing index in `lancet status`) | `empty` |
-| `2` | Bad query/CLI flags, unsupported target/rename, CAS conflict, or I/O error | `invalid_query`, `unsupported`, `conflict` |
+| `0` | Done: matches found, or a change previewed or applied | `complete` |
+| `1` | Nothing found (not an error) | `empty` |
+| `2` | Refused or invalid: bad arguments, unsupported file, a conflict (the file changed since its `rev`), I/O error | `invalid_query`, `unsupported`, `conflict` |
 
-## lancet <QUERY> & batch & parse & explain {#cmd-search}
+`lancet fd` keeps fd's own codes: `0` even when nothing matched, `1` for its errors (a missing search path), `2` for invalid arguments.
 
-| Command & Flag | Default / Values | Meaning |
-| --- | --- | --- |
-| `lancet <QUERY> [PATH]` | `PATH = .` | Evaluate LQL query over directory or file |
-| `--json` · `--stats` | `false` | Machine-readable JSON · execution telemetry on stderr |
-| `--no-index` \| `--trust-index` \| `--index-dir DIR` | `auto`, `PATH/.lancet` | Override index freshness strategy or location |
-| `--hidden` · `--no-ignore` · `-j THREADS` · `--ocr` | `false`, CPUs, `false` | Traversal & OCR toggles |
-| `--max-lines N` · `--max-cols N` | `20`, `240` | Display cap per matched unit and line |
-| `lancet batch [PATH] -q Q... [--name N...] [--queries-json JSON]` | — | Share one index open + walk across multiple LQL queries |
-| `lancet parse <QUERY>` | — | Print normalized canonical query + JSON IR |
-| `lancet explain <QUERY> [PATH]` | — | Show required trigrams, candidate count & selectivity % |
+With `--json`, every command's response has `status`, and `error` when it failed; searching commands also report `warnings`.
 
-## lancet fd & outline & refs & read {#cmd-discover}
+## Find and search {#cmd-search}
 
-| Subcommand | Flags & Arguments |
+| Command | Flags |
 | --- | --- |
-| `lancet fd [PATTERN] [PATH...]` | `-p/--pattern`, `-t f\|d`, `-e/--ext` (comma/repeatable), `--type-class`, `-g` (glob; auto-detected on `*`/`?`/`[`), `-r` (regex), `-s` (case), `-d/--max-depth`, `--changed-within DUR`, `--min-size`, `--max-size`, `--tree`, `--dirs`, `--limit N`, `--meta`, `--no-index`, `--trust-index`, `--index-dir`, `--hidden`, `--no-ignore`, `-j`, `--json`, `--stats` |
-| `lancet outline [PATH]` | `-d/--max-depth`, `-e/--ext`, `--limit N`, `--hidden`, `--no-ignore`, `-j`, `--ocr`, `--json` |
-| `lancet refs <SYMBOL> [PATH]` | `--rank`, `--kind KIND,...` (requires `--rank`), `-l/--lang`, `-e/--ext`, `--path GLOB`, `--all-files`, `--limit N`, `--no-index`, `--trust-index`, `--index-dir`, `--hidden`, `--no-ignore`, `-j`, `--json`, `--stats` |
-| `lancet read <TARGET>...` | One or more targets (`file:10-50`, `zip!entry`), `-l/--lines`, `-s/--symbol`, `-p/--page`, `--sheet`, `--rows`, `--cols`, `-e/--entry`, `--budget-tokens`, `--raw`, `--ocr`, `--json` |
+| `lancet rg [FLAGS] PATTERN [PATH...]` | ripgrep's flags ([parity](rg-parity.md)), plus `--docs` (search documents and archives) |
+| `lancet fd [PATTERN] [PATH...]` | fd's flags ([parity](fd-parity.md)): `-g`, `-F`, `--exact`, `-p`, `-s`/`-i`, `-t`, `-e`, `-S`, `--changed-within`/`--changed-before`, `-o`, `-d`/`--min-depth`, `-E`, `-H`, `-I`, `-u`, `-a`, `-0`, `--format`, `--max-results`, `-q` … · lancet: `--tree`, `--dirs`, `--type-class`, `--json`, `--meta` |
+| `lancet refs SYMBOL [PATH...]` | `--rank` (SYMBOL is a glob; most referenced declarations first), `--kind KIND,...`, `-l/--lang`, `-e/--ext`, `--path GLOB`, `--all-files`, `--limit N`, `--hidden`, `--no-ignore`, `-j`, `--json` |
+| `lancet ast PATTERN [PATH...]` | `-l/--lang`, `-r/--rewrite TEMPLATE`, `--apply`, `--allow-syntax-errors`, `--path GLOB`, `--limit N`, `--hidden`, `--no-ignore`, `-j`, `--json` ([pattern syntax](ast-patterns.md)) |
 
-## lancet ast, edit, patch, rename, index & mcp {#cmd-mutate}
+Searching commands use the index automatically when one exists; `--no-index` and `--trust-index` choose the mode explicitly (see [index and freshness](../concepts/index-and-freshness.md)).
 
-| Subcommand | Flags & Arguments |
+## Read {#cmd-read}
+
+| Command | Flags |
 | --- | --- |
-| `lancet ast <PATTERN> [PATH]` | `-l/--lang`, `-r/--rewrite TEMPLATE`, `--apply`, `--path GLOB` (repeatable), `--limit N`, `--no-index`, `--trust-index`, `--index-dir`, `--hidden`, `--no-ignore`, `-j`, `--json`, `--stats` |
-| `lancet edit <PATH>` | Target (one of): `--lines`, `--symbol`, `--find [--all]`, or `--edits FILE\|-` · Operation (one of): `--with`, `--with-file FILE\|-`, `--delete`, `--insert-before`, `--insert-after` · Safety: `--rev REV`, `--apply`, `--allow-syntax-errors`, `--json` |
-| `lancet patch [DIFF\|-]` | `--root DIR` (`.`), `-p/--strip N` (`1`), `--apply`, `--allow-syntax-errors`, `--json` |
-| `lancet rename <FILE:LINE[:COL]> <OLD> <NEW>` | `--rev REV`, `--apply`, `--json` |
-| `lancet index [PATH]` · `status [PATH]` | `--rebuild` \| `--compact`, `--index-dir`, `--ocr`, `--hidden`, `--no-ignore`, `-j` |
-| `lancet mcp` | `--root DIR` (`.`), `--read-only`, `--trust-index`, `-j/--threads` |
+| `lancet read TARGET...` | Targets: `file`, `file:10-50`, `file:42`, `archive.zip!inner.log`, several per call · `-l/--lines`, `--offset N --limit N`, `-s/--symbol`, `-p/--page`, `--sheet`, `--rows`, `--cols`, `-e/--entry`, `--budget-tokens N`, `--raw`, `--ocr`, `--json` |
+| `lancet outline [PATH...]` | `-d/--max-depth`, `-e/--ext`, `--limit N`, `--hidden`, `--no-ignore`, `-j`, `--ocr`, `--json` |
+
+`read` prints at most 2,000 lines unless you give a range; the first line is `# PATH rev REV`.
+
+## Change {#cmd-change}
+
+Every change is a preview until `--apply`; every write is a compare-and-swap and multi-file changes are all or nothing ([write safety](../concepts/write-safety.md)).
+
+| Command | Flags |
+| --- | --- |
+| `lancet edit PATH` | Target: `--old-string TEXT` (`--replace-all`, `--expected-replacements N`), `--lines`, `--symbol` · Operation: `--new-string TEXT`, `--with-file FILE\|-`, `--delete`, `--insert-before`, `--insert-after` · `--edits FILE\|-` (several hunks or files at once) · `--rev REV`, `--apply`, `--allow-syntax-errors`, `--json` |
+| `lancet write PATH` | `--content TEXT` or `--with-file FILE\|-`, `--rev REV` (required to replace an existing file), `--apply`, `--allow-syntax-errors`, `--json` |
+| `lancet patch [DIFF\|-]` | Unified diff or Codex `*** Begin Patch` · `--root DIR` (`.`), `-p/--strip N` (`1`), `--apply`, `--allow-syntax-errors`, `--json` |
+| `lancet rename FILE:LINE[:COL] OLD NEW` | `--rev REV`, `--apply`, `--json` |
+
+## Infrastructure {#cmd-infra}
+
+| Command | Flags |
+| --- | --- |
+| `lancet index [PATH]` | `--status` (print the index's state as JSON, change nothing), `--rebuild`, `--compact`, `--index-dir DIR`, `--hidden`, `--no-ignore`, `--ocr`, `-j` |
+| `lancet mcp` | `--root DIR` (`.`), `--read-only` (refuse `edit`, `write`, `patch`, `rename`, `index` and `--apply`), `--trust-index`, `-j` |

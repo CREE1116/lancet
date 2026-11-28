@@ -20,26 +20,16 @@ const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2025-03-26", "2024-11-05"];
 const DEFAULT_MAX_BYTES: usize = 131_072;
 const HARD_MAX_BYTES: usize = 4_194_304;
 
-/// Commands that change files (or the on-disk index).
-const WRITING_COMMANDS: &[&str] = &["edit", "write", "patch", "rename", "index"];
-/// Commands that accept `--trust-index` and `-j`.
-const SEARCHING_COMMANDS: &[&str] = &["rg", "fd", "ast", "refs", "batch"];
-/// First words that are subcommands rather than a query (`lancet '"x" in line'`).
-const SUBCOMMANDS: &[&str] = &[
-    "fd", "ast", "rg", "read", "edit", "write", "patch", "rename", "outline", "refs", "index",
-    "status", "parse", "explain", "batch", "mcp",
-];
-
 const TOOL_DESCRIPTION: &str = "\
 Run a lancet command in the workspace. `args` is the command line after `lancet`, \
 one array element per argument (no shell: no quoting, globbing, pipes or `&&`). \
 Output, flags and exit codes are the CLI's: exit 0 = done, 1 = nothing found (not an \
-error), 2 = refused or invalid (message on stderr).\n\
+error), 2 = refused or invalid (message on stderr); `fd` keeps fd's codes (0 even when nothing matched).\n\
 \n\
 Orient:   [\"fd\",\"--tree\",\"--dirs\",\"-d\",\"2\",\".\"]  [\"outline\",\"src/server.rs\"]  \
 [\"refs\",\"--rank\",\"*Service\",\"--kind\",\"class\",\".\"]\n\
 Search:   [\"rg\",\"-w\",\"spin_lock\",\"src\"]  [\"refs\",\"SearchOptions\",\"src\"]  \
-[\"ast\",\"$X.unwrap()\",\"src\",\"--lang\",\"rs\"]  [\"near(\\\"retry\\\", \\\"timeout\\\", 20) in function\",\"src\"]\n\
+[\"ast\",\"$X.unwrap()\",\"src\",\"--lang\",\"rs\"]\n\
 Read:     [\"read\",\"src/x.rs\",\"--symbol\",\"handle\"]  [\"read\",\"src/x.rs:120-180\",\"src/y.rs:10-40\"]  \
 — the first line is `# PATH rev REV`; keep REV for edits. Large files: add \"--budget-tokens\",\"800\". \
 An image comes back as the image (add \"--ocr\" for its text).\n\
@@ -234,7 +224,7 @@ const MAX_IMAGE_BYTES: u64 = 5 * 1024 * 1024;
 
 /// The image files a `read` command names (without `--ocr`), with their MIME types.
 fn read_images(argv: &[String], cfg: &McpConfig) -> Vec<(PathBuf, &'static str)> {
-    if subcommand(argv) != Some("read") || argv.iter().any(|a| a == "--ocr") {
+    if subcommand(argv).map(|c| c.name) != Some("read") || argv.iter().any(|a| a == "--ocr") {
         return Vec::new();
     }
     const TAKES_VALUE: &[&str] = &[
@@ -318,16 +308,19 @@ fn handle_tools_call(req_id: Value, params: &Map<String, Value>, cfg: &McpConfig
     rpc_ok(req_id, result)
 }
 
-/// The subcommand an argument list runs (`None` for a query).
-fn subcommand(args: &[String]) -> Option<&str> {
-    args.first()
-        .map(String::as_str)
-        .filter(|a| SUBCOMMANDS.contains(a))
+/// The command an argument list runs (`None` if it isn't one).
+fn subcommand(args: &[String]) -> Option<&'static crate::commands::CommandSpec> {
+    args.first().and_then(|a| crate::commands::get(a))
 }
 
 /// Why `args` is refused on a read-only server, if it is.
 fn read_only_refusal(args: &[String]) -> Option<String> {
-    if let Some(cmd) = subcommand(args).filter(|c| WRITING_COMMANDS.contains(c)) {
+    let status_only =
+        subcommand(args).is_some_and(|c| c.name == "index") && args.iter().any(|a| a == "--status");
+    if let Some(cmd) = subcommand(args)
+        .filter(|c| c.writes && !status_only)
+        .map(|c| c.name)
+    {
         return Some(format!(
             "`{cmd}` writes files; this MCP server is read-only"
         ));
@@ -354,7 +347,7 @@ fn run_tool(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Vec<Value>, b
             )
         }
     };
-    if subcommand(&argv) == Some("mcp") {
+    if subcommand(&argv).is_some_and(|c| c.name == "mcp") {
         return Err("`mcp` can't be run from inside the MCP server".into());
     }
     if cfg.read_only {
@@ -376,10 +369,7 @@ fn run_tool(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Vec<Value>, b
     };
 
     let mut full = argv.clone();
-    let searching = match subcommand(&argv) {
-        Some(c) => SEARCHING_COMMANDS.contains(&c),
-        None => true, // a query
-    };
+    let searching = subcommand(&argv).is_some_and(|c| c.searches);
     if searching {
         let has = |f: &str| argv.iter().any(|a| a == f);
         if cfg.trust_index && !has("--trust-index") && !has("--no-index") {
@@ -442,10 +432,19 @@ fn run_tool(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Vec<Value>, b
         text.push_str(err.trim_end());
         text.push('\n');
     }
+    // fd's codes differ: 0 even when nothing matched, 1 for its own errors
+    // (except with -q, where 1 means nothing matched).
+    let fd_quiet = |a: &String| matches!(a.as_str(), "-q" | "--quiet" | "--has-results");
+    let fd_error = argv.first().is_some_and(|c| c == "fd") && !argv.iter().any(fd_quiet);
+    let error = code >= 2 || (code == 1 && fd_error);
     if code != 0 {
         text.push_str(&format!(
             "[exit {code}{}]\n",
-            if code == 1 { ": nothing found" } else { "" }
+            if code == 1 && !error {
+                ": nothing found"
+            } else {
+                ""
+            }
         ));
     }
     // `read` of an image: give the client the image itself, as its own Read would.
@@ -455,7 +454,7 @@ fn run_tool(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Vec<Value>, b
             content.push(json!({ "type": "image", "data": base64(&data), "mimeType": mime }));
         }
     }
-    Ok((content, code >= 2))
+    Ok((content, error))
 }
 
 #[cfg(test)]
@@ -494,9 +493,8 @@ mod tests {
         for r in [
             &["rg", "edit"][..],
             &["read", "a.rs"],
-            &["\"edit\" in line"],
             &["ast", "$X", "--rewrite", "$X"],
-            &["status"],
+            &["index", "--status"],
         ] {
             assert!(read_only_refusal(&v(r)).is_none(), "{r:?}");
         }

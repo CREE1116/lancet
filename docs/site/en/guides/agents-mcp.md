@@ -16,7 +16,7 @@ AI coding agents can drive Lancet via shell CLI or its zero-dependency stdio **M
 | --- | --- | --- |
 | `--root <DIR>` | `.` | Directory commands run in, so relative paths resolve against it (**not** a chroot/sandbox; absolute or `..` paths still resolve like the CLI) |
 | `--read-only` | `false` | Refuses commands that write: `edit`, `patch`, `rename`, `index`, and anything with `--apply` |
-| `--trust-index` | `false` | Adds `--trust-index` to searches (`rg`, `fd`, `ast`, `refs`, `batch`, queries) that don't pick an index mode themselves |
+| `--trust-index` | `false` | Adds `--trust-index` to searches (`rg`, `fd`, `ast`, `refs`) that don't pick an index mode themselves |
 | `-j, --threads <NUM>` | CPU count | Adds `-j NUM` to those searches unless they set it |
 
 ## Ready-to-Copy Client Configurations {#client-configs}
@@ -71,7 +71,7 @@ args = ["mcp", "--root", "."]
 
 ## Installing the Official Agent Skill {#skill-install}
 
-The [`skills/lancet/`](https://github.com/CREE1116/lancet/tree/main/skills/lancet) directory bundles `SKILL.md` plus detailed `references/` for LQL, 24 AST languages, edit/patch/rename CAS rules, and MCP configs.
+The [`skills/lancet/`](https://github.com/CREE1116/lancet/tree/main/skills/lancet) directory bundles `SKILL.md` plus detailed `references/` for `rg` and AST patterns, 24 AST languages, edit/patch/rename CAS rules, and MCP configs.
 
 ```bash title="Terminal"
 # Project-local (.agents standard)
