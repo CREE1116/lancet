@@ -7,25 +7,9 @@
 //! exclusive create, rollback, syntax check) cannot differ between commands.
 
 use crate::edit;
-use crate::output::Status;
+use crate::output::{Refusal, Status};
 use std::fs;
 use std::path::{Path, PathBuf};
-
-/// Why a change was refused, with the status the interface reports.
-#[derive(Debug)]
-pub struct Refusal {
-    pub status: Status,
-    pub message: String,
-}
-
-impl Refusal {
-    pub fn new(status: Status, message: impl Into<String>) -> Self {
-        Refusal {
-            status,
-            message: message.into(),
-        }
-    }
-}
 
 /// A file's text as an edit sees it, and the revision it was read at.
 pub struct Text {

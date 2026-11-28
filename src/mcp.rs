@@ -20,15 +20,6 @@ const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2025-03-26", "2024-11-05"];
 const DEFAULT_MAX_BYTES: usize = 131_072;
 const HARD_MAX_BYTES: usize = 4_194_304;
 
-/// Commands that change files (or the on-disk index).
-const WRITING_COMMANDS: &[&str] = &["edit", "write", "patch", "rename", "index"];
-/// Commands that accept `--trust-index` and `-j`.
-const SEARCHING_COMMANDS: &[&str] = &["rg", "fd", "ast", "refs"];
-const SUBCOMMANDS: &[&str] = &[
-    "fd", "ast", "rg", "read", "edit", "write", "patch", "rename", "outline", "refs", "index",
-    "mcp",
-];
-
 const TOOL_DESCRIPTION: &str = "\
 Run a lancet command in the workspace. `args` is the command line after `lancet`, \
 one array element per argument (no shell: no quoting, globbing, pipes or `&&`). \
@@ -233,7 +224,7 @@ const MAX_IMAGE_BYTES: u64 = 5 * 1024 * 1024;
 
 /// The image files a `read` command names (without `--ocr`), with their MIME types.
 fn read_images(argv: &[String], cfg: &McpConfig) -> Vec<(PathBuf, &'static str)> {
-    if subcommand(argv) != Some("read") || argv.iter().any(|a| a == "--ocr") {
+    if subcommand(argv).map(|c| c.name) != Some("read") || argv.iter().any(|a| a == "--ocr") {
         return Vec::new();
     }
     const TAKES_VALUE: &[&str] = &[
@@ -317,17 +308,19 @@ fn handle_tools_call(req_id: Value, params: &Map<String, Value>, cfg: &McpConfig
     rpc_ok(req_id, result)
 }
 
-/// The subcommand an argument list runs (`None` if it isn't one).
-fn subcommand(args: &[String]) -> Option<&str> {
-    args.first()
-        .map(String::as_str)
-        .filter(|a| SUBCOMMANDS.contains(a))
+/// The command an argument list runs (`None` if it isn't one).
+fn subcommand(args: &[String]) -> Option<&'static crate::commands::CommandSpec> {
+    args.first().and_then(|a| crate::commands::get(a))
 }
 
 /// Why `args` is refused on a read-only server, if it is.
 fn read_only_refusal(args: &[String]) -> Option<String> {
-    let status_only = subcommand(args) == Some("index") && args.iter().any(|a| a == "--status");
-    if let Some(cmd) = subcommand(args).filter(|c| WRITING_COMMANDS.contains(c) && !status_only) {
+    let status_only =
+        subcommand(args).is_some_and(|c| c.name == "index") && args.iter().any(|a| a == "--status");
+    if let Some(cmd) = subcommand(args)
+        .filter(|c| c.writes && !status_only)
+        .map(|c| c.name)
+    {
         return Some(format!(
             "`{cmd}` writes files; this MCP server is read-only"
         ));
@@ -354,7 +347,7 @@ fn run_tool(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Vec<Value>, b
             )
         }
     };
-    if subcommand(&argv) == Some("mcp") {
+    if subcommand(&argv).is_some_and(|c| c.name == "mcp") {
         return Err("`mcp` can't be run from inside the MCP server".into());
     }
     if cfg.read_only {
@@ -376,7 +369,7 @@ fn run_tool(args: &Map<String, Value>, cfg: &McpConfig) -> Result<(Vec<Value>, b
     };
 
     let mut full = argv.clone();
-    let searching = subcommand(&argv).is_some_and(|c| SEARCHING_COMMANDS.contains(&c));
+    let searching = subcommand(&argv).is_some_and(|c| c.searches);
     if searching {
         let has = |f: &str| argv.iter().any(|a| a == f);
         if cfg.trust_index && !has("--trust-index") && !has("--no-index") {

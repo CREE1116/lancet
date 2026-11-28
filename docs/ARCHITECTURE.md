@@ -62,7 +62,7 @@
 | 쓰기 규칙 | `edit --edits`·`patch`는 전부 아니면 전무, `ast --apply`는 파일마다 → **3단계 후 모두 `change::commit` 하나** | 명령마다 안전성이 다름 |
 | 걷기 → 검색 | 걷기를 끝까지 마친 뒤 검색 시작 | 두 단계가 겹치지 않음 |
 | `rg` 출력 | 모든 결과를 메모리에 모은 뒤 경로순 출력 | 큰 출력에서 메모리, 첫 출력 지연 |
-| 명령 목록 | 최상위 도움말, MCP 설명, 스킬 표에 따로 | 바꿀 때마다 어긋남 (지금도 `refs`·`ast`가 `[PATH]` 하나로 나옴) |
+| 명령 목록 | 최상위 도움말, MCP 설명, 스킬 표에 따로 → **4단계 후 `commands::COMMANDS` 하나** | 바꿀 때마다 어긋남 (지금도 `refs`·`ast`가 `[PATH]` 하나로 나옴) |
 
 ### 2.2 층
 
@@ -152,6 +152,11 @@ change::commit(&set)?;                   // 전부 아니면 전무. 실패하�
 - 사람용, `--json`, ripgrep 형식(컨텍스트, `--vimgrep`, `--json` 이벤트, `-c`, `-l` …)이 렌더러다. rg의 출력 플래그 수십 개가 명령 로직에 섞이지 않는다.
 - `--json`은 모든 명령에서 같은 바깥 구조(`status`, `warnings`, `error`)를 쓴다.
 - 오류는 한 타입이다: `Refusal { status, message, hint }`. 종료 코드(0/1/2)는 인터페이스 한 곳에서 status로 정한다.
+- **4단계 결정:**
+  - `rg`를 뺀 명령은 이미 결과 구조체(`*Response`)를 돌려주고, 사람용은 `print_*_human`, `--json`은 serde가 그린다. 렌더러 모듈을 따로 만들면 파일만 옮기는 일이라 하지 않았다.
+  - `rg`의 출력은 ripgrep 형식 그 자체이고(바이트 단위 대조), 흘려보내며 쓴다. 결과 값을 모은 뒤 그리게 바꾸면 메모리와 첫 출력이 나빠지므로 `rg.rs` 안에 둔다.
+  - `--json` 바깥 구조: 모든 응답에 `status`와(실패 시) `error`가 있고, 경고를 내는 명령(`rg`·`fd`·`refs`·`ast`)에는 `warnings`가 있다. 경고가 없는 명령에 늘 비어 있을 필드는 넣지 않았다.
+  - `Refusal { status, message }`는 `output.rs`로 옮겨 `Status` 옆에 두었다(`hint`는 쓰는 곳이 없어 뺐다). 종료 코드는 `Status::exit_code` 한 곳(복사본 10개 → 1개). 명령 안의 `(Status, String)` 오류는 응답의 `ErrorInfo`로 바뀌는 지역 값이라 그대로 두었다.
 
 #### ⑥ 병렬로 처리하고, 순서대로 흘려보낸다 (성능)
 
@@ -167,11 +172,13 @@ change::commit(&set)?;                   // 전부 아니면 전무. 실패하�
 #### ⑦ 명령 목록은 한 곳 (수정)
 
 ```rust
-static COMMANDS: &[CommandSpec] = &[CommandSpec { name: "refs", usage: "refs SYMBOL [PATH...]", summary: "...", read_only: true }, ...];
+// src/commands.rs — 열: name, usage, summary, writes, searches
+cmd("refs", "refs SYMBOL [PATH...]", "definitions and references (`--rank` for the most used)", false, true),
 ```
 
 - 최상위 도움말, MCP 도구 설명, MCP `--read-only` 판정, 스킬 표 검사가 모두 여기서 나온다.
 - 테스트 하나가 `skills/lancet/SKILL.md`의 명령 표가 이 목록과 맞는지 확인한다.
+- **4단계 구현:** 도움말의 명령 목록(`commands::help_list`), MCP의 명령·쓰기·검색 판정이 이 표를 읽는다. 바이너리의 실행 표(`main.rs`의 `RUNNERS`)는 테스트로 이 표와 같은 이름·순서인지 확인한다. 스킬 검사는 `mcp`를 뺀 모든 명령이 `SKILL.md`에 `lancet NAME `으로 나오는지 본다.
 
 #### ⑧ 내용에서 나온 값은 인덱스에 쌓을 수 있다 (나중, 성능)
 
@@ -199,6 +206,8 @@ static COMMANDS: &[CommandSpec] = &[CommandSpec { name: "refs", usage: "refs SYM
 | index | ✓ (파일만) | | | | | 세그먼트 생성·병합 |
 
 ### 2.6 목표 디렉터리
+
+4단계 뒤 실제 배치: 명령 인터페이스는 `src/cli/`(명령마다 파일 하나: clap 인자, `main(args)`, 출력)와 76줄짜리 `main.rs`(실행 표와 최상위 도움말)로 나뉘었다. 코어(`scope.rs`, `code.rs`, `scopes.rs`, `change.rs`)와 엔진은 아직 `src/` 바로 아래에 있다. 디렉터리를 옮기는 일은 경로만 바꾸므로 5단계에서 문서와 함께 정한다.
 
 ```
 src/
@@ -259,7 +268,7 @@ src/
 | 1. Scope (완료) | `rg`·`refs`·`ast`의 후보 계획을 `scope::plan` 하나로 합침(경로 여러 개, 표시 경로 `AsGiven`/`Clean`, 중복 제거, 인덱스·신선도·trust 판단). `fd`는 디렉터리까지 나열하고 인덱스에서 목록을 바로 읽는 다른 방식이라 따로 둠. ⑥은 두 방식 모두 측정상 느려서 넣지 않음. "인덱스 없이 rg보다 12% 느림"은 측정 시점 차이였음(번갈아 재면 -1%~+5%). | 계획 코드 4벌 → 1벌(+`fd`), 모든 자산 통과, 기준값과 같음 |
 | 2. LangSpec + Syntax (완료) | `code::Syntax`로 한 번 파싱(refs 파싱 4 → 1: Go 201 → 115 ms, Rust 734 → 639 ms), tree-sitter 파서 3벌 → 1벌(`code::parse_tree`), 언어 정보를 `LangSpec` 표로(언어 분기 129 → 2, 남은 둘은 로직), 스코프 해석기를 `scopes.rs`로 분리. `Matcher` trait은 만들지 않음(① 참고). `Doc` 코어는 읽기 경로를 다루는 3단계로 넘김. | 7개 언어에서 outline·refs --rank·ast 출력이 0단계와 같음, rename 오라클 통과 |
 | 3. Change (완료) | 쓰기 명령 다섯 개(`edit`, `write`, `patch`, `rename`, `ast --rewrite`)가 `change::load`로 읽고 `change::commit`으로 씀. 쓰기·되돌리기 코드 4벌 → 1벌. 동작 변화: `ast --apply`는 전부 아니면 전무, 문법 오류를 늘리는 rewrite는 거부(`--allow-syntax-errors`), `rename`도 바이너리 거부. 지연 `Doc` 구조체는 만들지 않음(② 참고). rename 오라클이 Python 3.9로 못 읽는 파일(`match` 문)을 틀림으로 세던 오탐을 고침. 비용: `ast --rewrite` 미리보기가 바뀌는 파일마다 한 번 더 파싱해서 느려짐(Rust 42개 파일 35 → 69 ms). 대신 줄바꿈 있는 Python 템플릿이 들여쓰기를 깨뜨린 70개 파일을 쓰던 것을 거부함(`bench/results/baseline-step3.md`). | `ast --apply` 전부 아니면 전무, 모든 자산 통과 |
-| 4. 인터페이스 | 명령 목록, 렌더러, `Refusal`, `main.rs`를 명령별로 나누기. | 도움말·MCP·스킬이 같은 목록에서 나옴 |
+| 4. 인터페이스 (완료) | 명령 목록을 `commands::COMMANDS` 하나로(도움말·MCP·실행 표·스킬 검사), `main.rs` 2,250줄 → 76줄 + `src/cli/` 명령별 모듈, 종료 코드 `Status::exit_code` 한 곳, `Refusal`을 `output.rs`로. 렌더러 모듈과 `--json` 필드 추가는 하지 않음(⑤ 참고). 지워진 `src/search.rs`를 가리키던 도움말 예시를 고침. | 도움말·MCP·스킬이 같은 목록에서 나옴, 모든 자산 통과 |
 | 5. 마무리 | 영어판 문서, 문서 사이트(`docs/site/`) 맞추기. ⑧ 검토. | |
 
 순서 이유: 1단계(Scope)가 중복이 가장 많고 다른 단계의 바탕이다. 2단계는 성능 이득이 가장 확실하다. 3단계는 동작 변화가 있어서 구조가 안정된 뒤에 한다.

@@ -11,6 +11,7 @@ pub mod adapters;
 pub mod ast_grep;
 pub mod change;
 pub mod code;
+pub mod commands;
 pub mod content;
 pub mod edit;
 pub mod edit_cmd;
