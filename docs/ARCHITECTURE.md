@@ -59,7 +59,7 @@
 | 언어별 `match Lang::X` 분기 | 129곳 (`code.rs` 103, `ast_grep.rs` 22, `rename.rs` 4) → **2단계 후 2곳 (`LangSpec` 표)** | 언어 추가·수정이 수십 군데 |
 | tree-sitter 파서·캐시 | 3벌 (`code.rs`, `ast_grep.rs`, `rename.rs`) → **2단계 후 1벌** | |
 | `refs`가 파일 하나를 파싱하는 횟수 | 4번 (심볼, 함수 범위, 식별자, 스코프를 각자 파싱) → **2단계 후 1번** | 성능 손실 |
-| 쓰기 규칙 | `edit --edits`·`patch`는 전부 아니면 전무, `ast --apply`는 파일마다 | 명령마다 안전성이 다름 |
+| 쓰기 규칙 | `edit --edits`·`patch`는 전부 아니면 전무, `ast --apply`는 파일마다 → **3단계 후 모두 `change::commit` 하나** | 명령마다 안전성이 다름 |
 | 걷기 → 검색 | 걷기를 끝까지 마친 뒤 검색 시작 | 두 단계가 겹치지 않음 |
 | `rg` 출력 | 모든 결과를 메모리에 모은 뒤 경로순 출력 | 큰 출력에서 메모리, 첫 출력 지연 |
 | 명령 목록 | 최상위 도움말, MCP 설명, 스킬 표에 따로 | 바꿀 때마다 어긋남 (지금도 `refs`·`ast`가 `[PATH]` 하나로 나옴) |
@@ -111,6 +111,7 @@ doc.syntax()?.symbols()  /  .identifiers(name)  /  .scopes()
 
 - `refs`의 파싱이 4번 → 1번이 된다. 줄 표, rev도 처음 필요할 때 한 번만 계산한다.
 - tree-sitter 파서는 스레드별로 하나만 둔다(지금 3벌 → 1벌).
+- **3단계 결정: 지연 계산하는 `Doc` 구조체는 만들지 않음.** 2단계 뒤로는 어느 명령도 같은 파일의 줄 표·트리·rev를 두 번 계산하지 않아서, 캐시할 소비자가 없다(2.4). 내용 코어는 읽기 쪽 `content`(`read`, `load_searchable`)와 쓰기 쪽 `change::load`(문서·바이너리·UTF-8 검사, 공유 잠금, rev), `change::line_starts`·`eol`로 둔다.
 
 #### ③ 언어는 코드가 아니라 데이터 (수정)
 
@@ -132,10 +133,13 @@ static LANGS: &[LangSpec] = &[LangSpec {
 모든 쓰기 명령은 부수효과 없는 계획 함수와 한 곳의 실행으로 나뉜다.
 
 ```rust
-fn plan(args, docs) -> Result<ChangeSet, Refusal>   // 순수 함수. 파일을 쓰지 않음. 테스트하기 쉬움
-let preview = set.check()?;   // CAS 사전 확인, 문법 검사, diff
-let done = set.commit()?;     // 전부 아니면 전무. 실패하면 이미 쓴 파일을 되돌림
+let text = change::load(path)?;          // 읽기: 문서·바이너리·UTF-8 거부, 공유 잠금, rev
+// 명령의 계획: 파일을 쓰지 않음. diff와 change::added_syntax_errors 검사까지
+let set: Vec<FileChange> = plan(args, text)?;
+change::commit(&set)?;                   // 전부 아니면 전무. 실패하면 이미 쓴 파일을 되돌림
 ```
+
+- **3단계 구현:** `ChangeSet` 타입 대신 `&[FileChange]`(갱신·생성·삭제·권한)와 `change::commit`. 감싸는 타입이 할 일이 없어서다. 문법 검사는 오류 문구가 명령마다 달라(`edit`·`patch`·`rename`·`ast`) 계획 단계에서 `change::added_syntax_errors`를 부르게 했다.
 
 - `edit`, `write`, `patch`, `rename`, `ast --rewrite`가 모두 `ChangeSet`을 만든다. 미리보기(`--apply` 없음)는 `check`까지만, 적용은 `commit`까지.
 - 안전 규칙(CAS, 원자적 쓰기, 롤백, 문법 검사)이 한 곳에만 있어서, 명령마다 다를 수 없다.
@@ -254,7 +258,7 @@ src/
 | 0. 기준선 (완료) | rename 오라클(`bench/rename_oracle.py`), diff ↔ patch 왕복 테스트, 에이전트 A/B(`bench/agents/`)를 저장소로 옮김. rg 대조를 ripgrep 16.0으로 올려 150케이스를 CI에서 실행(`--in`, `--in0`, `--max-bytes`, `--no-pre` 구현). 기준값 `bench/results/baseline-step0.md`, README 성능 표 재측정. 그 과정에서 diff(끝 줄바꿈, CRLF, 큰 파일 → Myers)와 trust 모드(인덱스 범위 밖 요청) 버그를 고침. | CI에서 대조 150케이스 통과 |
 | 1. Scope (완료) | `rg`·`refs`·`ast`의 후보 계획을 `scope::plan` 하나로 합침(경로 여러 개, 표시 경로 `AsGiven`/`Clean`, 중복 제거, 인덱스·신선도·trust 판단). `fd`는 디렉터리까지 나열하고 인덱스에서 목록을 바로 읽는 다른 방식이라 따로 둠. ⑥은 두 방식 모두 측정상 느려서 넣지 않음. "인덱스 없이 rg보다 12% 느림"은 측정 시점 차이였음(번갈아 재면 -1%~+5%). | 계획 코드 4벌 → 1벌(+`fd`), 모든 자산 통과, 기준값과 같음 |
 | 2. LangSpec + Syntax (완료) | `code::Syntax`로 한 번 파싱(refs 파싱 4 → 1: Go 201 → 115 ms, Rust 734 → 639 ms), tree-sitter 파서 3벌 → 1벌(`code::parse_tree`), 언어 정보를 `LangSpec` 표로(언어 분기 129 → 2, 남은 둘은 로직), 스코프 해석기를 `scopes.rs`로 분리. `Matcher` trait은 만들지 않음(① 참고). `Doc` 코어는 읽기 경로를 다루는 3단계로 넘김. | 7개 언어에서 outline·refs --rank·ast 출력이 0단계와 같음, rename 오라클 통과 |
-| 3. Change | `ChangeSet`으로 쓰기 명령 다섯 개를 옮긴다. | `ast --apply`도 전부 아니면 전무 |
+| 3. Change (완료) | 쓰기 명령 다섯 개(`edit`, `write`, `patch`, `rename`, `ast --rewrite`)가 `change::load`로 읽고 `change::commit`으로 씀. 쓰기·되돌리기 코드 4벌 → 1벌. 동작 변화: `ast --apply`는 전부 아니면 전무, 문법 오류를 늘리는 rewrite는 거부(`--allow-syntax-errors`), `rename`도 바이너리 거부. 지연 `Doc` 구조체는 만들지 않음(② 참고). rename 오라클이 Python 3.9로 못 읽는 파일(`match` 문)을 틀림으로 세던 오탐을 고침. 비용: `ast --rewrite` 미리보기가 바뀌는 파일마다 한 번 더 파싱해서 느려짐(Rust 42개 파일 35 → 69 ms). 대신 줄바꿈 있는 Python 템플릿이 들여쓰기를 깨뜨린 70개 파일을 쓰던 것을 거부함(`bench/results/baseline-step3.md`). | `ast --apply` 전부 아니면 전무, 모든 자산 통과 |
 | 4. 인터페이스 | 명령 목록, 렌더러, `Refusal`, `main.rs`를 명령별로 나누기. | 도움말·MCP·스킬이 같은 목록에서 나옴 |
 | 5. 마무리 | 영어판 문서, 문서 사이트(`docs/site/`) 맞추기. ⑧ 검토. | |
 
@@ -266,5 +270,5 @@ src/
 
 1. **쿼리 언어(`lancet '…'`)와 `parse`, `explain`, `batch`는 지웠다.** 대체하는 기존 도구가 없고(0장), 에이전트 실행 기록 40여 개에서 한 번도 쓰이지 않았다. 정규식 검색은 `rg`, 구조 검색은 `ast`가 맡는다. 근접·퍼지 검색은 같이 없어졌다. 내부 표현(`Expr` → `Req`)은 `Match`와 `And`만 남겨 엔진에 둔다.
 2. **`status`는 `index --status`가 됐다.**
-3. **`ast --apply`는 전부 아니면 전무로 바꾼다(3단계).** `apply_patch`·`git apply`와 같다.
+3. **`ast --apply`는 전부 아니면 전무가 됐다(3단계).** `apply_patch`·`git apply`와 같다. 문법 오류를 늘리는 rewrite도 `edit`처럼 거부한다.
 4. **문서는 이 작업이 끝날 때 영어판을 기본으로 한다.** 이 문서는 그때까지 한국어로 둔다.

@@ -1143,12 +1143,11 @@ mod imp {
 
             if new_src != src {
                 if !allow_syntax_errors {
-                    if let Some((b0, b1)) = crate::change::added_syntax_errors(
-                        &target.path,
-                        &src,
-                        &target.path,
-                        &new_src,
-                    ) {
+                    // Same rule as change::added_syntax_errors, reusing the tree
+                    // the matches came from instead of parsing the original again.
+                    let b0 = crate::code::error_count(&tree);
+                    let b1 = parse_src(pat.lang, &new_src).map(|t| crate::code::error_count(&t));
+                    if let Some(b1) = b1.filter(|&b1| b1 > b0) {
                         refusal = Some(format!(
                             "{}: rewrite would add {} syntax error(s) ({b0} -> {b1})",
                             target.rel,

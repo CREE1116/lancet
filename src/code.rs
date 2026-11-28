@@ -681,6 +681,19 @@ mod imp {
         })
     }
 
+    /// Number of Tree-sitter ERROR / MISSING nodes in `tree`.
+    pub fn error_count(tree: &Tree) -> usize {
+        let root = tree.root_node();
+        if !root.has_error() {
+            return 0;
+        }
+        let mut n = 0;
+        visit_dfs(root, |node| {
+            n += (node.is_error() || node.is_missing()) as usize
+        });
+        n
+    }
+
     /// A parsed source file. Parse once, then read every structural view from it
     /// (symbols, function spans, identifiers, syntax errors, scopes).
     pub struct Syntax {
@@ -700,15 +713,7 @@ mod imp {
     impl Syntax {
         /// Number of Tree-sitter ERROR / MISSING nodes, or `None` for unsupported files.
         pub fn errors(&self) -> usize {
-            let root = self.tree.root_node();
-            if !root.has_error() {
-                return 0;
-            }
-            let mut n = 0;
-            visit_dfs(root, |node| {
-                n += (node.is_error() || node.is_missing()) as usize
-            });
-            n
+            error_count(&self.tree)
         }
         pub fn functions(&self, src: &[u8]) -> Vec<CodeSpan> {
             let lang = self.lang;
@@ -1119,9 +1124,9 @@ mod imp {
     }
 }
 
+#[cfg(feature = "ast")]
+pub use imp::{error_count, parse_tree, Lang};
 pub use imp::{
     extract_functions, extract_symbols, parse, supports_path, symbols_and_token_counts,
     syntax_errors, Syntax, ENABLED,
 };
-#[cfg(feature = "ast")]
-pub use imp::{parse_tree, Lang};
