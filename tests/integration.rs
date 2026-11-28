@@ -1783,7 +1783,8 @@ fn rg_mode_matches_ripgrep_semantics_and_is_index_independent() {
         f(&mut o);
         let mut out = Vec::new();
         let any = run(&o, &mut out).unwrap();
-        let base = format!("{}/", root.display());
+        // lancet prints `/`-separated paths on every platform.
+        let base = format!("{}/", root.display()).replace('\\', "/");
         (any, String::from_utf8(out).unwrap().replace(&base, ""))
     };
 
@@ -2383,7 +2384,8 @@ fn rg_passthru_and_type_add_match_ripgrep() {
         f(&mut o);
         let mut out = Vec::new();
         let any = run(&o, &mut out).unwrap();
-        let base = format!("{}/", root.display());
+        // lancet prints `/`-separated paths on every platform.
+        let base = format!("{}/", root.display()).replace('\\', "/");
         (any, String::from_utf8(out).unwrap().replace(&base, ""))
     };
     let passthru = |o: &mut RgOptions| {
@@ -2972,7 +2974,8 @@ fn printed_diffs_apply_back_with_patch() {
     };
     let dir = TempDir::new().unwrap();
     let f = dir.path().join("f.txt");
-    let has_patch = Command::new("patch").arg("--version").output().is_ok();
+    // patch(1) as a second opinion on Unix; Windows' Git patch rewrites CRLF on its own.
+    let has_patch = cfg!(unix) && Command::new("patch").arg("--version").output().is_ok();
     // Both sizes: the small one goes through the LCS, the big one (more than
     // 1414 lines on each side) through the trimmed / paired path.
     for (case, size) in (0..60).map(|c| (c, if c % 2 == 0 { 40 } else { 2000 })) {
