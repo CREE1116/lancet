@@ -286,3 +286,13 @@ Why this order: step 1 (Scope) had the most duplication and underlies the others
 2. **`status` became `index --status`.**
 3. **`ast --apply` became all or nothing (step 3),** like `apply_patch` and `git apply`. Rewrites that add syntax errors are refused, as in `edit`.
 4. **English is the default for docs (step 5).** The Korean version of this document is `ARCHITECTURE.ko.md`.
+5. **The restructure ships as 0.2.0, not 1.0.** It removes commands and changes `ast --apply`, so the minor version goes up. 1.0 is a promise that the interface won't change, so it waits for the criteria below.
+
+### 1.0 criteria
+
+1.0 ships when all of these hold and a period of real use needed no breaking change:
+
+- Commands, flags and the `--json` schema are frozen and documented, with a test that fails when the schema changes.
+- CI passes on Linux, macOS and Windows, rg parity included.
+- The agent A/B (`bench/agents/`) is repeated across several models and runs, and lancet is at least as accurate as the built-in tools.
+- Every command is timed on the largest corpora (Linux, LLVM) and none has a pathological case like the `refs --rank` one fixed in step 5.

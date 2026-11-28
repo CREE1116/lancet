@@ -1,6 +1,6 @@
 [package]
 name = "lancet"
-version = "0.1.5"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.89"
 description = "Surgical code, AST, and multi-format document search, inspection, and refactoring CLI for AI agents and developers"
