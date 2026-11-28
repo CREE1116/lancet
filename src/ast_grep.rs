@@ -16,7 +16,9 @@ pub struct AstOptions {
     /// Directories or files to search; results show paths joined onto each.
     pub roots: Vec<PathBuf>,
     pub rewrite: Option<String>,
+    /// Write every rewritten file, or none (see [`crate::change::commit`]).
     pub apply: bool,
+    pub allow_syntax_errors: bool,
     pub paths: Vec<String>,
     pub limit: Option<usize>,
     pub walk: WalkOpts,
@@ -32,6 +34,7 @@ impl AstOptions {
             roots: vec![root.into()],
             rewrite: None,
             apply: false,
+            allow_syntax_errors: false,
             paths: Vec::new(),
             limit: None,
             walk: WalkOpts::default(),
@@ -132,10 +135,11 @@ impl AstResponse {
 #[cfg(feature = "ast")]
 mod imp {
     use super::{AstMatch, AstOptions, AstResponse, AstStats, FileDiff};
+    use crate::change::FileChange;
     use crate::code::Lang;
     use crate::edit;
     use crate::index::Req;
-    use crate::output::Status;
+    use crate::output::{ErrorInfo, Status};
     use crate::query::{Expr, Filters, Matcher};
     use crate::scope::Target;
     use crate::walk::FileFilter;
@@ -973,14 +977,18 @@ mod imp {
         parsed: bool,
         matches: Vec<AstMatch>,
         diff: Option<FileDiff>,
+        /// The rewrite to commit with the others.
+        change: Option<FileChange>,
         warning: Option<String>,
+        /// Why this file's rewrite cannot be written at all (it would add syntax errors).
+        refusal: Option<String>,
     }
 
     fn process_file(
         target: &Target,
         pat: &CompiledPattern,
         rewrite: Option<&str>,
-        apply: bool,
+        allow_syntax_errors: bool,
     ) -> Option<FileResult> {
         // Rewrites read under a shared lock so a concurrent lancet writer can't make
         // the read fail (Windows byte-range locks), and a failed read is reported.
@@ -996,7 +1004,9 @@ mod imp {
                     parsed: false,
                     matches: Vec::new(),
                     diff: None,
+                    change: None,
                     warning: Some(format!("{}: not rewritten, read failed: {e}", target.rel)),
+                    refusal: None,
                 })
             }
             Err(_) => return None,
@@ -1011,7 +1021,9 @@ mod imp {
                 parsed: false,
                 matches: Vec::new(),
                 diff: None,
+                change: None,
                 warning: None,
+                refusal: None,
             });
         }
 
@@ -1092,6 +1104,8 @@ mod imp {
                 parsed: true,
                 matches,
                 diff: None,
+                change: None,
+                refusal: None,
                 warning: Some(format!(
                     "{}: pattern too ambiguous (over {MATCH_BUDGET} matching steps at one node); matches in this file are incomplete and it was not rewritten — make the pattern more specific (fewer `$$$`)",
                     target.rel
@@ -1104,12 +1118,15 @@ mod imp {
                 parsed: true,
                 matches,
                 diff: None,
+                change: None,
                 warning: None,
+                refusal: None,
             });
         }
 
         let mut diff = None;
-        let mut warning = None;
+        let mut change = None;
+        let mut refusal = None;
         if rewrite.is_some() {
             let edits: Vec<edit::Edit> = matches
                 .iter()
@@ -1125,25 +1142,18 @@ mod imp {
             let new_src = planned.new_src;
 
             if new_src != src {
-                let udiff = edit::unified_diff(&target.rel, &src, &new_src);
-                let mut applied = false;
-                if apply {
-                    match edit::write_if_rev(
+                if !allow_syntax_errors {
+                    if let Some((b0, b1)) = crate::change::added_syntax_errors(
                         &target.path,
-                        &edit::rev(src.as_bytes()),
-                        new_src.as_bytes(),
+                        &src,
+                        &target.path,
+                        &new_src,
                     ) {
-                        Ok(()) => applied = true,
-                        Err(edit::WriteError::Conflict { .. }) => {
-                            warning = Some(format!(
-                                "{} changed while rewriting; skipped (re-run to rewrite it)",
-                                target.rel
-                            ));
-                        }
-                        Err(edit::WriteError::Io(e)) => {
-                            warning =
-                                Some(format!("failed writing rewrite to {}: {e}", target.rel));
-                        }
+                        refusal = Some(format!(
+                            "{}: rewrite would add {} syntax error(s) ({b0} -> {b1})",
+                            target.rel,
+                            b1 - b0
+                        ));
                     }
                 }
                 diff = Some(FileDiff {
@@ -1151,9 +1161,15 @@ mod imp {
                     rev: edit::rev(src.as_bytes()),
                     replacements: planned.applied,
                     skipped_overlaps: planned.skipped_overlaps,
-                    diff: udiff,
-                    applied,
+                    diff: edit::unified_diff(&target.rel, &src, &new_src),
+                    applied: false,
                 });
+                change = Some(FileChange::update(
+                    &target.path,
+                    target.rel.clone(),
+                    src,
+                    new_src,
+                ));
             }
         }
 
@@ -1161,7 +1177,9 @@ mod imp {
             parsed: true,
             matches,
             diff,
-            warning,
+            change,
+            warning: None,
+            refusal,
         })
     }
 
@@ -1290,20 +1308,48 @@ mod imp {
 
         let file_results: Vec<Option<FileResult>> = targets
             .par_iter()
-            .map(|t| process_file(t, &compiled, opts.rewrite.as_deref(), opts.apply))
+            .map(|t| {
+                process_file(
+                    t,
+                    &compiled,
+                    opts.rewrite.as_deref(),
+                    opts.allow_syntax_errors,
+                )
+            })
             .collect();
 
         let mut files_parsed = 0usize;
         let mut matches = Vec::new();
         let mut diffs = Vec::new();
+        let mut changes = Vec::new();
+        let mut refusals = Vec::new();
         for res in file_results.into_iter().flatten() {
             files_parsed += res.parsed as usize;
             matches.extend(res.matches);
-            if let Some(d) = res.diff {
-                diffs.push(d);
-            }
-            if let Some(w) = res.warning {
-                warnings.push(w);
+            diffs.extend(res.diff);
+            changes.extend(res.change);
+            refusals.extend(res.refusal);
+            warnings.extend(res.warning);
+        }
+        // Rewrites are one change: refused, or written, all together.
+        let mut error = None;
+        if !refusals.is_empty() {
+            error = Some((
+                Status::InvalidQuery,
+                format!(
+                    "{}; nothing written (pass --allow-syntax-errors to write anyway)",
+                    refusals.join("; ")
+                ),
+            ));
+        } else if opts.apply && !warnings.is_empty() {
+            error = Some((
+                Status::InvalidQuery,
+                format!("{}; nothing written", warnings.join("; ")),
+            ));
+        } else if opts.apply {
+            match crate::change::commit(&changes) {
+                Ok(()) => diffs.iter_mut().for_each(|d| d.applied = true),
+                Err(e) => error = Some((e.status, e.message)),
             }
         }
 
@@ -1317,12 +1363,13 @@ mod imp {
         }
         let returned = matches.len();
 
+        let status = match &error {
+            Some((status, _)) => *status,
+            None if matched == 0 => Status::Empty,
+            None => Status::Complete,
+        };
         AstResponse {
-            status: if matched == 0 {
-                Status::Empty
-            } else {
-                Status::Complete
-            },
+            status,
             mode,
             lang: Some(lang_name),
             pattern: opts.pattern.clone(),
@@ -1332,7 +1379,7 @@ mod imp {
             matches,
             diffs,
             warnings,
-            error: None,
+            error: error.map(|(_, message)| ErrorInfo { message, pos: None }),
             stats: AstStats {
                 files_considered: core_stats.files_considered,
                 index_candidates: core_stats.index_candidates,

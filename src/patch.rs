@@ -7,10 +7,10 @@
 //! locked compare-and-swaps against the content that was verified, and if one of
 //! them loses a race the files already written are restored.
 
+use crate::change::{mode_of, FileChange};
 use crate::edit::{self, Edit};
 use crate::output::{ErrorInfo, Status};
 use serde::Serialize;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -322,17 +322,9 @@ impl PatchOptions {
 
 /// A verified change, ready to write.
 struct Planned {
-    path: PathBuf,
-    rel: String,
     /// Shown to the caller; `None` for the removal half of a rename.
     result: Option<PatchFileResult>,
-    /// Content we verified against; `None` for a file to create.
-    old: Option<String>,
-    /// New content; `None` to delete.
-    new: Option<String>,
-    /// Permission bits to set after writing, and the ones to restore on undo.
-    mode: Option<u32>,
-    old_mode: Option<u32>,
+    change: FileChange,
 }
 
 pub fn apply_patch(o: &PatchOptions) -> PatchResponse {
@@ -370,11 +362,11 @@ pub fn apply_patch(o: &PatchOptions) -> PatchResponse {
     // Two changes to one path (or a rename onto a path the patch also touches) would
     // verify against stale content; refuse rather than guess an order.
     let mut seen = std::collections::HashSet::new();
-    if let Some(p) = plans.iter().find(|p| !seen.insert(p.rel.clone())) {
+    if let Some(p) = plans.iter().find(|p| !seen.insert(p.change.rel.clone())) {
         return fail(
             r,
             Status::InvalidQuery,
-            format!("invalid patch: {} is changed more than once", p.rel),
+            format!("invalid patch: {} is changed more than once", p.change.rel),
         );
     }
     r.files = plans.iter().filter_map(|p| p.result.clone()).collect();
@@ -383,56 +375,14 @@ pub fn apply_patch(o: &PatchOptions) -> PatchResponse {
         return r;
     }
 
-    // 2. Write; on a lost race, restore what was already written.
-    let mut done: Vec<&Planned> = Vec::new();
-    for p in &plans {
-        if let Err(msg) = write_one(p) {
-            let mut restore_errors = Vec::new();
-            for d in done.iter().rev() {
-                if let Err(e) = undo_one(d) {
-                    restore_errors.push(e);
-                }
-            }
-            let mut msg = format!("{msg}; nothing applied");
-            if !restore_errors.is_empty() {
-                msg = format!(
-                    "{msg} — but restoring failed: {}",
-                    restore_errors.join("; ")
-                );
-            }
-            return fail(r, Status::Conflict, msg);
-        }
-        done.push(p);
+    // 2. Write all or nothing.
+    let set: Vec<FileChange> = plans.into_iter().map(|p| p.change).collect();
+    if let Err(e) = crate::change::commit(&set) {
+        return fail(r, e.status, e.message);
     }
     r.applied = true;
     r.elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
     r
-}
-
-fn mode_of(path: &Path) -> Option<u32> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::metadata(path)
-            .ok()
-            .map(|m| m.permissions().mode() & 0o7777)
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = path;
-        None
-    }
-}
-
-fn set_mode(path: &Path, mode: Option<u32>) -> std::io::Result<()> {
-    #[cfg(unix)]
-    if let Some(m) = mode {
-        use std::os::unix::fs::PermissionsExt;
-        return fs::set_permissions(path, fs::Permissions::from_mode(m & 0o7777));
-    }
-    // Windows has no executable bit; git there ignores mode changes too.
-    let _ = (path, mode);
-    Ok(())
 }
 
 fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Vec<Planned>, (Status, String)> {
@@ -482,33 +432,24 @@ fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Vec<Planned>, (Status, 
                 rev_after: Some(edit::rev(new.as_bytes())),
                 diff: edit::unified_diff(&rel, "", &new),
             }),
-            path,
-            rel,
-            old: None,
-            new: Some(new),
-            mode: want_mode,
-            old_mode: None,
+            change: FileChange {
+                path,
+                rel,
+                old: None,
+                new: Some(new),
+                mode: want_mode,
+                old_mode: None,
+            },
         }]);
     };
     let rel = fp.old_path.clone().unwrap();
 
-    let bytes = edit::read_shared(&path).map_err(|e| invalid(format!("{rel}: {e}")))?;
-    if crate::content::is_binary(&bytes) {
-        return Err((Status::Unsupported, format!("{rel}: binary file")));
-    }
-    let src = String::from_utf8(bytes)
-        .map_err(|_| (Status::Unsupported, format!("{rel}: not valid UTF-8")))?;
-    let rev = edit::rev(src.as_bytes());
+    let crate::change::Text { src, rev } =
+        crate::change::load(&path).map_err(|e| (e.status, format!("{rel}: {}", e.message)))?;
     let old_mode = mode_of(&path);
     let lines: Vec<&str> = src.lines().collect();
-    let starts: Vec<usize> = std::iter::once(0)
-        .chain(memchr::memchr_iter(b'\n', src.as_bytes()).map(|i| i + 1))
-        .collect();
-    let eol = if src[..starts.get(1).copied().unwrap_or(0)].ends_with("\r\n") {
-        "\r\n"
-    } else {
-        "\n"
-    };
+    let starts = crate::change::line_starts(&src);
+    let eol = crate::change::eol(&src);
     let strip_cr = |l: &str| l.strip_suffix('\r').unwrap_or(l).to_string();
     let file_lines: Vec<String> = lines.iter().map(|l| strip_cr(l)).collect();
 
@@ -536,12 +477,14 @@ fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Vec<Planned>, (Status, 
                 rev_after: None,
                 diff: edit::unified_diff(&rel, &src, ""),
             }),
-            path,
-            rel,
-            old: Some(src),
-            new: None,
-            mode: None,
-            old_mode,
+            change: FileChange {
+                path,
+                rel,
+                old: Some(src),
+                new: None,
+                mode: None,
+                old_mode,
+            },
         }]);
     };
     let new_rel = fp.new_path.clone().unwrap();
@@ -639,16 +582,11 @@ fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Vec<Planned>, (Status, 
     }
     let new = edit::plan(&src, &edits).new_src;
     if !o.allow_syntax_errors && !edits.is_empty() {
-        if let (Some(b0), Some(b1)) = (
-            crate::code::syntax_errors(&path, src.as_bytes()),
-            crate::code::syntax_errors(&new_path, new.as_bytes()),
-        ) {
-            if b1 > b0 {
-                return Err(invalid(format!(
-                    "{new_rel}: patch would add {} syntax error(s) ({b0} -> {b1}); nothing applied (pass --allow-syntax-errors to write anyway)",
-                    b1 - b0
-                )));
-            }
+        if let Some((b0, b1)) = crate::change::added_syntax_errors(&path, &src, &new_path, &new) {
+            return Err(invalid(format!(
+                "{new_rel}: patch would add {} syntax error(s) ({b0} -> {b1}); nothing applied (pass --allow-syntax-errors to write anyway)",
+                b1 - b0
+            )));
         }
     }
     let mode_note = match (old_mode, want_mode) {
@@ -669,12 +607,14 @@ fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Vec<Planned>, (Status, 
                 rev_after: Some(edit::rev(new.as_bytes())),
                 diff: mode_note + &edit::unified_diff(&rel, &src, &new),
             }),
-            path,
-            rel,
-            old: Some(src),
-            new: Some(new),
-            mode: want_mode,
-            old_mode,
+            change: FileChange {
+                path,
+                rel,
+                old: Some(src),
+                new: Some(new),
+                mode: want_mode,
+                old_mode,
+            },
         }]);
     }
 
@@ -700,21 +640,25 @@ fn plan_file(o: &PatchOptions, fp: &FilePatch) -> Result<Vec<Planned>, (Status, 
                 rev_after: Some(edit::rev(new.as_bytes())),
                 diff,
             }),
-            path: new_path,
-            rel: new_rel,
-            old: None,
-            new: Some(new),
-            mode: want_mode.or(old_mode),
-            old_mode: None,
+            change: FileChange {
+                path: new_path,
+                rel: new_rel,
+                old: None,
+                new: Some(new),
+                mode: want_mode.or(old_mode),
+                old_mode: None,
+            },
         },
         Planned {
             result: None,
-            path,
-            rel,
-            old: Some(src),
-            new: None,
-            mode: None,
-            old_mode,
+            change: FileChange {
+                path,
+                rel,
+                old: Some(src),
+                new: None,
+                mode: None,
+                old_mode,
+            },
         },
     ])
 }
@@ -917,75 +861,6 @@ fn parse_codex(text: &str) -> Result<Vec<FilePatch>, String> {
         return Err("no file changes found in the patch".into());
     }
     Ok(files)
-}
-
-fn write_one(p: &Planned) -> Result<(), String> {
-    let rel = &p.rel;
-    write_content(p)?;
-    if p.new.is_some() && p.mode.is_some() && p.mode != p.old_mode {
-        set_mode(&p.path, p.mode).map_err(|e| format!("{rel}: {e}"))?;
-    }
-    Ok(())
-}
-
-fn write_content(p: &Planned) -> Result<(), String> {
-    let rel = &p.rel;
-    match (&p.old, &p.new) {
-        (Some(old), Some(new)) if old == new => Ok(()), // mode-only change
-        (Some(old), Some(new)) => {
-            match edit::write_if_rev(&p.path, &edit::rev(old.as_bytes()), new.as_bytes()) {
-                Ok(()) => Ok(()),
-                Err(edit::WriteError::Conflict { .. }) => {
-                    Err(format!("{rel} changed while patching"))
-                }
-                Err(edit::WriteError::Io(e)) => Err(format!("{rel}: {e}")),
-            }
-        }
-        (None, Some(new)) => {
-            if let Some(dir) = p.path.parent() {
-                fs::create_dir_all(dir).map_err(|e| format!("{rel}: {e}"))?;
-            }
-            // create_new: someone else creating it first is a conflict, not an overwrite.
-            fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&p.path)
-                .and_then(|mut f| {
-                    std::io::Write::write_all(&mut f, new.as_bytes())?;
-                    f.sync_all()
-                })
-                .map_err(|e| format!("{rel}: {e}"))
-        }
-        (Some(old), None) => {
-            if fs::read(&p.path)
-                .map(|b| b == old.as_bytes())
-                .unwrap_or(false)
-            {
-                fs::remove_file(&p.path).map_err(|e| format!("{rel}: {e}"))
-            } else {
-                Err(format!("{rel} changed while patching"))
-            }
-        }
-        (None, None) => Ok(()),
-    }
-}
-
-fn undo_one(p: &Planned) -> Result<(), String> {
-    let rel = &p.rel;
-    match (&p.old, &p.new) {
-        (Some(old), Some(new)) => {
-            if old != new {
-                edit::write_if_rev(&p.path, &edit::rev(new.as_bytes()), old.as_bytes())
-                    .map_err(|_| format!("{rel} could not be restored"))?;
-            }
-            set_mode(&p.path, p.old_mode).map_err(|e| format!("{rel}: {e}"))
-        }
-        (None, Some(_)) => fs::remove_file(&p.path).map_err(|e| format!("{rel}: {e}")),
-        (Some(old), None) => fs::write(&p.path, old)
-            .and_then(|_| set_mode(&p.path, p.old_mode))
-            .map_err(|e| format!("{rel}: {e}")),
-        (None, None) => Ok(()),
-    }
 }
 
 #[cfg(test)]

@@ -143,10 +143,8 @@ mod imp {
             ));
         }
 
-        let bytes = edit::read_shared(&o.path).map_err(|e| invalid(format!("read error: {e}")))?;
-        let src =
-            String::from_utf8(bytes).map_err(|_| unsupported("file is not valid UTF-8".into()))?;
-        let rev = edit::rev(src.as_bytes());
+        let crate::change::Text { src, rev } =
+            crate::change::load(&o.path).map_err(|e| (e.status, e.message))?;
         r.rev = Some(rev.clone());
         if let Some(want) = &o.rev {
             if *want != rev {
@@ -159,9 +157,7 @@ mod imp {
             }
         }
         let before = analyze(lang, fam, &src)?;
-        let line_starts: Vec<usize> = std::iter::once(0)
-            .chain(memchr::memchr_iter(b'\n', src.as_bytes()).map(|i| i + 1))
-            .collect();
+        let line_starts = crate::change::line_starts(&src);
         let site_of = |p: usize| {
             let l = line_starts.partition_point(|&s| s <= p);
             Site {
@@ -245,17 +241,11 @@ mod imp {
         // 4. Resolve the result again: every use must mean what it meant before.
         let after = analyze(lang, fam, &new_src)?;
         verify(&before, &after, target, &edits, o, &site_of)?;
-        let (e0, e1) = (
-            crate::code::syntax_errors(&o.path, src.as_bytes()),
-            crate::code::syntax_errors(&o.path, new_src.as_bytes()),
-        );
-        if let (Some(a), Some(b)) = (e0, e1) {
-            if b > a {
-                return Err(invalid(format!(
-                    "renaming would add {} syntax error(s); nothing written",
-                    b - a
-                )));
-            }
+        if let Some((a, b)) = crate::change::added_syntax_errors(&o.path, &src, &o.path, &new_src) {
+            return Err(invalid(format!(
+                "renaming would add {} syntax error(s); nothing written",
+                b - a
+            )));
         }
 
         r.declaration = Some(decl_site);
@@ -263,16 +253,9 @@ mod imp {
         r.diff = edit::unified_diff(&r.path, &src, &new_src);
         r.rev_after = Some(edit::rev(new_src.as_bytes()));
         if o.apply {
-            match edit::write_if_rev(&o.path, &rev, new_src.as_bytes()) {
-                Ok(()) => r.applied = true,
-                Err(edit::WriteError::Conflict { now }) => {
-                    return Err((
-                        Status::Conflict,
-                        format!("file changed while renaming (now rev {now}); nothing written"),
-                    ))
-                }
-                Err(edit::WriteError::Io(e)) => return Err(invalid(format!("write failed: {e}"))),
-            }
+            let change = crate::change::FileChange::update(&o.path, r.path.clone(), src, new_src);
+            crate::change::commit(&[change]).map_err(|e| (e.status, e.message))?;
+            r.applied = true;
         }
         Ok(())
     }

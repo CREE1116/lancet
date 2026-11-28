@@ -851,6 +851,35 @@ fn ast_rewrite_dry_run_and_apply() {
 }
 
 #[test]
+fn ast_rewrites_are_written_together_or_not_at_all() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    fs::write(root.join("a.rs"), "fn a() { foo(1); }\n").unwrap();
+    fs::write(root.join("b.rs"), "fn b() { foo(2); }\n").unwrap();
+    let mut o = AstOptions::new("foo($X)", root);
+    o.lang = Some("rs".into());
+    o.rewrite = Some("foo($X".into());
+    o.apply = true;
+
+    // One rewrite would break the syntax: nothing is written, not even the other file.
+    let r = search_ast(&o);
+    assert_eq!(r.status, Status::InvalidQuery);
+    let msg = r.error.unwrap().message;
+    assert!(msg.contains("syntax error") && msg.contains("nothing written"), "{msg}");
+    assert!(r.diffs.iter().all(|d| !d.applied));
+    assert_eq!(fs::read_to_string(root.join("a.rs")).unwrap(), "fn a() { foo(1); }\n");
+    assert_eq!(fs::read_to_string(root.join("b.rs")).unwrap(), "fn b() { foo(2); }\n");
+
+    // A clean rewrite lands in both.
+    o.rewrite = Some("bar($X)".into());
+    let r = search_ast(&o);
+    assert_eq!(r.status, Status::Complete);
+    assert_eq!(r.diffs.iter().filter(|d| d.applied).count(), 2);
+    assert_eq!(fs::read_to_string(root.join("a.rs")).unwrap(), "fn a() { bar(1); }\n");
+    assert_eq!(fs::read_to_string(root.join("b.rs")).unwrap(), "fn b() { bar(2); }\n");
+}
+
+#[test]
 fn read_outline_and_refs_end_to_end() {
     let dir = build_rich_corpus();
     let root = dir.path();
@@ -2675,7 +2704,7 @@ fn multi_file_edits_are_all_or_nothing() {
         if !r.applied {
             // (Running as root ignores the read-only directory; then both land.)
             assert_eq!(fs::read_to_string(&a).unwrap(), "fn a() { new(1); }\n");
-            assert!(r.error.unwrap().message.contains("nothing applied"));
+            assert!(r.error.unwrap().message.contains("nothing written"));
         }
     }
 }

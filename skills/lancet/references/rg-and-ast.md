@@ -42,4 +42,4 @@
 - `$_`: anonymous single-node wildcard (not captured).
 - `$$$ARGS`: matches zero or more sibling AST nodes (bounded memoization with per-node step budget).
 - C-like statement metavariables: patterns like `if ($C) $S` and `{ $$$B }` work; `if ($C) $S` distinguishes `if` from `if-else`.
-- Rewrite safety: `--rewrite <TEMPLATE>` is dry-run unless `--apply`; `--apply` refuses `--limit`; overlapping nested matches inside one file are skipped during rewrite; `--lang cpp` scans `.h` files as well as `.cpp`/`.cc`.
+- Rewrite safety: `--rewrite <TEMPLATE>` is dry-run unless `--apply`; `--apply` writes every rewritten file or none (a lost race puts back the files already written) and refuses `--limit`; a rewrite that adds Tree-sitter syntax errors is refused unless `--allow-syntax-errors`; overlapping nested matches inside one file are skipped during rewrite; `--lang cpp` scans `.h` files as well as `.cpp`/`.cc`.

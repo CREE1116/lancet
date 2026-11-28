@@ -182,9 +182,12 @@ struct AstCli {
     /// Rewrite matched AST nodes using captured metavariables (dry-run unified diff by default)
     #[arg(short = 'r', long)]
     rewrite: Option<String>,
-    /// Write --rewrite changes to disk atomically
+    /// Write --rewrite changes to disk: every file or none
     #[arg(long)]
     apply: bool,
+    /// Rewrite even if it adds Tree-sitter syntax errors
+    #[arg(long)]
+    allow_syntax_errors: bool,
     /// Restrict search to files matching path glob (repeatable)
     #[arg(long = "path")]
     paths: Vec<String>,
@@ -2187,6 +2190,7 @@ fn run_ast(cli: AstCli) -> ExitCode {
     opts.lang = cli.lang;
     opts.rewrite = cli.rewrite;
     opts.apply = cli.apply;
+    opts.allow_syntax_errors = cli.allow_syntax_errors;
     opts.paths = cli.paths;
     opts.limit = cli.limit;
     opts.walk = WalkOpts {

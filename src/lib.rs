@@ -5,10 +5,11 @@
 //!   *narrows* candidate files, case folding.
 //! - [`scope`]: which files a command looks at (index + freshness).
 //! - commands: [`rg`], [`fd`], [`read_cmd`], [`outline`], [`refs`], [`ast_grep`],
-//!   [`edit_cmd`], [`patch`], [`rename`]; every write goes through [`edit`].
+//!   [`edit_cmd`], [`patch`], [`rename`]; every write goes through [`change`].
 
 pub mod adapters;
 pub mod ast_grep;
+pub mod change;
 pub mod code;
 pub mod content;
 pub mod edit;

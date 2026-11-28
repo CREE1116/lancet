@@ -55,6 +55,7 @@ Supported languages (24): `rs`, `py`, `js`, `ts`, `tsx`, `go`, `c`, `cpp`, `zig`
 - **Always preview rewrites first** (default `--rewrite` prints a unified diff without touching disk), then pass `--apply`:
   - `lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?'`
   - `lancet ast '$X.unwrap()' src --lang rs --rewrite '$X?' --apply`
+  - `--apply` writes every rewritten file or none; a rewrite that adds syntax errors is refused (`--allow-syntax-errors` overrides).
 
 ## 6. Edit by Coordinates (`lancet edit` — replaces `sed -i` / hand-written patches)
 

@@ -7,6 +7,7 @@
 //! file's coordinates (no drift between them), must not overlap, and land in one
 //! locked compare-and-swap write — all of them or none.
 
+use crate::change::FileChange;
 use crate::edit::{self, Edit};
 use crate::output::{ErrorInfo, Status};
 use crate::read_cmd::find_symbol_lines;
@@ -288,7 +289,7 @@ pub struct EditResponse {
 
 /// Everything up to the write: the response (diff, revs) and, when there is a
 /// change to make.
-fn plan_edit(o: &EditOptions) -> (EditResponse, Option<Change>) {
+fn plan_edit(o: &EditOptions) -> (EditResponse, Option<FileChange>) {
     let t0 = Instant::now();
     let mut r = EditResponse {
         status: Status::Complete,
@@ -328,35 +329,10 @@ fn plan_edit(o: &EditOptions) -> (EditResponse, Option<Change>) {
             None,
         );
     }
-    if crate::adapters::is_adapted_path(&o.path, false) {
-        return (fail(
-            r,
-            Status::Unsupported,
-            "documents and archives are read-only: their text is extracted, so there is no byte range to write back".into(),
-        ), None);
-    }
-    let bytes = match edit::read_shared(&o.path) {
-        Ok(b) => b,
-        Err(e) => {
-            return (
-                fail(r, Status::InvalidQuery, format!("read error: {e}")),
-                None,
-            )
-        }
+    let crate::change::Text { src, rev } = match crate::change::load(&o.path) {
+        Ok(t) => t,
+        Err(e) => return (fail(r, e.status, e.message), None),
     };
-    if crate::content::is_binary(&bytes) {
-        return (fail(r, Status::Unsupported, "binary file".into()), None);
-    }
-    let src = match String::from_utf8(bytes) {
-        Ok(s) => s,
-        Err(_) => {
-            return (
-                fail(r, Status::Unsupported, "file is not valid UTF-8".into()),
-                None,
-            )
-        }
-    };
-    let rev = edit::rev(src.as_bytes());
     r.rev = Some(rev.clone());
     if let Some(want) = &o.rev {
         if *want != rev {
@@ -375,14 +351,8 @@ fn plan_edit(o: &EditOptions) -> (EditResponse, Option<Change>) {
 
     // Same line model as `read`: `str::lines`, 1-based.
     let lines: Vec<&str> = src.lines().collect();
-    let starts: Vec<usize> = std::iter::once(0)
-        .chain(memchr::memchr_iter(b'\n', src.as_bytes()).map(|i| i + 1))
-        .collect();
-    let eol = if src[..starts.get(1).copied().unwrap_or(0)].ends_with("\r\n") {
-        "\r\n"
-    } else {
-        "\n"
-    };
+    let starts = crate::change::line_starts(&src);
+    let eol = crate::change::eol(&src);
     let multi = o.hunks.len() > 1;
     let mut edits: Vec<(usize, Edit)> = Vec::with_capacity(o.hunks.len());
     for (i, h) in o.hunks.iter().enumerate() {
@@ -465,112 +435,47 @@ fn plan_edit(o: &EditOptions) -> (EditResponse, Option<Change>) {
         return (r, None);
     }
     if !o.allow_syntax_errors {
-        let before = crate::code::syntax_errors(&o.path, src.as_bytes());
-        let after = crate::code::syntax_errors(&o.path, new_src.as_bytes());
-        if let (Some(b0), Some(b1)) = (before, after) {
-            // Only a net increase is refused, so a file that is already broken can
-            // still be repaired step by step.
-            if b1 > b0 {
-                return (fail(
-                    r,
-                    Status::InvalidQuery,
-                    format!(
-                        "edit would add {} syntax error(s) ({b0} -> {b1}); nothing written (pass --allow-syntax-errors to write anyway)",
-                        b1 - b0
-                    ),
-                ), None);
-            }
+        if let Some((b0, b1)) = crate::change::added_syntax_errors(&o.path, &src, &o.path, &new_src)
+        {
+            return (fail(
+                r,
+                Status::InvalidQuery,
+                format!(
+                    "edit would add {} syntax error(s) ({b0} -> {b1}); nothing written (pass --allow-syntax-errors to write anyway)",
+                    b1 - b0
+                ),
+            ), None);
         }
     }
-
     r.rev_after = Some(edit::rev(new_src.as_bytes()));
     r.elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
-    (
-        r,
-        Some(Change {
-            rev: Some(rev),
-            old: src,
-            new: new_src,
-        }),
-    )
+    let change = FileChange::update(&o.path, r.path.clone(), src, new_src);
+    (r, Some(change))
 }
 
 pub fn edit_file(o: &EditOptions) -> EditResponse {
     let t0 = Instant::now();
     let (mut r, change) = plan_edit(o);
     if let (true, Some(change)) = (o.apply, change) {
-        apply_or_fail(&mut r, &o.path, &change);
+        apply_or_fail(&mut r, &change);
     }
     r.elapsed_ms += t0.elapsed().as_secs_f64() * 1000.0;
     r
 }
 
-/// A verified change to one file: what to write, and what it must still be.
-/// `rev: None` means the file must not exist yet (a creation).
-#[derive(Clone, Debug)]
-pub struct Change {
-    pub rev: Option<String>,
-    pub old: String,
-    pub new: String,
-}
-
-/// Write `c`: a locked compare-and-swap on an existing file, or an exclusive
-/// create (someone creating it first is a conflict, not an overwrite).
-fn write_change(path: &std::path::Path, c: &Change) -> Result<(), (Status, String)> {
-    match &c.rev {
-        Some(rev) => edit::write_if_rev(path, rev, c.new.as_bytes()).map_err(|e| match e {
-            edit::WriteError::Conflict { now } => (
-                Status::Conflict,
-                format!("file changed while editing (now rev {now}); nothing written"),
-            ),
-            edit::WriteError::Io(e) => (Status::InvalidQuery, format!("write failed: {e}")),
-        }),
-        None => {
-            if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
-                std::fs::create_dir_all(dir)
-                    .map_err(|e| (Status::InvalidQuery, format!("write failed: {e}")))?;
-            }
-            std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(path)
-                .and_then(|mut f| {
-                    std::io::Write::write_all(&mut f, c.new.as_bytes())?;
-                    f.sync_all()
-                })
-                .map_err(|e| {
-                    if e.kind() == std::io::ErrorKind::AlreadyExists {
-                        (
-                            Status::Conflict,
-                            "the file was created by someone else meanwhile; nothing written"
-                                .into(),
-                        )
-                    } else {
-                        (Status::InvalidQuery, format!("write failed: {e}"))
-                    }
-                })
-        }
-    }
-}
-
-/// Undo a written change (best effort): put the old content back, or remove a created file.
-fn undo_change(path: &std::path::Path, c: &Change) -> bool {
-    match &c.rev {
-        Some(_) => edit::write_if_rev(path, &edit::rev(c.new.as_bytes()), c.old.as_bytes()).is_ok(),
-        None => std::fs::remove_file(path).is_ok(),
-    }
-}
-
-fn apply_or_fail(r: &mut EditResponse, path: &std::path::Path, c: &Change) {
-    match write_change(path, c) {
+fn apply_or_fail(r: &mut EditResponse, c: &FileChange) {
+    match crate::change::commit(std::slice::from_ref(c)) {
         Ok(()) => {
             r.applied = true;
             r.mode = "applied";
         }
-        Err((status, message)) => {
-            r.status = status;
+        Err(e) => {
+            r.status = e.status;
             r.rev_after = None;
-            r.error = Some(ErrorInfo { message, pos: None });
+            r.error = Some(ErrorInfo {
+                message: e.message,
+                pos: None,
+            });
         }
     }
 }
@@ -590,7 +495,7 @@ pub fn write_file(o: &WriteOptions) -> EditResponse {
     let t0 = Instant::now();
     let (mut r, change) = plan_write(&o.path, &o.content, o.rev.as_deref(), o.allow_syntax_errors);
     if let (true, Some(c)) = (o.apply, change) {
-        apply_or_fail(&mut r, &o.path, &c);
+        apply_or_fail(&mut r, &c);
     }
     r.elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
     r
@@ -601,7 +506,7 @@ fn plan_write(
     content: &str,
     want_rev: Option<&str>,
     allow_syntax_errors: bool,
-) -> (EditResponse, Option<Change>) {
+) -> (EditResponse, Option<FileChange>) {
     let mut r = EditResponse {
         status: Status::Complete,
         mode: "dry-run",
@@ -621,13 +526,6 @@ fn plan_write(
         r.error = Some(ErrorInfo { message, pos: None });
         (r, None)
     };
-    if crate::adapters::is_adapted_path(path, false) {
-        return fail(
-            r,
-            Status::Unsupported,
-            "documents and archives are read-only".into(),
-        );
-    }
     let old = if path.exists() {
         if !path.is_file() {
             return fail(
@@ -636,18 +534,10 @@ fn plan_write(
                 format!("`{}` is not a file", path.display()),
             );
         }
-        let bytes = match edit::read_shared(path) {
-            Ok(b) => b,
-            Err(e) => return fail(r, Status::InvalidQuery, format!("read error: {e}")),
+        let crate::change::Text { src: old, rev } = match crate::change::load(path) {
+            Ok(t) => t,
+            Err(e) => return fail(r, e.status, e.message),
         };
-        let Ok(old) = String::from_utf8(bytes) else {
-            return fail(
-                r,
-                Status::Unsupported,
-                "the existing file is not valid UTF-8".into(),
-            );
-        };
-        let rev = edit::rev(old.as_bytes());
         r.rev = Some(rev.clone());
         match want_rev {
             None => {
@@ -685,32 +575,30 @@ fn plan_write(
         return (r, None);
     }
     if !allow_syntax_errors {
-        let b0 = crate::code::syntax_errors(path, before.as_bytes()).unwrap_or(0);
-        if let Some(b1) = crate::code::syntax_errors(path, content.as_bytes()) {
-            if b1 > b0 {
-                return fail(
-                    r,
-                    Status::InvalidQuery,
-                    format!(
-                        "the content has {} more syntax error(s) than the file it replaces ({b0} -> {b1}); nothing written (pass --allow-syntax-errors to write anyway)",
-                        b1 - b0
-                    ),
-                );
-            }
+        if let Some((b0, b1)) = crate::change::added_syntax_errors(path, before, path, content) {
+            return fail(
+                r,
+                Status::InvalidQuery,
+                format!(
+                    "the content has {} more syntax error(s) than the file it replaces ({b0} -> {b1}); nothing written (pass --allow-syntax-errors to write anyway)",
+                    b1 - b0
+                ),
+            );
         }
     }
     r.hunks = vec![[r.start_line, r.end_line]];
     r.diff = edit::unified_diff(&r.path, before, content);
     r.rev_after = Some(edit::rev(content.as_bytes()));
-    let rev = r.rev.clone();
-    (
-        r,
-        Some(Change {
-            rev,
-            old: before.to_string(),
-            new: content.to_string(),
-        }),
-    )
+    let change = match &old {
+        Some(_) => FileChange::update(
+            path,
+            r.path.clone(),
+            before.to_string(),
+            content.to_string(),
+        ),
+        None => FileChange::create(path, r.path.clone(), content.to_string()),
+    };
+    (r, Some(change))
 }
 
 /// Edits for every occurrence of `text` (exactly one unless `all`), with the
@@ -861,7 +749,7 @@ pub fn edit_files(
                 plan_edit(&o)
             }
         };
-        planned.push((f.path.clone(), change));
+        planned.push(change);
         out.files.push(r);
     }
     if let Some(bad) = out.files.iter().find(|r| r.error.is_some()) {
@@ -887,40 +775,21 @@ pub fn edit_files(
     if !apply {
         return finish(out);
     }
-    let mut written: Vec<(&PathBuf, &Change)> = Vec::new();
-    for (i, (path, change)) in planned.iter().enumerate() {
-        let Some(change) = change else {
-            continue;
-        };
-        if let Err((status, why)) = write_change(path, change) {
-            out.status = status;
-            let mut failed_restore = Vec::new();
-            for (p, c) in written.iter().rev() {
-                if !undo_change(p, c) {
-                    failed_restore.push(p.display().to_string());
-                }
-            }
-            let why = why.trim_end_matches("; nothing written");
-            let mut msg = format!("{}: {why}; nothing applied", path.display());
-            if !failed_restore.is_empty() {
-                msg = format!(
-                    "{msg} — but restoring failed for {}",
-                    failed_restore.join(", ")
-                );
-            }
-            out.error = Some(ErrorInfo {
-                message: msg,
-                pos: None,
-            });
-            for r in &mut out.files {
-                r.rev_after = None;
-            }
-            out.files[i].status = out.status;
-            return finish(out);
+    let set: Vec<FileChange> = planned.into_iter().flatten().collect();
+    if let Err(e) = crate::change::commit(&set) {
+        out.status = e.status;
+        out.error = Some(ErrorInfo {
+            message: e.message,
+            pos: None,
+        });
+        for r in &mut out.files {
+            r.rev_after = None;
         }
-        written.push((path, change));
-        out.files[i].applied = true;
-        out.files[i].mode = "applied";
+        return finish(out);
+    }
+    for r in out.files.iter_mut().filter(|r| r.status != Status::Empty) {
+        r.applied = true;
+        r.mode = "applied";
     }
     out.applied = true;
     finish(out)

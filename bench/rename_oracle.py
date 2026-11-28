@@ -124,6 +124,13 @@ class Python:
         except (SyntaxError, ValueError) as e:
             return False, f"no longer parses: {e}"
 
+    def builds(self, path: Path) -> bool:
+        try:
+            compile(path.read_text(), str(path), "exec")
+            return True
+        except (SyntaxError, ValueError):
+            return False
+
 
 class Go:
     def __init__(self, work: Path):
@@ -168,8 +175,10 @@ def main() -> int:
             if tried >= args.limit:
                 break
             before = path.read_text()
-            if args.lang == "go" and not checker.builds(path):
-                continue  # a package that doesn't build on its own can't judge a rename
+            if hasattr(checker, "builds") and not checker.builds(path):
+                # A file this Python can't parse (newer syntax), or a Go package that
+                # doesn't build on its own, can't judge a rename.
+                continue
             tried += 1
             new = fresh(name, tried)
             r = subprocess.run([LANCET, "rename", f"{path}:{line}:{col}", name, new, "--apply", "--json"],
